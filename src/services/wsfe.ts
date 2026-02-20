@@ -122,9 +122,11 @@ export class WsfeService {
         comprador: Comprador;
         concepto?: Concepto;
         fecha?: Date;
+        incluyeIva?: boolean;
     }): Promise<CAEResponse> {
         this.validateItemsWithIVA(params.items);
-        const ivaData = this.calcularIVAPorAlicuota(params.items);
+        const incluyeIva = params.incluyeIva || false;
+        const ivaData = this.calcularIVAPorAlicuota(params.items, incluyeIva);
 
         return this.emitirComprobante({
             tipo: TipoComprobante.FACTURA_B,
@@ -133,6 +135,7 @@ export class WsfeService {
             comprador: params.comprador,
             fecha: params.fecha,
             ivaData,
+            incluyeIva,
         });
     }
 
@@ -145,9 +148,11 @@ export class WsfeService {
         comprador: Comprador;
         concepto?: Concepto;
         fecha?: Date;
+        incluyeIva?: boolean;
     }): Promise<CAEResponse> {
         this.validateItemsWithIVA(params.items);
-        const ivaData = this.calcularIVAPorAlicuota(params.items);
+        const incluyeIva = params.incluyeIva || false;
+        const ivaData = this.calcularIVAPorAlicuota(params.items, incluyeIva);
 
         return this.emitirComprobante({
             tipo: TipoComprobante.FACTURA_A,
@@ -156,6 +161,7 @@ export class WsfeService {
             comprador: params.comprador,
             fecha: params.fecha,
             ivaData,
+            incluyeIva,
         });
     }
 
@@ -182,7 +188,7 @@ export class WsfeService {
      * Calcula IVA agrupado por alícuota
      * ARCA requiere esto para Factura B/A
      */
-    private calcularIVAPorAlicuota(items: FacturaItem[]): {
+    private calcularIVAPorAlicuota(items: FacturaItem[], incluyeIva = false): {
         alicuota: number;
         baseImponible: number;
         importe: number;
@@ -191,7 +197,13 @@ export class WsfeService {
 
         items.forEach(item => {
             const alicuota = item.alicuotaIva || 0;
-            const base = item.cantidad * item.precioUnitario;
+            let precioNeto = item.precioUnitario;
+
+            if (incluyeIva && alicuota) {
+                precioNeto = item.precioUnitario / (1 + (alicuota / 100));
+            }
+
+            const base = item.cantidad * precioNeto;
             const importe = base * alicuota / 100;
 
             const actual = porAlicuota.get(alicuota) || { base: 0, importe: 0 };
@@ -245,9 +257,10 @@ export class WsfeService {
         let iva = 0;
 
         if (request.items && request.items.length > 0) {
-            subtotal = redondear(calcularSubtotal(request.items));
-            iva = redondear(calcularIVA(request.items));
-            total = redondear(calcularTotal(request.items));
+            const incluyeIva = request.incluyeIva || false;
+            subtotal = redondear(calcularSubtotal(request.items, incluyeIva));
+            iva = redondear(calcularIVA(request.items, incluyeIva));
+            total = redondear(calcularTotal(request.items, incluyeIva));
         }
 
         if (total <= 0) {

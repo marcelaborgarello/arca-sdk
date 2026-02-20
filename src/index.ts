@@ -40,3 +40,6 @@ export {
     ArcaAuthError,
     ArcaValidationError,
 } from './types/common';
+
+// Utilidades útiles para Frontend/Impresión
+export { generarUrlQR } from './utils/qr';

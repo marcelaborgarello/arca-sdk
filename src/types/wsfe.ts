@@ -93,6 +93,8 @@ export interface EmitirFacturaRequest {
         baseImponible: number;
         importe: number;
     }[];
+    /** Indica si los preciosUnitarios de los items YA incluyen el IVA (Precio Final). Defecto: false */
+    incluyeIva?: boolean;
     /** Fecha del comprobante (default: hoy) */
     fecha?: Date;
 }

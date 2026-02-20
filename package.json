@@ -1,6 +1,6 @@
 {
   "name": "arca-sdk",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SDK moderna en TypeScript para ARCA (ex-AFIP)",
   "type": "module",
   "main": "./dist/index.js",
@@ -8,9 +8,12 @@
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js"
+      "types": {
+        "import": "./dist/index.d.ts",
+        "require": "./dist/index.d.cts"
+      },
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
     }
   },
   "files": [
