@@ -25,55 +25,81 @@ export async function callArcaApi(
     url: string,
     options: CallApiOptions
 ): Promise<Response> {
-    const timeout = options.timeout || 15000; // 15 segundos por defecto
-
-    // Si estamos en Node.js, necesitamos usar un agente HTTPS que permita SECLEVEL=1
-    // para evitar el error "dh key too small" de AFIP (OpenSSL 3.0+)
+    const timeout = options.timeout || 15000;
     const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
 
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), timeout);
+    if (isNode) {
+        return new Promise((resolve, reject) => {
+            const parsedUrl = new URL(url);
 
-    try {
-        if (isNode) {
             const agent = new https.Agent({
-                // Permitir llaves DH de 1024 bits (AFIP) bajando a Security Level 1
-                // solo para esta conexión específica.
                 ciphers: 'DEFAULT@SECLEVEL=1',
                 rejectUnauthorized: true,
             });
 
-            // @ts-ignore - node-fetch o fetch nativo en Node 18+ aceptan el agente
-            return await fetch(url, {
+            const reqOptions: https.RequestOptions = {
                 method: options.method,
+                hostname: parsedUrl.hostname,
+                path: parsedUrl.pathname + parsedUrl.search,
                 headers: options.headers,
-                body: options.body,
                 agent,
-                signal: controller.signal
-            } as any);
-        }
+                timeout,
+            };
 
-        return await fetch(url, {
+            const req = https.request(reqOptions, (res) => {
+                let data = '';
+                res.on('data', (chunk) => { data += chunk; });
+                res.on('end', () => {
+                    // Simular objeto Response de fetch
+                    const response = {
+                        ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300,
+                        status: res.statusCode || 0,
+                        statusText: res.statusMessage || '',
+                        text: async () => data,
+                        json: async () => JSON.parse(data),
+                    };
+                    resolve(response as Response);
+                });
+            });
+
+            req.on('error', (error: any) => {
+                let message = error.message;
+                if (message.includes('dh key too small')) {
+                    message = 'Error SSL de ARCA (DH Key too small). Verifique su versión de OpenSSL/Node.';
+                }
+                reject(new ArcaNetworkError(`Error de red al comunicarse con ARCA (HTTPS): ${message}`, {
+                    url,
+                    originalError: error
+                }));
+            });
+
+            req.on('timeout', () => {
+                req.destroy();
+                reject(new ArcaNetworkError(`Tiempo de espera agotado (${timeout}ms) al conectar con ARCA: ${url}`));
+            });
+
+            req.write(options.body);
+            req.end();
+        });
+    }
+
+    // Navegador o entorno no-Node (utiliza fetch nativo)
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+    try {
+        const response = await fetch(url, {
             method: options.method,
             headers: options.headers,
             body: options.body,
             signal: controller.signal
         });
+        return response;
     } catch (error: any) {
         if (error.name === 'AbortError') {
             throw new ArcaNetworkError(`Tiempo de espera agotado (${timeout}ms) al conectar con ARCA: ${url}`);
         }
-
-        // Mapear errores de SSL comunes para dar pistas claras al desarrollador
-        let message = error.message;
-        if (message.includes('dh key too small')) {
-            message = 'Error SSL de ARCA (DH Key too small). El SDK intentó mitigarlo pero falló. Verifique su versión de Node.js.';
-        }
-
-        throw new ArcaNetworkError(`Error de red al comunicarse con ARCA: ${message}`, {
-            url,
-            originalError: error
-        });
+        throw new ArcaNetworkError(`Error de red: ${error.message}`, { url, originalError: error });
     } finally {
         clearTimeout(timeoutId);
     }
