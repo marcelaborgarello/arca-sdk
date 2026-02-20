@@ -145,6 +145,98 @@ Los errores incluyen contexto útil en `error.details`.
 
 ---
 
+### WSFE - Facturación Electrónica
+
+#### Ticket C Simple (solo total)
+```typescript
+import { WsaaService, WsfeService } from 'arca-sdk';
+
+// 1. Autenticar
+const wsaa = new WsaaService({ ... });
+const ticket = await wsaa.login();
+
+// 2. Crear servicio WSFE
+const wsfe = new WsfeService({
+  environment: 'homologacion',
+  cuit: '20123456789',
+  ticket,
+  puntoVenta: 4,
+});
+
+// 3. Emitir ticket (modo simple)
+const cae = await wsfe.emitirTicketCSimple({ 
+  total: 3500 
+});
+
+console.log('CAE:', cae.cae);
+```
+
+#### Ticket C con Items
+```typescript
+// Modo completo: con detalle de items
+const cae = await wsfe.emitirTicketC({
+  items: [
+    { descripcion: 'Producto 1', cantidad: 2, precioUnitario: 500 },
+    { descripcion: 'Producto 2', cantidad: 1, precioUnitario: 1000 },
+  ],
+});
+
+// Los items NO se envían a ARCA
+// Pero se retornan en la respuesta para que los guardes
+console.log('Items:', cae.items);
+```
+
+#### Factura B (IVA discriminado)
+```typescript
+import { TipoDocumento } from 'arca-sdk';
+
+const cae = await wsfe.emitirFacturaB({
+  items: [
+    { 
+      descripcion: 'Servicio', 
+      cantidad: 10, 
+      precioUnitario: 1000,
+      alicuotaIva: 21,  // ← OBLIGATORIO
+    },
+  ],
+  comprador: {
+    tipoDocumento: TipoDocumento.CUIT,
+    nroDocumento: '20987654321',
+  },
+});
+
+console.log('CAE:', cae.cae);
+console.log('IVA:', cae.iva);
+```
+
+#### Factura A (RI a RI)
+```typescript
+const cae = await wsfe.emitirFacturaA({
+  items: [
+    { descripcion: 'Producto', cantidad: 5, precioUnitario: 2000, alicuotaIva: 21 },
+  ],
+  comprador: {
+    tipoDocumento: TipoDocumento.CUIT,
+    nroDocumento: '20111111119',
+  },
+});
+```
+
+---
+
+## 🎯 Tipos de Comprobante
+
+| Tipo | Uso | IVA Discriminado | Items requeridos |
+|------|-----|------------------|------------------|
+| **Ticket C** | Consumidor final | No | Opcional (solo local) |
+| **Factura C** | Consumidor final | No | Opcional |
+| **Factura B** | Monotributo → RI | Sí | **Obligatorio** |
+| **Factura A** | RI → RI | Sí | **Obligatorio** |
+
+**Importante:** Factura B y A requieren `alicuotaIva` en cada item.
+
+---
+
 ## 🤝 Contribuir
 
 Contribuciones bienvenidas! Ver [CONTRIBUTING.md](./CONTRIBUTING.md)

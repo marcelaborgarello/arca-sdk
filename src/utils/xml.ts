@@ -87,6 +87,21 @@ export function parseWsaaResponse(xml: string): LoginTicket {
 }
 
 /**
+ * Parsea un XML genérico de ARCA
+ * 
+ * @param xml - XML de respuesta
+ * @returns Objeto parseado
+ */
+export function parseXml(xml: string): any {
+    const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseAttributeValue: true,
+        removeNSPrefix: true,
+    });
+    return parser.parse(xml);
+}
+
+/**
  * Valida CUIT (11 dígitos sin guiones)
  */
 export function validateCUIT(cuit: string): boolean {

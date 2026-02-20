@@ -1,41 +1,40 @@
 /**
  * arca-sdk - SDK moderna para ARCA (ex-AFIP)
- * 
- * @example
- * ```typescript
- * import { ArcaClient } from 'arca-sdk';
- * 
- * const arca = new ArcaClient({
- *   environment: 'homologacion',
- *   cuit: '20123456789',
- *   cert: './cert.pem',
- *   key: './key.pem',
- * });
- * 
- * // Listo. Ya está autenticado automáticamente.
- * ```
- * 
- * @packageDocumentation
  */
 
-// Exportar cliente principal (cuando lo creemos)
-// export { ArcaClient } from './client';
-
-// Exportar servicio WSAA para uso avanzado
+// Servicios principales
 export { WsaaService } from './auth/wsaa';
+export { WsfeService } from './services/wsfe';
 
-// Exportar tipos
+// Tipos comunes
 export type {
     Environment,
     ArcaConfig,
 } from './types/common';
 
+// Tipos WSAA
 export type {
     WsaaConfig,
     LoginTicket,
 } from './types/wsaa';
 
-// Exportar errores para manejo
+// Tipos WSFE
+export type {
+    WsfeConfig,
+    FacturaItem,
+    Comprador,
+    EmitirFacturaRequest,
+    CAEResponse,
+} from './types/wsfe';
+
+// Enums WSFE
+export {
+    TipoComprobante,
+    Concepto,
+    TipoDocumento,
+} from './types/wsfe';
+
+// Errores
 export {
     ArcaError,
     ArcaAuthError,
