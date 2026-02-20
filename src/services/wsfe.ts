@@ -292,6 +292,7 @@ export class WsfeService {
                 'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
             },
             body: soapRequest,
+            timeout: this.config.timeout,
         });
 
         if (!response.ok) {

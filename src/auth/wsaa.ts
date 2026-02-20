@@ -113,6 +113,7 @@ export class WsaaService {
                 'SOAPAction': '',
             },
             body: this.buildSoapRequest(cms),
+            timeout: this.config.timeout,
         });
 
         if (!response.ok) {
