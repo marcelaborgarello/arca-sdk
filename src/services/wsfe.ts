@@ -19,6 +19,7 @@ import {
     redondear,
 } from '../utils/calculations';
 import { parseXml } from '../utils/xml';
+import { callArcaApi } from '../utils/network';
 
 /**
  * Servicio de Facturación Electrónica (WSFE v1)
@@ -284,7 +285,7 @@ export class WsfeService {
         // 4. Enviar a ARCA
         const endpoint = getWsfeEndpoint(this.config.environment);
 
-        const response = await fetch(endpoint, {
+        const response = await callArcaApi(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',

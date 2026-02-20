@@ -4,6 +4,7 @@ import type { WsaaConfig, LoginTicket } from '../types/wsaa';
 import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
 import { validateCertificate, validatePrivateKey, signCMS } from '../utils/crypto';
 import { TicketManager } from './ticket';
+import { callArcaApi } from '../utils/network';
 
 /**
  * Servicio de autenticación WSAA (Web Service de Autenticación y Autorización)
@@ -105,7 +106,7 @@ export class WsaaService {
         // 3. Enviar CMS a WSAA
         const endpoint = getWsaaEndpoint(this.config.environment);
 
-        const response = await fetch(endpoint, {
+        const response = await callArcaApi(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
