@@ -33,7 +33,12 @@ export async function callArcaApi(
             const parsedUrl = new URL(url);
 
             const agent = new https.Agent({
-                ciphers: 'DEFAULT@SECLEVEL=1',
+                // SECLEVEL=0 es el nivel más permisivo de OpenSSL.
+                // !DH desactiva Diffie-Hellman para forzar RSA o ECDHE si están disponibles,
+                // evitando el problema de "dh key too small" de raíz.
+                ciphers: 'DEFAULT:!DH@SECLEVEL=0',
+                // AFIP todavía tiene endpoints que podrían requerir TLS 1.0/1.1
+                minVersion: 'TLSv1',
                 rejectUnauthorized: true,
             });
 
