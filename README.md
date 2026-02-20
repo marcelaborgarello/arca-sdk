@@ -6,7 +6,9 @@ SDK en TypeScript para integración con servicios de ARCA:
 - ✅ **Type-safe**: TypeScript strict mode
 - ✅ **Simple**: No más XML manual
 - ✅ **Automático**: Cache de tokens, retry logic
-- ✅ **Moderno**: ESM + CJS, Node.js 18+
+- ✅ **Fiscal**: Generador de QR oficial AFIP integrado
+- ✅ **Resiliente**: Maneja errores SSL ("dh key too small") y timeouts
+- ✅ **Moderno**: ESM + CJS nativo, Node.js 18+
 
 ---
 
@@ -143,6 +145,15 @@ try {
 
 Los errores incluyen contexto útil en `error.details`.
 
+#### Timeouts
+Por defecto, las peticiones tienen un timeout de **15 segundos**. Podés ajustarlo en la configuración:
+```typescript
+const wsfe = new WsfeService({
+  ...config,
+  timeout: 30000 // 30 segundos
+});
+```
+
 ---
 
 ### WSFE - Facturación Electrónica
@@ -221,6 +232,38 @@ const cae = await wsfe.emitirFacturaA({
   },
 });
 ```
+
+#### Precios con IVA Incluido
+Si tus precios ya tienen el IVA (típico en venta minorista/POS), podés usar el flag `incluyeIva`:
+```typescript
+const cae = await wsfe.emitirFacturaB({
+  incluyeIva: true, // ← El SDK calculará el neto y el IVA automáticamente
+  items: [
+    { descripcion: 'Producto', cantidad: 1, precioUnitario: 1210, alicuotaIva: 21 },
+  ],
+  // ... comprador
+});
+// Internamente enviará: Subtotal: 1000, IVA: 210, Total: 1210
+```
+
+---
+
+## 📱 Generador de QR Oficial
+AFIP exige que los comprobantes impresos tengan un código QR con los datos fiscales. La SDK lo genera por vos:
+
+```typescript
+import { generarUrlQR } from 'arca-sdk';
+
+// Usá la respuesta del CAE para generar la URL del QR
+const urlQr = generarUrlQR(cae);
+
+console.log('URL para QR:', urlQr);
+// Output: https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hh...
+```
+
+Esta URL la podés pasar a cualquier librería de generación de imágenes QR.
+
+---
 
 ---
 

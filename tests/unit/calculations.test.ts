@@ -31,4 +31,15 @@ describe('Cálculos de Facturación', () => {
         expect(redondear(894.505)).toBe(894.51);
         expect(redondear(894.504)).toBe(894.5);
     });
+
+    it('debe calcular correctamente cuando incluyeIva es true', () => {
+        const itemsIvaInc: FacturaItem[] = [
+            { descripcion: 'Item 1', cantidad: 1, precioUnitario: 121, alicuotaIva: 21 }, // Neto: 100, IVA: 21
+            { descripcion: 'Item 2', cantidad: 2, precioUnitario: 110.5, alicuotaIva: 10.5 }, // Neto: 200, IVA: 21
+        ];
+
+        expect(calcularSubtotal(itemsIvaInc, true)).toBe(300);
+        expect(calcularIVA(itemsIvaInc, true)).toBe(42);
+        expect(calcularTotal(itemsIvaInc, true)).toBe(342);
+    });
 });
