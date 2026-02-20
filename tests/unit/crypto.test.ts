@@ -5,7 +5,7 @@ import { ArcaAuthError } from '../../src/types/common';
 describe('validateCertificate', () => {
     it('debe validar certificado PEM correcto', () => {
         const validCert = `-----BEGIN CERTIFICATE-----
-MIIDXTCCAkWgAwIBAgIJAKL0UG+mRkSvMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV
+CERTIFICADO_DE_PRUEBA_CONTENIDO_TOTALMENTE_FALSO_1234567890
 -----END CERTIFICATE-----`;
 
         expect(validateCertificate(validCert)).toBe(true);
@@ -20,7 +20,7 @@ MIIDXTCCAkWgAwIBAgIJAKL0UG+mRkSvMA0GCSqGSIb3DQEBCwUAMEUxCzAJBgNV
 describe('validatePrivateKey', () => {
     it('debe validar clave privada PKCS#8', () => {
         const validKey = `-----BEGIN PRIVATE KEY-----
-MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj
+CLAVE_PRIVADA_PKCS8_DE_PRUEBA_TOTALMENTE_FALSA_1234567890
 -----END PRIVATE KEY-----`;
 
         expect(validatePrivateKey(validKey)).toBe(true);
@@ -28,7 +28,7 @@ MIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQC7VJTUt9Us8cKj
 
     it('debe validar clave privada RSA', () => {
         const validKey = `-----BEGIN RSA PRIVATE KEY-----
-MIIEpAIBAAKCAQEAu1SU1LfVLPHCo3FmE/YJ3YRr2E+3JGy2xUVXyZ7J3iVqTCc
+CLAVE_PRIVADA_RSA_DE_PRUEBA_TOTALMENTE_FALSA_1234567890
 -----END RSA PRIVATE KEY-----`;
 
         expect(validatePrivateKey(validKey)).toBe(true);
