@@ -41,22 +41,20 @@ export function buildTRA(service: string, cuit: string): string {
  * @returns Ticket de login
  */
 export function parseWsaaResponse(xml: string): LoginTicket {
+    const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseAttributeValue: true,
+        removeNSPrefix: true,
+    });
+
     try {
-        const parser = new XMLParser({
-            ignoreAttributes: false,
-            parseAttributeValue: true,
-            removeNSPrefix: true, // Sugerencia: más robusto contra cambios de prefijos soapenv
-        });
+        const envelope = parser.parse(xml);
 
-        const result = parser.parse(xml);
+        // El loginCmsReturn contiene el ticket real como un XML escapado (string)
+        const loginCmsReturn = envelope?.Envelope?.Body?.loginCmsResponse?.loginCmsReturn;
 
-        // Navegar estructura XML de respuesta WSAA
-        // Gracias a removeNSPrefix: true, evitamos depender de 'soapenv:'
-        const credentials = result?.Envelope?.Body?.loginCmsResponse?.loginCmsReturn;
-
-        if (!credentials) {
-            // Intentar detectar error de ARCA en respuesta
-            const fault = result?.Envelope?.Body?.Fault;
+        if (!loginCmsReturn) {
+            const fault = envelope?.Envelope?.Body?.Fault;
             if (fault) {
                 throw new ArcaAuthError(
                     `Error ARCA: ${fault.faultstring || 'Error desconocido'}`,
@@ -67,26 +65,36 @@ export function parseWsaaResponse(xml: string): LoginTicket {
             throw new ArcaAuthError(
                 'Respuesta WSAA inválida: estructura no reconocida',
                 {
-                    receivedXml: xml.substring(0, 1000),
-                    receivedStructure: JSON.stringify(result).substring(0, 500)
+                    receivedXml: xml.substring(0, 5000),
+                    receivedStructure: JSON.stringify(envelope).substring(0, 500)
                 }
             );
         }
 
-        // fast-xml-parser con removeNSPrefix puede dejar los campos limpios
+        // Segundo nivel de parseo: El XML interno escapado que viene dentro de loginCmsReturn
+        const ticketResult = parser.parse(loginCmsReturn);
+        const ticket = ticketResult?.loginTicketResponse;
+
+        if (!ticket || !ticket.header || !ticket.credentials) {
+            throw new ArcaAuthError('Ticket WSAA inválido o malformado dentro de loginCmsReturn', {
+                innerStructure: JSON.stringify(ticketResult).substring(0, 500),
+                receivedXml: xml.substring(0, 5000)
+            });
+        }
+
         return {
-            token: credentials.token,
-            sign: credentials.sign,
-            generationTime: new Date(credentials.header.generationTime),
-            expirationTime: new Date(credentials.header.expirationTime),
+            token: ticket.credentials.token,
+            sign: ticket.credentials.sign,
+            generationTime: new Date(ticket.header.generationTime),
+            expirationTime: new Date(ticket.header.expirationTime),
         };
     } catch (error) {
         if (error instanceof ArcaAuthError) throw error;
         throw new ArcaAuthError(
-            'Error al parsear respuesta WSAA',
+            'Error al parsear respuesta WSAA (posible XML anidado malformado)',
             {
                 originalError: error instanceof Error ? error.message : String(error),
-                receivedXml: xml.substring(0, 2000)
+                receivedXml: xml.substring(0, 5000)
             }
         );
     }
