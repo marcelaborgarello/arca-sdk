@@ -17,6 +17,7 @@ export type {
     WsaaConfig,
     LoginTicket,
 } from './types/wsaa';
+export type { TokenStorage } from './auth/storage';
 
 // Tipos WSFE
 export type {

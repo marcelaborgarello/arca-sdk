@@ -1,4 +1,5 @@
 import type { ArcaConfig } from './common';
+import type { TokenStorage } from '../auth/storage';
 
 /**
  * Configuración para WSAA
@@ -10,6 +11,8 @@ export interface WsaaConfig extends ArcaConfig {
     key: string;
     /** Servicio ARCA a autenticar (ej: 'wsfe', 'wsmtxca') */
     service: string;
+    /** Adaptador opcional para persistencia de tokens */
+    storage?: TokenStorage;
 }
 
 /**

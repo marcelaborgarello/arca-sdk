@@ -67,21 +67,55 @@ export class WsaaService {
     }
 
     /**
-     * Obtiene un ticket de acceso válido
-     * Usa cache si el ticket actual es válido
+     * Obtiene un ticket de acceso válido.
+     * 
+     * Prioridad de búsqueda:
+     * 1. Memoria (TicketManager cache)
+     * 2. Persistencia (si config.storage está definido)
+     * 3. Nueva solicitud a WSAA
      * 
      * @returns Ticket de acceso
      */
     async login(): Promise<LoginTicket> {
-        // Intentar usar ticket en cache
+        // 1. Intentar usar ticket en memoria (muy rápido)
         const cachedTicket = this.ticketManager.getTicket();
         if (cachedTicket) {
             return cachedTicket;
         }
 
-        // Generar nuevo ticket
+        // 2. Intentar usar persistencia externa si está disponible
+        if (this.config.storage) {
+            try {
+                const storedTicket = await this.config.storage.get(this.config.cuit, this.config.environment);
+                if (storedTicket) {
+                    // Validar si el ticket devuelto por el storage no está expirado
+                    // Agrego un margen de 5 minutos
+                    const now = new Date();
+                    if (new Date(storedTicket.expirationTime) > new Date(now.getTime() + 5 * 60000)) {
+                        this.ticketManager.setTicket(storedTicket);
+                        return storedTicket;
+                    }
+                }
+            } catch (error) {
+                console.warn('[ARCA-SDK] TokenStorage.get falló, intentando login directo:', error);
+            }
+        }
+
+        // 3. Generar nuevo ticket (llamada a AFIP)
         const ticket = await this.requestNewTicket();
+
+        // Guardar en memoria
         this.ticketManager.setTicket(ticket);
+
+        // Guardar en persistencia externa
+        if (this.config.storage) {
+            try {
+                await this.config.storage.save(this.config.cuit, this.config.environment, ticket);
+            } catch (error) {
+                console.warn('[ARCA-SDK] TokenStorage.save falló:', error);
+            }
+        }
+
         return ticket;
     }
 
