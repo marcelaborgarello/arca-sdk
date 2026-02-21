@@ -22,12 +22,13 @@ interface AFIPQRData {
 }
 
 /**
- * Genera la URL completa con el código QR para un comprobante emitido
+ * Genera la URL completa con el código QR para un comprobante emitido.
+ * Implementación robusta (Versión 11) que limpia inputs y asegura compatibilidad total con AFIP.
  * 
  * @param caeResponse Respuesta obtenida al emitir la factura (CAEResponse)
- * @param cuitEmisor Tu CUIT (11 dígitos, sin guiones)
+ * @param cuitEmisor Tu CUIT (con o sin guiones)
  * @param total Importe total del comprobante
- * @param comprador Datos del comprador (opcional, si no se pasa asume Consumidor Final)
+ * @param comprador Datos del comprador (opcional)
  * @returns La URL lista para embeber en un generador de QR
  */
 export function generarUrlQR(
@@ -36,41 +37,52 @@ export function generarUrlQR(
     total: number,
     comprador?: Comprador
 ): string {
-    // 1. Formatear fecha a YYYY-MM-DD (AFIP la devuelve como YYYYMMDD)
+    // 1. Limpieza estricta de CUIT y CAE (solo números)
+    const cleanCuit = cuitEmisor.replace(/\D/g, '');
+    const cleanCae = caeResponse.cae.replace(/\D/g, '');
+
+    // 2. Formatear fecha a YYYY-MM-DD (AFIP la devuelve como YYYYMMDD)
     const fDate = caeResponse.fecha;
     const fechaFormat = fDate.length === 8
         ? `${fDate.substring(0, 4)}-${fDate.substring(4, 6)}-${fDate.substring(6, 8)}`
         : fDate;
 
-    // 2. Determinar comprador
+    // 3. Determinar comprador
     const docTipo = comprador?.tipoDocumento || TipoDocumento.CONSUMIDOR_FINAL;
-    const docNro = comprador?.nroDocumento ? parseInt(comprador.nroDocumento, 10) : 0;
+    const docNro = comprador?.nroDocumento ? comprador.nroDocumento.replace(/\D/g, '') : '0';
 
-    // 3. Armar objeto JSON
-    const qrData: AFIPQRData = {
-        ver: 1, // Versión estándar exigida por AFIP
+    // 4. Armar objeto JSON con ORDEN ESTRICTO de campos
+    // El orden de las propiedades en JS se mantiene si se definen así (en la mayoría de los motores modernos)
+    const qrObj: any = {
+        ver: 1,
         fecha: fechaFormat,
-        cuit: parseInt(cuitEmisor, 10),
-        ptoVta: caeResponse.puntoVenta,
-        tipoCmp: caeResponse.tipoComprobante,
-        nroCmp: caeResponse.nroComprobante,
-        importe: parseFloat(total.toFixed(2)),
-        moneda: 'PES', // Por defecto PES (Pesos Argentinos)
-        ctz: 1, // Cotización (siempre 1 para PES)
-        tipoDocRec: docTipo,
-        nroDocRec: docNro,
-        tipoCodAut: 'E', // 'E' para comprobantes electrónicos
-        codAut: parseInt(caeResponse.cae, 10)
+        cuit: Number(cleanCuit),
+        ptoVta: Number(caeResponse.puntoVenta),
+        tipoCmp: Number(caeResponse.tipoComprobante),
+        nroCmp: Number(caeResponse.nroComprobante),
+        importe: Number(parseFloat(total.toFixed(2))),
+        moneda: 'PES',
+        ctz: 1
     };
 
-    // 4. Convertir a String -> Base64
-    const jsonString = JSON.stringify(qrData);
+    // Omitir datos del receptor si es Consumidor Final (99) y el importe es bajo (evita "datos incompletos")
+    // O simplemente incluirlos si se desea, pero AFIP es más feliz con el objeto limpio si no hay receptor real.
+    if (docTipo !== TipoDocumento.CONSUMIDOR_FINAL || Number(docNro) > 0) {
+        qrObj.tipoDocRec = Number(docTipo);
+        qrObj.nroDocRec = Number(docNro);
+    }
+
+    qrObj.tipoCodAut = 'E';
+    qrObj.codAut = Number(cleanCae);
+
+    // 5. Convertir a String -> Base64
+    const jsonString = JSON.stringify(qrObj);
 
     // Uso robusto de Buffer para evitar problemas de btoa en Node/Edge
     let base64 = typeof Buffer !== 'undefined'
         ? Buffer.from(jsonString).toString('base64')
         : btoa(jsonString); // Fallback para navegadores
 
-    // 5. Retornar URL lista (URL-safe encoding para evitar que caracteres como + rompan la validación)
+    // 6. Retornar URL lista con URL-Safe Encoding
     return `https://www.afip.gob.ar/fe/qr/?p=${encodeURIComponent(base64)}`;
 }

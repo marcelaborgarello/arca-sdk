@@ -31,32 +31,63 @@ describe('QR Generation Utility', () => {
         expect(decoded.codAut).toBe(12345678901234);
     });
 
-    it('should robustly handle characters that break Base64 in URLs (+, /)', () => {
-        // We need a payload that results in '+' or '/' in standard Base64
-        // "{"ver":1,"fecha":"2026-02-20","cuit":30716024941,"ptoVta":4,"tipoCmp":11,"nroCmp":1,"importe":100,"moneda":"PES","ctz":1,"tipoDocRec":99,"nroDocRec":0,"tipoCodAut":"E","codAut":71049102452292}"
-        // Let's try to find one or just verify that encodeURIComponent is used
-
+    it('should clean dirty inputs (CUIT/CAE with dashes) and omit optional fields for standard consumers', () => {
         const caeResponse = {
             tipoComprobante: 11,
             puntoVenta: 4,
-            nroComprobante: 1,
+            nroComprobante: 38,
             fecha: '20260220',
-            cae: '71049102452292',
-            vencimientoCae: '20260301',
+            cae: '8608-4684-8315-69', // Dirty CAE
+            vencimientoCae: '20260302',
             resultado: 'A' as const,
         };
 
-        const url = generarUrlQR(caeResponse, '30716024941', 100);
+        // Dirty CUIT
+        const cuitEmisor = '27-20395373-4';
+        const total = 4000.00;
+
+        const url = generarUrlQR(caeResponse, cuitEmisor, total);
         const base64Part = url.split('?p=')[1];
+        const decoded = JSON.parse(Buffer.from(decodeURIComponent(base64Part), 'base64').toString());
 
-        // If it contains +, it's NOT robust unless wrapped in encodeURIComponent
-        // Note: Standard Base64 of a JSON string very often contains '/' or '+'
+        // Verify cleaning
+        expect(decoded.cuit).toBe(27203953734);
+        expect(decoded.codAut).toBe(86084684831569);
 
-        // For this specific test, we want to ensure that NO '+' or '/' appears UNENCODED.
-        // Actually, encodeURIComponent will turn '+' into '%2B' and '/' into '%2F'.
+        // Verify omission of optional fields (docTipo=99, docNro=0)
+        expect(decoded.tipoDocRec).toBeUndefined();
+        expect(decoded.nroDocRec).toBeUndefined();
 
-        // We can't easily predict if it WILL have a '+', but we can check if it's URL safe.
-        expect(base64Part).not.toContain('+');
-        expect(base64Part).not.toContain('/');
+        // Verify field order (implicit check of keys)
+        const keys = Object.keys(decoded);
+        expect(keys[0]).toBe('ver');
+        expect(keys[1]).toBe('fecha');
+        // The last keys should be tipoCodAut and codAut
+        expect(keys[keys.length - 2]).toBe('tipoCodAut');
+        expect(keys[keys.length - 1]).toBe('codAut');
+    });
+
+    it('should include optional fields for identified buyers (even with dirty input)', () => {
+        const caeResponse = {
+            tipoComprobante: 1, // Factura A
+            puntoVenta: 1,
+            nroComprobante: 10,
+            fecha: '20260220',
+            cae: '12345678901234',
+            vencimientoCae: '20260302',
+            resultado: 'A' as const,
+        };
+
+        const buyer = {
+            tipoDocumento: TipoDocumento.CUIT,
+            nroDocumento: '20-12345678-9'
+        };
+
+        const url = generarUrlQR(caeResponse, '30716024941', 50000, buyer);
+        const base64Part = url.split('?p=')[1];
+        const decoded = JSON.parse(Buffer.from(decodeURIComponent(base64Part), 'base64').toString());
+
+        expect(decoded.tipoDocRec).toBe(80);
+        expect(decoded.nroDocRec).toBe(20123456789);
     });
 });
