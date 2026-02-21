@@ -84,7 +84,10 @@ export function parseWsaaResponse(xml: string): LoginTicket {
         if (error instanceof ArcaAuthError) throw error;
         throw new ArcaAuthError(
             'Error al parsear respuesta WSAA',
-            { originalError: error }
+            {
+                originalError: error instanceof Error ? error.message : String(error),
+                receivedXml: xml.substring(0, 2000)
+            }
         );
     }
 }

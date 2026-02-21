@@ -1,6 +1,6 @@
 {
   "name": "arca-sdk",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "SDK moderna en TypeScript para ARCA (ex-AFIP)",
   "type": "module",
   "main": "./dist/index.cjs",
