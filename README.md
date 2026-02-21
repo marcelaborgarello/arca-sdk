@@ -65,11 +65,11 @@ const ticket = await wsaa.login();
 // Se renueva automáticamente
 ```
 
-### WSFE - Facturación *(próximamente)*
+### WSFE - Facturación
 ```typescript
-// Próximamente:
 const wsfe = new WsfeService(config);
-await wsfe.emitirFacturaC({ ... });
+const cae = await wsfe.emitirFacturaC({ items });
+console.log('CAE:', cae.cae);
 ```
 
 ---
