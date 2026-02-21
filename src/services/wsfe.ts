@@ -6,6 +6,7 @@ import type {
     CAEResponse,
     FacturaItem,
     Comprador,
+    ServiceStatus,
 } from '../types/wsfe';
 import {
     TipoComprobante,
@@ -85,6 +86,51 @@ export class WsfeService {
                 nroDocumento: '0',
             },
         });
+    }
+
+    /**
+     * Verifica el estado de los servidores de ARCA (FEDummy)
+     * No requiere autenticación.
+     */
+    async checkStatus(): Promise<ServiceStatus> {
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FEDummy/>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const endpoint = getWsfeEndpoint(this.config.environment);
+
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEDummy',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout || 10000,
+        });
+
+        if (!response.ok) {
+            throw new ArcaError(`Error HTTP al consultar estado: ${response.status}`, 'HTTP_ERROR');
+        }
+
+        const responseXml = await response.text();
+        const result = parseXml(responseXml);
+        const data = result?.Envelope?.Body?.FEDummyResponse?.FEDummyResult;
+
+        if (!data) {
+            throw new ArcaError('Respuesta FEDummy inválida', 'PARSE_ERROR', { xml: responseXml });
+        }
+
+        return {
+            AppServer: data.AppServer,
+            DbServer: data.DbServer,
+            AuthServer: data.AuthServer,
+        };
     }
 
     /**

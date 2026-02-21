@@ -128,3 +128,15 @@ export interface CAEResponse {
         importe: number;
     }[];
 }
+
+/**
+ * Estado de los servidores de ARCA
+ */
+export interface ServiceStatus {
+    /** Estado del servidor de aplicaciones */
+    AppServer: string;
+    /** Estado del servidor de base de datos */
+    DbServer: string;
+    /** Estado del servidor de autenticación */
+    AuthServer: string;
+}
