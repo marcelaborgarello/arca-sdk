@@ -21,6 +21,7 @@ import {
 } from '../utils/calculations';
 import { parseXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
+import { generarUrlQR } from '../utils/qr';
 
 /**
  * Servicio de Facturación Electrónica (WSFE v1)
@@ -362,10 +363,19 @@ export class WsfeService {
         // 5. Parsear respuesta CAE
         const result = await this.parseCAEResponse(responseXml);
 
+        // 6. Generar URL de QR (simplificación para el usuario)
+        const urlQr = generarUrlQR(
+            result,
+            this.config.cuit,
+            total,
+            request.comprador
+        );
+
         return {
             ...result,
             items: request.items,
             iva: request.ivaData,
+            urlQr,
         };
     }
 

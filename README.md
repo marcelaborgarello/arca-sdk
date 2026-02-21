@@ -39,6 +39,7 @@ const wsfe = new WsfeService(config);
 const result = await wsfe.emitirTicketCSimple({ total: 1500 });
 
 console.log('CAE:', result.cae);
+console.log('QR URL:', result.urlQr); // ← Ya viene integrado!
 ```
 
 ---
@@ -84,12 +85,20 @@ if (persona) {
 AFIP exige que los comprobantes impresos tengan un código QR. El SDK lo genera cumpliendo estrictamente con el formato oficial (JSON ordenado, Base64 URL-safe, etc).
 
 ```typescript
-import { generarUrlQR } from 'arca-sdk';
+// 1. Integrado en WsfeService (Recomendado)
+const result = await wsfe.emitirTicketCSimple({ total: 1500 });
+console.log(result.urlQr); 
 
-// Usá la respuesta del CAE
+// 2. O manual si lo necesitás por separado
+import { generarUrlQR } from 'arca-sdk';
 const urlQr = generarUrlQR(caeResponse, '20123456789', 1500);
-// Output: https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIi...
 ```
+
+---
+
+## 🖨️ Generación de PDF
+Para mantener la SDK ligera, no incluimos generadores de PDF (como `jspdf`) en el core. 
+**Tip:** La URL del QR (`urlQr`) apunta a la vista oficial de ARCA que ya es 100% imprimible y legal. Si necesitás PDF local, podés usar los datos de `CAEResponse` con tu librería favorita.
 
 ---
 

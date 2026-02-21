@@ -127,6 +127,8 @@ export interface CAEResponse {
         baseImponible: number;
         importe: number;
     }[];
+    /** URL del código QR oficial de ARCA */
+    urlQr?: string;
 }
 
 /**
