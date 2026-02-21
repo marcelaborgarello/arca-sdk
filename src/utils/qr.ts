@@ -71,6 +71,6 @@ export function generarUrlQR(
         ? Buffer.from(jsonString).toString('base64')
         : btoa(jsonString); // Fallback para navegadores
 
-    // 5. Retornar URL lista
-    return `https://www.afip.gob.ar/fe/qr/?p=${base64}`;
+    // 5. Retornar URL lista (URL-safe encoding para evitar que caracteres como + rompan la validación)
+    return `https://www.afip.gob.ar/fe/qr/?p=${encodeURIComponent(base64)}`;
 }
