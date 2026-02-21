@@ -497,10 +497,10 @@ export class WsfeService {
         return {
             tipoComprobante: cab.CbteTipo,
             puntoVenta: cab.PtoVta,
-            nroComprobante: det.CbteDesde,
+            nroComprobante: Number(det.CbteDesde),
             fecha: det.CbteFch,
-            cae: det.CAE,
-            vencimientoCae: det.CAEFchVto,
+            cae: String(det.CAE),
+            vencimientoCae: String(det.CAEFchVto),
             resultado: det.Resultado,
             observaciones: observaciones.length > 0 ? observaciones : undefined,
         };
