@@ -17,6 +17,14 @@ export const WSFE_ENDPOINTS: Record<Environment, string> = {
 };
 
 /**
+ * URLs del servicio Padron A13 por ambiente
+ */
+export const PADRON_A13_ENDPOINTS: Record<Environment, string> = {
+    homologacion: 'https://awshomo.afip.gov.ar/sr-padron/webservices/personaServiceA13',
+    produccion: 'https://aws.afip.gov.ar/sr-padron/webservices/personaServiceA13',
+};
+
+/**
  * Obtener endpoint WSAA según ambiente
  */
 export function getWsaaEndpoint(environment: Environment): string {
@@ -28,4 +36,11 @@ export function getWsaaEndpoint(environment: Environment): string {
  */
 export function getWsfeEndpoint(environment: Environment): string {
     return WSFE_ENDPOINTS[environment];
+}
+
+/**
+ * Obtener endpoint Padron A13 según ambiente
+ */
+export function getPadronEndpoint(environment: Environment): string {
+    return PADRON_A13_ENDPOINTS[environment];
 }

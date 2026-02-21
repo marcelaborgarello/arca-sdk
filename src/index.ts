@@ -5,6 +5,7 @@
 // Servicios principales
 export { WsaaService } from './auth/wsaa';
 export { WsfeService } from './services/wsfe';
+export { PadronService } from './services/padron';
 
 // Tipos comunes
 export type {
@@ -18,6 +19,14 @@ export type {
     LoginTicket,
 } from './types/wsaa';
 export type { TokenStorage } from './auth/storage';
+
+// Tipos Padrón
+export type {
+    PadronConfig,
+    Persona,
+    Domicilio,
+    PadronResponse,
+} from './types/padron';
 
 // Tipos WSFE
 export type {

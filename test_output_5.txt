@@ -1,0 +1,71 @@
+bun test v1.3.8 (b64edcb4)
+
+tests\unit\calculations.test.ts:
+(pass) Cálculos de Facturación > debe calcular el subtotal correctamente
+(pass) Cálculos de Facturación > debe calcular el IVA correctamente
+(pass) Cálculos de Facturación > debe calcular el total correctamente
+(pass) Cálculos de Facturación > debe redondear valores correctamente
+(pass) Cálculos de Facturación > debe calcular correctamente cuando incluyeIva es true
+
+tests\unit\crypto.test.ts:
+(pass) validateCertificate > debe validar certificado PEM correcto
+(pass) validateCertificate > debe rechazar certificado inválido
+(pass) validatePrivateKey > debe validar clave privada PKCS#8
+(pass) validatePrivateKey > debe validar clave privada RSA
+(pass) validatePrivateKey > debe rechazar clave inválida
+(pass) signCMS > debe lanzar error con certificado/clave inválidos
+(pass) signCMS > debe tener la firma correcta y ser una función exportada
+
+tests\unit\padron.test.ts:
+(pass) PadronService (A13) > should parse a successful getPersona response correctly [16.00ms]
+77 |     expect(result.persona?.esMonotributista).toBe(false);
+78 |     expect(result.persona?.domicilio[0].direccion).toBe('CALLE FALSA 123');
+79 |   });
+80 | 
+81 |   it('should handle "CUIT no encontrado" response', async () => {
+82 |     const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: "No se encontraron datos para el CUIT informado"
+Received: "CUIT no encontrado"
+
+      at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\padron.test.ts:82:27)
+(fail) PadronService (A13) > should handle "CUIT no encontrado" response
+
+tests\unit\qr.test.ts:
+(pass) QR Generation Utility > should generate a valid AFIP QR URL
+(pass) QR Generation Utility > should clean dirty inputs (CUIT/CAE with dashes) and omit optional fields for standard consumers
+(pass) QR Generation Utility > should include optional fields for identified buyers (even with dirty input)
+
+tests\unit\ticket.test.ts:
+(pass) TicketManager > debe retornar null si no hay ticket
+(pass) TicketManager > debe guardar y recuperar un ticket válido
+(pass) TicketManager > debe considerar inválido un ticket que expira en menos de 5 min
+(pass) TicketManager > debe considerar válido un ticket que expira en más de 5 min
+(pass) TicketManager > debe limpiar el ticket al llamar clearTicket()
+
+tests\unit\validation.test.ts:
+(pass) WsaaService - Validaciones > debe aceptar configuración válida
+(pass) WsaaService - Validaciones > debe rechazar CUIT inválido
+(pass) WsaaService - Validaciones > debe rechazar certificado inválido
+(pass) WsaaService - Validaciones > debe rechazar clave privada inválida
+(pass) WsaaService - Validaciones > debe rechazar servicio vacío
+(pass) WsaaService - Validaciones > debe aceptar clave privada con formato RSA
+
+tests\unit\xml.test.ts:
+(pass) buildTRA > debe generar XML TRA válido
+(pass) buildTRA > debe incluir timestamps válidos
+(pass) parseWsaaResponse > debe parsear respuesta WSAA exitosa
+(pass) parseWsaaResponse > debe detectar SOAP Fault y lanzar error descriptivo
+(pass) parseWsaaResponse > debe lanzar error si estructura es inválida
+(pass) validateCUIT > debe validar CUIT correcto
+(pass) validateCUIT > debe rechazar CUIT con formato incorrecto
+
+1 tests failed:
+(fail) PadronService (A13) > should handle "CUIT no encontrado" response
+
+ 34 pass
+ 1 fail
+ 86 expect() calls
+Ran 35 tests across 7 files. [530.00ms]

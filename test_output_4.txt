@@ -4,11 +4,11 @@ tests\unit\calculations.test.ts:
 (pass) Cálculos de Facturación > debe calcular el subtotal correctamente
 (pass) Cálculos de Facturación > debe calcular el IVA correctamente
 (pass) Cálculos de Facturación > debe calcular el total correctamente
-(pass) Cálculos de Facturación > debe redondear valores correctamente [16.00ms]
+(pass) Cálculos de Facturación > debe redondear valores correctamente
 (pass) Cálculos de Facturación > debe calcular correctamente cuando incluyeIva es true
 
 tests\unit\crypto.test.ts:
-(pass) validateCertificate > debe validar certificado PEM correcto [16.00ms]
+(pass) validateCertificate > debe validar certificado PEM correcto
 (pass) validateCertificate > debe rechazar certificado inválido
 (pass) validatePrivateKey > debe validar clave privada PKCS#8
 (pass) validatePrivateKey > debe validar clave privada RSA
@@ -18,10 +18,23 @@ tests\unit\crypto.test.ts:
 
 tests\unit\padron.test.ts:
 (pass) PadronService (A13) > should parse a successful getPersona response correctly [15.00ms]
-(pass) PadronService (A13) > should handle "CUIT no encontrado" response [16.00ms]
+92 |     expect(result.persona?.esMonotributista).toBe(false);
+93 |     expect(result.persona?.domicilio[0].direccion).toBe('CALLE FALSA 123');
+94 |   });
+95 | 
+96 |   it('should handle "CUIT no encontrado" response', async () => {
+97 |     const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
+                               ^
+error: expect(received).toBe(expected)
+
+Expected: "CUIT no encontrado"
+Received: "No se encontraron datos para el CUIT informado"
+
+      at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\padron.test.ts:97:27)
+(fail) PadronService (A13) > should handle "CUIT no encontrado" response
 
 tests\unit\qr.test.ts:
-(pass) QR Generation Utility > should generate a valid AFIP QR URL [16.00ms]
+(pass) QR Generation Utility > should generate a valid AFIP QR URL
 (pass) QR Generation Utility > should clean dirty inputs (CUIT/CAE with dashes) and omit optional fields for standard consumers
 (pass) QR Generation Utility > should include optional fields for identified buyers (even with dirty input)
 
@@ -34,24 +47,7 @@ tests\unit\ticket.test.ts:
 
 tests\unit\validation.test.ts:
 (pass) WsaaService - Validaciones > debe aceptar configuración válida
-17 | 
-18 |     it('debe rechazar CUIT inválido', () => {
-19 |         const invalidConfig = { ...validConfig, cuit: '20-12345678-9' };
-20 | 
-21 |         expect(() => new WsaaService(invalidConfig))
-22 |             .toThrow(ArcaValidationError);
-                  ^
-error: expect(received).toThrow(expected)
-
-Expected constructor: ArcaValidationError
-
-Received function did not throw
-Received value: {
-  login: [class Function extends Function],
-}
-
-      at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\validation.test.ts:22:14)
-(fail) WsaaService - Validaciones > debe rechazar CUIT inválido
+(pass) WsaaService - Validaciones > debe rechazar CUIT inválido
 30 | 
 31 |     it('debe rechazar certificado inválido', () => {
 32 |         const invalidConfig = { ...validConfig, cert: 'invalid-cert' };
@@ -64,8 +60,26 @@ error: expect(received).toThrow(expected)
 Expected constructor: ArcaValidationError
 
 Received function did not throw
-Received value: {
-  login: [class Function extends Function],
+Received value: WsaaService {
+  config: {
+    environment: "homologacion",
+    cuit: "20123456789",
+    cert: "invalid-cert",
+    key: "-----BEGIN PRIVATE KEY-----\ntest\n-----END PRIVATE KEY-----",
+    service: "wsfe",
+  },
+  ticketManager: TicketManager {
+    ticket: null,
+    setTicket: [Function: setTicket],
+    getTicket: [Function: getTicket],
+    hasValidTicket: [Function: hasValidTicket],
+    clearTicket: [Function: clearTicket],
+  },
+  validateConfig: [Function: validateConfig],
+  login: [AsyncFunction: login],
+  requestNewTicket: [AsyncFunction: requestNewTicket],
+  buildSoapRequest: [Function: buildSoapRequest],
+  clearCache: [Function: clearCache],
 }
 
       at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\validation.test.ts:35:14)
@@ -82,34 +96,35 @@ error: expect(received).toThrow(expected)
 Expected constructor: ArcaValidationError
 
 Received function did not throw
-Received value: {
-  login: [class Function extends Function],
+Received value: WsaaService {
+  config: {
+    environment: "homologacion",
+    cuit: "20123456789",
+    cert: "-----BEGIN CERTIFICATE-----\ntest\n-----END CERTIFICATE-----",
+    key: "invalid-key",
+    service: "wsfe",
+  },
+  ticketManager: TicketManager {
+    ticket: null,
+    setTicket: [Function: setTicket],
+    getTicket: [Function: getTicket],
+    hasValidTicket: [Function: hasValidTicket],
+    clearTicket: [Function: clearTicket],
+  },
+  validateConfig: [Function: validateConfig],
+  login: [AsyncFunction: login],
+  requestNewTicket: [AsyncFunction: requestNewTicket],
+  buildSoapRequest: [Function: buildSoapRequest],
+  clearCache: [Function: clearCache],
 }
 
       at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\validation.test.ts:48:14)
 (fail) WsaaService - Validaciones > debe rechazar clave privada inválida
-56 | 
-57 |     it('debe rechazar servicio vacío', () => {
-58 |         const invalidConfig = { ...validConfig, service: '' };
-59 | 
-60 |         expect(() => new WsaaService(invalidConfig))
-61 |             .toThrow(ArcaValidationError);
-                  ^
-error: expect(received).toThrow(expected)
-
-Expected constructor: ArcaValidationError
-
-Received function did not throw
-Received value: {
-  login: [class Function extends Function],
-}
-
-      at <anonymous> (C:\Users\impre\dev\arca-sdk\tests\unit\validation.test.ts:61:14)
-(fail) WsaaService - Validaciones > debe rechazar servicio vacío
+(pass) WsaaService - Validaciones > debe rechazar servicio vacío
 (pass) WsaaService - Validaciones > debe aceptar clave privada con formato RSA
 
 tests\unit\xml.test.ts:
-(pass) buildTRA > debe generar XML TRA válido [16.00ms]
+(pass) buildTRA > debe generar XML TRA válido
 (pass) buildTRA > debe incluir timestamps válidos
 (pass) parseWsaaResponse > debe parsear respuesta WSAA exitosa
 (pass) parseWsaaResponse > debe detectar SOAP Fault y lanzar error descriptivo
@@ -117,13 +132,12 @@ tests\unit\xml.test.ts:
 (pass) validateCUIT > debe validar CUIT correcto
 (pass) validateCUIT > debe rechazar CUIT con formato incorrecto
 
-4 tests failed:
-(fail) WsaaService - Validaciones > debe rechazar CUIT inválido
+3 tests failed:
+(fail) PadronService (A13) > should handle "CUIT no encontrado" response
 (fail) WsaaService - Validaciones > debe rechazar certificado inválido
 (fail) WsaaService - Validaciones > debe rechazar clave privada inválida
-(fail) WsaaService - Validaciones > debe rechazar servicio vacío
 
- 31 pass
- 4 fail
- 82 expect() calls
-Ran 35 tests across 7 files. [533.00ms]
+ 32 pass
+ 3 fail
+ 84 expect() calls
+Ran 35 tests across 7 files. [516.00ms]
