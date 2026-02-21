@@ -322,13 +322,14 @@ export class WsfeService {
         const soapRequest = this.buildProximoNumeroRequest(tipo);
         const endpoint = getWsfeEndpoint(this.config.environment);
 
-        const response = await fetch(endpoint, {
+        const response = await callArcaApi(endpoint, {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
                 'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
             },
             body: soapRequest,
+            timeout: this.config.timeout,
         });
 
         if (!response.ok) {

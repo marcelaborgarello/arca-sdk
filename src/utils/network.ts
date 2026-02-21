@@ -39,6 +39,8 @@ export async function callArcaApi(
                 ciphers: 'DEFAULT:!DH@SECLEVEL=0',
                 // AFIP todavía tiene endpoints que podrían requerir TLS 1.0/1.1
                 minVersion: 'TLSv1',
+                // @ts-ignore - Propiedad específica para mitigar "dh key too small" en Node 18+
+                minDHSize: 1024,
                 rejectUnauthorized: true,
             });
 
