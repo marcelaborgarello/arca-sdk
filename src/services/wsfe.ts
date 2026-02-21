@@ -90,9 +90,9 @@ export class WsfeService {
 
     /**
      * Verifica el estado de los servidores de ARCA (FEDummy)
-     * No requiere autenticación.
+     * No requiere autenticación ni instancia configurada.
      */
-    async checkStatus(): Promise<ServiceStatus> {
+    static async checkStatus(environment: 'homologacion' | 'produccion' = 'homologacion'): Promise<ServiceStatus> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -102,7 +102,7 @@ export class WsfeService {
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-        const endpoint = getWsfeEndpoint(this.config.environment);
+        const endpoint = getWsfeEndpoint(environment);
 
         const response = await callArcaApi(endpoint, {
             method: 'POST',
@@ -111,7 +111,7 @@ export class WsfeService {
                 'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEDummy',
             },
             body: soapRequest,
-            timeout: this.config.timeout || 10000,
+            timeout: 10000,
         });
 
         if (!response.ok) {
@@ -131,6 +131,14 @@ export class WsfeService {
             DbServer: data.DbServer,
             AuthServer: data.AuthServer,
         };
+    }
+
+    /**
+     * Verifica el estado de los servidores de ARCA (FEDummy)
+     * No requiere autenticación.
+     */
+    async checkStatus(): Promise<ServiceStatus> {
+        return WsfeService.checkStatus(this.config.environment);
     }
 
     /**
