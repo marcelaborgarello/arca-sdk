@@ -66,7 +66,10 @@ export function parseWsaaResponse(xml: string): LoginTicket {
 
             throw new ArcaAuthError(
                 'Respuesta WSAA inválida: estructura no reconocida',
-                { receivedStructure: result }
+                {
+                    receivedXml: xml.substring(0, 1000),
+                    receivedStructure: JSON.stringify(result).substring(0, 500)
+                }
             );
         }
 

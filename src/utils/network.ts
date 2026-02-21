@@ -54,6 +54,7 @@ export async function callArcaApi(
             };
 
             const req = https.request(reqOptions, (res) => {
+                res.setEncoding('utf8');
                 let data = '';
                 res.on('data', (chunk) => { data += chunk; });
                 res.on('end', () => {
