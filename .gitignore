@@ -1,9 +1,26 @@
+# Dependencias
 node_modules/
+
+# Build
 dist/
+*.tsbuildinfo
+
+# Secretos
 .env
 .env.local
+.npmrc
+
+# Tests y Performance
 coverage/
 *.log
-.DS_Store
+test_output*.txt
 
+# IDEs y Editores
+.vscode/
+.idea/
+.DS_Store
+*.swp
+*.swo
+
+# Proyectos Propios
 docs/
