@@ -5,8 +5,9 @@
 SDK en TypeScript para integración con servicios de ARCA:
 - ✅ **Type-safe**: TypeScript strict mode
 - ✅ **Simple**: No más XML manual
-- ✅ **Automático**: Cache de tokens, retry logic
-- ✅ **Fiscal**: Generador de QR oficial AFIP integrado
+- ✅ **Automático**: Cache de tokens, persistencia opcional (God Mode)
+- ✅ **Fiscal**: Generador de QR oficial ARCA/AFIP ultra-robusto
+- ✅ **Padrón**: Consulta de CUIT (A13) para autocompletado de datos
 - ✅ **Resiliente**: Maneja errores SSL ("dh key too small") y timeouts
 - ✅ **Moderno**: ESM + CJS nativo, Node.js 18+
 
@@ -23,283 +24,119 @@ bun add arca-sdk
 
 ## ⚡ Quick Start
 ```typescript
-import { WsaaService } from 'arca-sdk';
-import * as fs from 'node:fs';
+import { WsaaService, WsfeService } from 'arca-sdk';
 
-// 1. Crear servicio con tus certificados
-const wsaa = new WsaaService({
-  environment: 'homologacion',  // 'homologacion' o 'produccion'
-  cuit: '20123456789',
-  cert: fs.readFileSync('./cert.pem', 'utf-8'),
-  key: fs.readFileSync('./key.pem', 'utf-8'),
-  service: 'wsfe',
-});
-
-// 2. Obtener ticket (automático, con cache)
-const ticket = await wsaa.login();
-
-// 3. Usar token en otros servicios ARCA
-console.log('Token:', ticket.token);
-```
-
-**Eso es todo.** No XML. No SOAP. No pain.
-
----
-
-## 📖 Servicios Disponibles
-
-### WSAA - Autenticación
-```typescript
-import { WsaaService } from 'arca-sdk';
-
-const wsaa = new WsaaService({
+// 1. Configuración base
+const config = {
   environment: 'homologacion',
   cuit: '20123456789',
   cert: '...certificado PEM...',
   key: '...clave privada PEM...',
-  service: 'wsfe',  // o 'wsmtxca', etc
-});
+};
 
-const ticket = await wsaa.login();
-// Ticket válido por ~12 horas
-// Se renueva automáticamente
-```
-
-### WSFE - Facturación
-```typescript
+// 2. Emitir un Ticket C en dos líneas
 const wsfe = new WsfeService(config);
-const cae = await wsfe.emitirFacturaC({ items });
-console.log('CAE:', cae.cae);
+const result = await wsfe.emitirTicketCSimple({ total: 1500 });
+
+console.log('CAE:', result.cae);
 ```
 
 ---
 
-## 🔑 Certificados
+## 👑 God Mode: Persistencia Automática
+No manejes tickets manualmente. Pasale un `storage` al SDK y se encargará de guardar, recuperar y renovar el token solo cuando expire.
 
-Necesitás certificados de ARCA en formato PEM:
-- `cert.pem`: Certificado X.509
-- `key.pem`: Clave privada
-
-**Homologación (testing):**
-1. Ir a [ARCA Homologación](https://www.afip.gob.ar/ws/documentacion/certificados.asp)
-2. Generar certificado de prueba
-3. Descargar cert + key
-
-**Producción:**
-1. Generar CSR con tu CUIT
-2. Subir a ARCA
-3. Descargar certificado firmado
-
----
-
-## 🛠️ Ejemplos
-
-Ver carpeta [`/examples`](./examples):
-- [`autenticacion.ts`](./examples/autenticacion.ts) - Obtener ticket WSAA
-- [`quick-start.ts`](./examples/quick-start.ts) - Inicio rápido
-
----
-
-## 🧪 Testing
-```bash
-# Tests unitarios
-bun test
-
-# Build
-bun run build
-```
-
----
-
-## 📝 TypeScript
-
-La SDK exporta todos los tipos:
 ```typescript
-import type { 
-  LoginTicket, 
-  WsaaConfig, 
-  Environment 
-} from 'arca-sdk';
-```
-
-Autocomplete completo en tu IDE. ✨
-
----
-
-## ⚠️ Manejo de Errores
-```typescript
-import { ArcaAuthError, ArcaValidationError } from 'arca-sdk';
-
-try {
-  const ticket = await wsaa.login();
-} catch (error) {
-  if (error instanceof ArcaAuthError) {
-    console.error('Error de autenticación:', error.message);
-  }
-  
-  if (error instanceof ArcaValidationError) {
-    console.error('Configuración inválida:', error.message);
-  }
-}
-```
-
-Los errores incluyen contexto útil en `error.details`.
-
-#### Timeouts
-Por defecto, las peticiones tienen un timeout de **15 segundos**. Podés ajustarlo en la configuración:
-```typescript
-const wsfe = new WsfeService({
+const wsaa = new WsaaService({
   ...config,
-  timeout: 30000 // 30 segundos
+  service: 'wsfe',
+  storage: {
+    get: async (key) => await db.token.findUnique({ where: { key } }),
+    save: async (key, data) => await db.token.upsert({ ... }),
+  }
 });
+
+// El SDK chequea el storage antes de pedir un nuevo ticket a ARCA
+const ticket = await wsaa.login();
 ```
 
 ---
 
-### WSFE - Facturación Electrónica
+## 🔍 Consulta de Padrón (A13)
+Obtené los datos de un cliente (Nombre, Domicilio, IVA) solo con su CUIT. Ideal para POS.
 
-#### Ticket C Simple (solo total)
 ```typescript
-import { WsaaService, WsfeService } from 'arca-sdk';
+import { PadronService } from 'arca-sdk';
 
-// 1. Autenticar
-const wsaa = new WsaaService({ ... });
-const ticket = await wsaa.login();
+const padron = new PadronService(config);
+const { persona, error } = await padron.getPersona('30111111118');
 
-// 2. Crear servicio WSFE
-const wsfe = new WsfeService({
-  environment: 'homologacion',
-  cuit: '20123456789',
-  ticket,
-  puntoVenta: 4,
-});
-
-// 3. Emitir ticket (modo simple)
-const cae = await wsfe.emitirTicketCSimple({ 
-  total: 3500 
-});
-
-console.log('CAE:', cae.cae);
-```
-
-#### Ticket C con Items
-```typescript
-// Modo completo: con detalle de items
-const cae = await wsfe.emitirTicketC({
-  items: [
-    { descripcion: 'Producto 1', cantidad: 2, precioUnitario: 500 },
-    { descripcion: 'Producto 2', cantidad: 1, precioUnitario: 1000 },
-  ],
-});
-
-// Los items NO se envían a ARCA
-// Pero se retornan en la respuesta para que los guardes
-console.log('Items:', cae.items);
-```
-
-#### Factura B (IVA discriminado)
-```typescript
-import { TipoDocumento } from 'arca-sdk';
-
-const cae = await wsfe.emitirFacturaB({
-  items: [
-    { 
-      descripcion: 'Servicio', 
-      cantidad: 10, 
-      precioUnitario: 1000,
-      alicuotaIva: 21,  // ← OBLIGATORIO
-    },
-  ],
-  comprador: {
-    tipoDocumento: TipoDocumento.CUIT,
-    nroDocumento: '20987654321',
-  },
-});
-
-console.log('CAE:', cae.cae);
-console.log('IVA:', cae.iva);
-```
-
-#### Factura A (RI a RI)
-```typescript
-const cae = await wsfe.emitirFacturaA({
-  items: [
-    { descripcion: 'Producto', cantidad: 5, precioUnitario: 2000, alicuotaIva: 21 },
-  ],
-  comprador: {
-    tipoDocumento: TipoDocumento.CUIT,
-    nroDocumento: '20111111119',
-  },
-});
-```
-
-#### Precios con IVA Incluido
-Si tus precios ya tienen el IVA (típico en venta minorista/POS), podés usar el flag `incluyeIva`:
-```typescript
-const cae = await wsfe.emitirFacturaB({
-  incluyeIva: true, // ← El SDK calculará el neto y el IVA automáticamente
-  items: [
-    { descripcion: 'Producto', cantidad: 1, precioUnitario: 1210, alicuotaIva: 21 },
-  ],
-  // ... comprador
-});
-// Internamente enviará: Subtotal: 1000, IVA: 210, Total: 1210
+if (persona) {
+  console.log('Razón Social:', persona.razonSocial || `${persona.nombre} ${persona.apellido}`);
+  console.log('Provincia:', persona.domicilio[0].descripcionProvincia);
+  console.log('¿Es Inscripto?:', persona.esInscriptoIVA);
+}
 ```
 
 ---
 
 ## 📱 Generador de QR Oficial
-AFIP exige que los comprobantes impresos tengan un código QR con los datos fiscales. La SDK lo genera por vos:
+AFIP exige que los comprobantes impresos tengan un código QR. El SDK lo genera cumpliendo estrictamente con el formato oficial (JSON ordenado, Base64 URL-safe, etc).
 
 ```typescript
 import { generarUrlQR } from 'arca-sdk';
 
-// Usá la respuesta del CAE para generar la URL del QR
-const urlQr = generarUrlQR(cae);
-
-console.log('URL para QR:', urlQr);
-// Output: https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIiOjEsImZlY2hh...
+// Usá la respuesta del CAE
+const urlQr = generarUrlQR(caeResponse, '20123456789', 1500);
+// Output: https://www.afip.gob.ar/fe/qr/?p=eyJ2ZXIi...
 ```
 
-Esta URL la podés pasar a cualquier librería de generación de imágenes QR.
+---
+
+## 🩺 Chequeo de Salud
+Verificá si los servidores de ARCA están online antes de intentar facturar.
+
+```typescript
+const status = await wsfe.checkStatus();
+console.log('AppServer:', status.appServer); // 'OK'
+```
 
 ---
 
+## 📝 Servicios y Comprobantes
+
+| Clase | Servicio ARCA | Descripción |
+|-------|---------------|-------------|
+| `WsaaService` | `wsaa` | Autenticación y Autorización |
+| `WsfeService` | `wsfev1` | Facturación Electrónica (A, B, C) |
+| `PadronService` | `ws_sr_padron_a13` | Consulta de datos de contribuyentes |
+
+### Comprobantes soportados en `WsfeService`:
+- `emitirTicketCSimple()`: Rápido para Consumidor Final.
+- `emitirTicketC()`: Con detalle de items.
+- `emitirFacturaB()`: Para Responsables Inscriptos o Facturas > $ limite.
+- `emitirFacturaA()`: Con discriminación de IVA.
+
 ---
 
-## 🎯 Tipos de Comprobante
+## 🛠️ Desarrollo y Tests
+```bash
+# Correr tests con mocks de ARCA
+bun test
 
-| Tipo | Uso | IVA Discriminado | Items requeridos |
-|------|-----|------------------|------------------|
-| **Ticket C** | Consumidor final | No | Opcional (solo local) |
-| **Factura C** | Consumidor final | No | Opcional |
-| **Factura B** | Monotributo → RI | Sí | **Obligatorio** |
-| **Factura A** | RI → RI | Sí | **Obligatorio** |
+# Verificar tipos
+bun run lint
 
-**Importante:** Factura B y A requieren `alicuotaIva` en cada item.
-
----
-
-## 🤝 Contribuir
-
-Contribuciones bienvenidas! Ver [CONTRIBUTING.md](./CONTRIBUTING.md)
+# Build para producción (CJS + ESM)
+bun run build
+```
 
 ---
 
 ## 📄 Licencia
-
 MIT © [Marcela Borgarello](https://github.com/marcelaborgarello)
 
 ---
 
-## 🔗 Links
-
-- [Documentación ARCA](https://www.afip.gob.ar/ws/)
-- [Issues](https://github.com/marcelaborgarello/arca-sdk/issues)
-- [NPM](https://www.npmjs.com/package/arca-sdk)
-
----
-
 **Hecho con ❤️ en Argentina 🇦🇷**
-
 *Porque integrar con ARCA no tiene por qué ser un infierno.*
