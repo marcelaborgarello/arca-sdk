@@ -22,6 +22,7 @@ import {
 import { parseXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generarUrlQR } from '../utils/qr';
+import { getArcaHint } from '../constants/errors';
 
 /**
  * Servicio de Facturación Electrónica (WSFE v1)
@@ -407,7 +408,13 @@ export class WsfeService {
 
         if (data?.Errors) {
             const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
-            throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
+            const code = error?.Code || 'UNKNOWN';
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+                getArcaHint(code)
+            );
         }
 
         const nro = data?.CbteNro;
@@ -538,7 +545,13 @@ export class WsfeService {
 
         if (data.Errors) {
             const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
-            throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
+            const code = error?.Code || 'UNKNOWN';
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+                getArcaHint(code)
+            );
         }
 
         const cab = data.FeCabResp;

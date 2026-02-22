@@ -90,7 +90,7 @@ export class PadronService {
             // Manejar errores devueltos por ARCA en el body
             const fault = body.Fault;
             if (fault) {
-                return { error: fault.faultstring || 'Error desconocido en AFIP' };
+                return { error: fault.faultstring || 'Error desconocido en ARCA' };
             }
             return { error: 'No se encontraron datos para el CUIT informado' };
         }
@@ -104,15 +104,17 @@ export class PadronService {
             return { error: 'CUIT no encontrado' };
         }
 
-        // Mapear datos a nuestra interfaz simplificada
+        // Mapear datos a nuestra interfaz simplificada con soporte robusto para arrays de ARCA
         const persona: Persona = {
             idPersona: Number(p.idPersona),
-            tipoPersona: p.tipoPersona,
+            tipoPersona: p.tipoPersona as 'FISICA' | 'JURIDICA',
             nombre: p.nombre,
             apellido: p.apellido,
             razonSocial: p.razonSocial,
             estadoClave: p.estadoClave,
             domicilio: this.mapDomicilios(p.domicilio),
+            actividad: this.mapActividades(p.actividad),
+            impuesto: this.mapImpuestos(p.impuesto),
             descripcionActividadPrincipal: p.descripcionActividadPrincipal,
             esInscriptoIVA: this.checkImpuesto(p, 30), // 30 = IVA
             esMonotributista: this.checkImpuesto(p, 20), // 20 = Monotributo
@@ -124,7 +126,7 @@ export class PadronService {
 
     private mapDomicilios(d: any): any[] {
         if (!d) return [];
-        const list = Array.isArray(d) ? d : [d];
+        const list = this.ensureArray(d);
         return list.map(item => ({
             direccion: item.direccion,
             localidad: item.localidad,
@@ -135,10 +137,39 @@ export class PadronService {
         }));
     }
 
+    private mapActividades(a: any): any[] {
+        if (!a) return [];
+        const list = this.ensureArray(a);
+        return list.map(item => ({
+            idActividad: Number(item.idActividad),
+            descripcion: item.descripcion,
+            orden: Number(item.orden),
+            periodo: Number(item.periodo)
+        }));
+    }
+
+    private mapImpuestos(i: any): any[] {
+        if (!i) return [];
+        const list = this.ensureArray(i);
+        return list.map(item => ({
+            idImpuesto: Number(item.idImpuesto),
+            descripcion: item.descripcion,
+            periodo: Number(item.periodo)
+        }));
+    }
+
     private checkImpuesto(p: any, id: number): boolean {
         const impuestos = p.impuesto;
         if (!impuestos) return false;
-        const list = Array.isArray(impuestos) ? impuestos : [impuestos];
+        const list = this.ensureArray(impuestos);
         return list.some((i: any) => Number(i.idImpuesto) === id);
+    }
+
+    /**
+     * Helper para normalizar la respuesta de XML que puede ser objeto único o array
+     */
+    private ensureArray(data: any): any[] {
+        if (data === undefined || data === null) return [];
+        return Array.isArray(data) ? data : [data];
     }
 }

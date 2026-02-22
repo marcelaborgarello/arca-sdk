@@ -2,7 +2,7 @@ import type { CAEResponse, Comprador } from '../types/wsfe';
 import { TipoDocumento } from '../types/wsfe';
 
 /**
- * Interfaz de los datos requeridos por AFIP para el QR
+ * Interfaz de los datos requeridos por ARCA para el QR
  * @see https://www.afip.gob.ar/fe/qr/especificaciones.asp
  */
 interface AFIPQRData {
@@ -23,7 +23,7 @@ interface AFIPQRData {
 
 /**
  * Genera la URL completa con el código QR para un comprobante emitido.
- * Implementación robusta (Versión 11) que limpia inputs y asegura compatibilidad total con AFIP.
+ * Implementación robusta (Versión 11) que limpia inputs y asegura compatibilidad total con ARCA.
  * 
  * @param caeResponse Respuesta obtenida al emitir la factura (CAEResponse)
  * @param cuitEmisor Tu CUIT (con o sin guiones)
@@ -41,7 +41,7 @@ export function generarUrlQR(
     const cleanCuit = cuitEmisor.replace(/\D/g, '');
     const cleanCae = caeResponse.cae.replace(/\D/g, '');
 
-    // 2. Formatear fecha a YYYY-MM-DD (AFIP la devuelve como YYYYMMDD)
+    // 2. Formatear fecha a YYYY-MM-DD (ARCA la devuelve como YYYYMMDD)
     const fDate = caeResponse.fecha;
     const fechaFormat = fDate.length === 8
         ? `${fDate.substring(0, 4)}-${fDate.substring(4, 6)}-${fDate.substring(6, 8)}`
@@ -66,7 +66,7 @@ export function generarUrlQR(
     };
 
     // Omitir datos del receptor si es Consumidor Final (99) y el importe es bajo (evita "datos incompletos")
-    // O simplemente incluirlos si se desea, pero AFIP es más feliz con el objeto limpio si no hay receptor real.
+    // O simplemente incluirlos si se desea, pero ARCA es más feliz con el objeto limpio si no hay receptor real.
     if (docTipo !== TipoDocumento.CONSUMIDOR_FINAL || Number(docNro) > 0) {
         qrObj.tipoDocRec = Number(docTipo);
         qrObj.nroDocRec = Number(docNro);

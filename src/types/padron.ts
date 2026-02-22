@@ -16,33 +16,45 @@ export interface PadronConfig extends ArcaConfig {
 }
 
 /**
+ * Actividad económica según AFIP
+ */
+export interface Actividad {
+    idActividad: number;
+    descripcion: string;
+    orden: number;
+    periodo: number;
+}
+
+/**
+ * Impuesto registrado en AFIP
+ */
+export interface Impuesto {
+    idImpuesto: number;
+    descripcion: string;
+    periodo: number;
+}
+
+/**
  * Representa una persona (física o jurídica) obtenida del Padrón A13
  */
 export interface Persona {
     idPersona: number;
-    tipoPersona: string; // FISICA o JURIDICA
+    tipoPersona: 'FISICA' | 'JURIDICA';
     nombre?: string;
     apellido?: string;
     razonSocial?: string;
-    estadoClave: string; // ACTIVO, etc
+    estadoClave: string;
     domicilio: Domicilio[];
+    actividad?: Actividad[];
+    impuesto?: Impuesto[];
     descripcionActividadPrincipal?: string;
-    monotributo?: {
-        actividad?: string[];
-        categoria?: string;
-        impuestos?: number[];
-    };
-    regimenGeneral?: {
-        impuestos?: number[];
-        actividades?: string[];
-    };
     esInscriptoIVA: boolean;
     esMonotributista: boolean;
     esExento: boolean;
 }
 
 /**
- * Domicilio registrado en AFIP
+ * Domicilio registrado en ARCA
  */
 export interface Domicilio {
     direccion: string;
