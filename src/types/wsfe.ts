@@ -2,19 +2,19 @@ import type { ArcaConfig } from './common';
 import type { LoginTicket } from './wsaa';
 
 /**
- * Configuración para WSFE
+ * Configuración para WsfeService
  */
 export interface WsfeConfig extends ArcaConfig {
     /** Ticket de autenticación WSAA */
     ticket: LoginTicket;
-    /** Punto de venta (4 dígitos) */
-    puntoVenta: number;
+    /** Punto de venta (1-9999) */
+    pointOfSale: number;
 }
 
 /**
- * Tipo de comprobante
+ * Tipo de comprobante ARCA
  */
-export enum TipoComprobante {
+export enum InvoiceType {
     FACTURA_A = 1,
     FACTURA_B = 6,
     FACTURA_C = 11,
@@ -26,77 +26,81 @@ export enum TipoComprobante {
 /**
  * Concepto de facturación
  */
-export enum Concepto {
-    PRODUCTOS = 1,      // Productos
-    SERVICIOS = 2,      // Servicios
-    PRODUCTOS_Y_SERVICIOS = 3,  // Mixto
+export enum BillingConcept {
+    PRODUCTS = 1,
+    SERVICES = 2,
+    PRODUCTS_AND_SERVICES = 3,
 }
 
 /**
- * Tipo de documento del cliente
+ * Tipo de documento del receptor
  */
-export enum TipoDocumento {
+export enum TaxIdType {
     CUIT = 80,
     CUIL = 86,
     CDI = 87,
     LE = 89,
     LC = 90,
-    CI_EXTRANJERA = 91,
-    PASAPORTE = 94,
-    CI_BUENOS_AIRES = 95,
-    CI_POLICIA_FEDERAL = 96,
+    FOREIGN_ID = 91,
+    PASSPORT = 94,
+    BUENOS_AIRES_ID = 95,
+    /**
+     * @note AFIP usa el código 96 para ambos. En la práctica, DNI es el más utilizado.
+     * Fuente: Tabla 13 del catálogo ARCA — ambos valores son 96 en el catálogo oficial.
+     */
+    NATIONAL_POLICE_ID = 96,
     DNI = 96,
-    CONSUMIDOR_FINAL = 99,  // Sin documento
+    FINAL_CONSUMER = 99,
 }
 
 /**
- * Item de factura
+ * Ítem de factura
  */
-export interface FacturaItem {
+export interface InvoiceItem {
     /** Descripción del producto/servicio */
-    descripcion: string;
+    description: string;
     /** Cantidad */
-    cantidad: number;
+    quantity: number;
     /** Precio unitario */
-    precioUnitario: number;
-    /** IVA % (0, 10.5, 21, 27) */
-    alicuotaIva?: number;
+    unitPrice: number;
+    /** Alícuota IVA % (0, 10.5, 21, 27) */
+    vatRate?: number;
 }
 
 /**
  * Datos del comprador
  */
-export interface Comprador {
+export interface Buyer {
     /** Tipo de documento */
-    tipoDocumento: TipoDocumento;
+    docType: TaxIdType;
     /** Número de documento (sin guiones) */
-    nroDocumento: string;
+    docNumber: string;
 }
 
 /**
- * Request para emitir factura
+ * Request para emitir comprobante
  */
-export interface EmitirFacturaRequest {
+export interface IssueInvoiceRequest {
     /** Tipo de comprobante */
-    tipo: TipoComprobante;
+    type: InvoiceType;
     /** Concepto */
-    concepto: Concepto;
+    concept: BillingConcept;
     /** Comprador (opcional para Factura C consumidor final) */
-    comprador?: Comprador;
-    /** Items de la factura (calculan el total si se proveen) */
-    items?: FacturaItem[];
+    buyer?: Buyer;
+    /** Items de la factura */
+    items?: InvoiceItem[];
     /** Monto total (requerido si no hay items) */
     total?: number;
-    /** Desglose de IVA (requerido para Factura B/A) */
-    ivaData?: {
-        alicuota: number;
-        baseImponible: number;
-        importe: number;
+    /** Desglose de IVA (requerido para Factura A/B) */
+    vatData?: {
+        rate: number;
+        taxBase: number;
+        amount: number;
     }[];
-    /** Indica si los preciosUnitarios de los items YA incluyen el IVA (Precio Final). Defecto: false */
-    incluyeIva?: boolean;
+    /** Indica si los precios unitarios YA incluyen el IVA. Defecto: false */
+    includesVAT?: boolean;
     /** Fecha del comprobante (default: hoy) */
-    fecha?: Date;
+    date?: Date;
 }
 
 /**
@@ -104,31 +108,77 @@ export interface EmitirFacturaRequest {
  */
 export interface CAEResponse {
     /** Tipo de comprobante */
-    tipoComprobante: number;
+    invoiceType: number;
     /** Punto de venta */
-    puntoVenta: number;
+    pointOfSale: number;
     /** Número de comprobante */
-    nroComprobante: number;
-    /** Fecha de emisión */
-    fecha: string;
+    invoiceNumber: number;
+    /** Fecha de emisión (YYYYMMDD) */
+    date: string;
     /** CAE asignado */
     cae: string;
-    /** Fecha de vencimiento del CAE */
-    vencimientoCae: string;
+    /** Fecha de vencimiento del CAE (YYYYMMDD) */
+    caeExpiry: string;
     /** Resultado (A = Aprobado, R = Rechazado) */
-    resultado: 'A' | 'R';
-    /** Observaciones de ARCA (si hay) */
-    observaciones?: string[];
+    result: 'A' | 'R';
+    /** Observaciones de ARCA */
+    observations?: string[];
     /** Items (se retornan si fueron proveídos en el request) */
-    items?: FacturaItem[];
-    /** Desglose IVA (solo para Factura B/A) */
-    iva?: {
-        alicuota: number;
-        baseImponible: number;
-        importe: number;
+    items?: InvoiceItem[];
+    /** Desglose IVA (solo para Factura A/B) */
+    vat?: {
+        rate: number;
+        taxBase: number;
+        amount: number;
     }[];
     /** URL del código QR oficial de ARCA */
-    urlQr?: string;
+    qrUrl?: string;
+}
+
+/**
+ * Detalle de un comprobante consultado (FECompConsultar)
+ */
+export interface InvoiceDetails {
+    /** Tipo de comprobante */
+    invoiceType: number;
+    /** Punto de venta */
+    pointOfSale: number;
+    /** Número de comprobante */
+    invoiceNumber: number;
+    /** Fecha de emisión (YYYYMMDD) */
+    date: string;
+    /** Concepto */
+    concept: number;
+    /** Tipo de documento del receptor */
+    docType: number;
+    /** Número de documento del receptor */
+    docNumber: number;
+    /** Importe total */
+    total: number;
+    /** Importe neto gravado */
+    net: number;
+    /** Importe IVA */
+    vat: number;
+    /** CAE */
+    cae: string;
+    /** Vencimiento CAE (YYYYMMDD) */
+    caeExpiry: string;
+    /** Resultado */
+    result: 'A' | 'R';
+}
+
+/**
+ * Punto de venta habilitado en ARCA
+ */
+export interface PointOfSale {
+    /** Número de punto de venta */
+    number: number;
+    /** Tipo (CAI, CAE, CAEA, etc.) */
+    type: string;
+    /** Indica si está bloqueado */
+    isBlocked: boolean;
+    /** Fecha de bloqueo (si aplica) */
+    blockedSince?: string;
 }
 
 /**
@@ -136,9 +186,9 @@ export interface CAEResponse {
  */
 export interface ServiceStatus {
     /** Estado del servidor de aplicaciones */
-    AppServer: string;
+    appServer: string;
     /** Estado del servidor de base de datos */
-    DbServer: string;
+    dbServer: string;
     /** Estado del servidor de autenticación */
-    AuthServer: string;
+    authServer: string;
 }

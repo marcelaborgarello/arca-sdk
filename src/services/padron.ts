@@ -1,18 +1,41 @@
 import { WsaaService } from '../auth/wsaa';
 import { getPadronEndpoint } from '../constants/endpoints';
 import { ArcaNetworkError, ArcaError } from '../types/common';
-import type { PadronConfig, Persona, PadronResponse } from '../types/padron';
+import type {
+    TaxpayerServiceConfig,
+    Taxpayer,
+    TaxpayerResponse,
+    Address,
+    Activity,
+    TaxRecord,
+} from '../types/padron';
 import { callArcaApi } from '../utils/network';
 import { XMLParser } from 'fast-xml-parser';
 
 /**
  * Servicio para consultar el Padrón de AFIP (ws_sr_padron_a13)
+ *
+ * @example
+ * ```typescript
+ * const padron = new PadronService({
+ *   environment: 'homologacion',
+ *   cuit: '20123456789',
+ *   cert: fs.readFileSync('cert.pem', 'utf-8'),
+ *   key: fs.readFileSync('key.pem', 'utf-8'),
+ * });
+ *
+ * const { taxpayer, error } = await padron.getTaxpayer('30111111118');
+ * if (taxpayer) {
+ *   console.log(taxpayer.companyName || `${taxpayer.firstName} ${taxpayer.lastName}`);
+ *   console.log('¿Inscripto IVA?:', taxpayer.isVATRegistered);
+ * }
+ * ```
  */
 export class PadronService {
     private wsaa: WsaaService;
-    private config: PadronConfig;
+    private config: TaxpayerServiceConfig;
 
-    constructor(config: PadronConfig) {
+    constructor(config: TaxpayerServiceConfig) {
         this.config = config;
         this.wsaa = new WsaaService({
             environment: config.environment,
@@ -20,17 +43,17 @@ export class PadronService {
             cert: config.cert,
             key: config.key,
             service: 'ws_sr_padron_a13',
-            storage: config.storage
+            storage: config.storage,
         });
     }
 
     /**
-     * Consulta los datos de una persona por CUIT
-     * 
-     * @param idPersona CUIT a consultar
-     * @returns Datos de la persona o error
+     * Consulta los datos de un contribuyente por CUIT
+     *
+     * @param taxId CUIT a consultar (11 dígitos sin guiones)
+     * @returns Datos del contribuyente o mensaje de error
      */
-    async getPersona(idPersona: string): Promise<PadronResponse> {
+    async getTaxpayer(taxId: string): Promise<TaxpayerResponse> {
         const ticket = await this.wsaa.login();
 
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -42,7 +65,7 @@ export class PadronService {
       <token>${ticket.token}</token>
       <sign>${ticket.sign}</sign>
       <cuitRepresentada>${this.config.cuit}</cuitRepresentada>
-      <idPersona>${idPersona}</idPersona>
+      <idPersona>${taxId}</idPersona>
     </a13:getPersona>
   </soapenv:Body>
 </soapenv:Envelope>`;
@@ -53,7 +76,7 @@ export class PadronService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': '', // A13 no suele requerir SOAPAction específica en el header
+                'SOAPAction': '',
             },
             body: soapRequest,
             timeout: this.config.timeout || 15000,
@@ -61,7 +84,7 @@ export class PadronService {
 
         if (!response.ok) {
             throw new ArcaNetworkError(
-                `Error HTTP al comunicarse con Padron A13: ${response.status}`,
+                `Error HTTP al comunicarse con Padrón A13: ${response.status}`,
                 { status: response.status }
             );
         }
@@ -71,9 +94,9 @@ export class PadronService {
     }
 
     /**
-     * Parsear la respuesta XML de getPersona
+     * Parsea la respuesta XML de getPersona
      */
-    private parseResponse(xml: string): PadronResponse {
+    private parseResponse(xml: string): TaxpayerResponse {
         const parser = new XMLParser({
             ignoreAttributes: false,
             removeNSPrefix: true,
@@ -82,12 +105,11 @@ export class PadronService {
 
         const body = result.Envelope?.Body;
         if (!body) {
-            throw new ArcaError('Respuesta de Padrón inválida: No se encontró Body', 'PADRON_ERROR');
+            throw new ArcaError('Respuesta del Padrón inválida: Body no encontrado', 'PADRON_ERROR');
         }
 
         const response = body.getPersonaResponse?.personaReturn;
         if (!response) {
-            // Manejar errores devueltos por ARCA en el body
             const fault = body.Fault;
             if (fault) {
                 return { error: fault.faultstring || 'Error desconocido en ARCA' };
@@ -104,72 +126,68 @@ export class PadronService {
             return { error: 'CUIT no encontrado' };
         }
 
-        // Mapear datos a nuestra interfaz simplificada con soporte robusto para arrays de ARCA
-        const persona: Persona = {
-            idPersona: Number(p.idPersona),
-            tipoPersona: p.tipoPersona as 'FISICA' | 'JURIDICA',
-            nombre: p.nombre,
-            apellido: p.apellido,
-            razonSocial: p.razonSocial,
-            estadoClave: p.estadoClave,
-            domicilio: this.mapDomicilios(p.domicilio),
-            actividad: this.mapActividades(p.actividad),
-            impuesto: this.mapImpuestos(p.impuesto),
-            descripcionActividadPrincipal: p.descripcionActividadPrincipal,
-            esInscriptoIVA: this.checkImpuesto(p, 30), // 30 = IVA
-            esMonotributista: this.checkImpuesto(p, 20), // 20 = Monotributo
-            esExento: this.checkImpuesto(p, 32), // 32 = Exento
+        const taxpayer: Taxpayer = {
+            taxId: Number(p.idPersona),
+            personType: p.tipoPersona as 'FISICA' | 'JURIDICA',
+            firstName: p.nombre,
+            lastName: p.apellido,
+            companyName: p.razonSocial,
+            status: p.estadoClave,
+            addresses: this.mapAddresses(p.domicilio),
+            activities: this.mapActivities(p.actividad),
+            taxes: this.mapTaxRecords(p.impuesto),
+            mainActivity: p.descripcionActividadPrincipal,
+            isVATRegistered: this.hasTaxId(p, 30),   // 30 = IVA
+            isMonotax: this.hasTaxId(p, 20),          // 20 = Monotributo
+            isVATExempt: this.hasTaxId(p, 32),        // 32 = IVA Exento
         };
 
-        return { persona };
+        return { taxpayer };
     }
 
-    private mapDomicilios(d: any): any[] {
-        if (!d) return [];
-        const list = this.ensureArray(d);
-        return list.map(item => ({
-            direccion: item.direccion,
-            localidad: item.localidad,
-            codPostal: item.codPostal,
-            idProvincia: Number(item.idProvincia),
-            descripcionProvincia: item.descripcionProvincia,
-            tipoDomicilio: item.tipoDomicilio
+    private mapAddresses(raw: unknown): Address[] {
+        if (!raw) return [];
+        return this.toArray(raw).map((item: Record<string, unknown>) => ({
+            street: item.direccion as string,
+            city: item.localidad as string | undefined,
+            postalCode: item.codPostal as string | undefined,
+            provinceId: Number(item.idProvincia),
+            province: item.descripcionProvincia as string,
+            type: item.tipoDomicilio as string,
         }));
     }
 
-    private mapActividades(a: any): any[] {
-        if (!a) return [];
-        const list = this.ensureArray(a);
-        return list.map(item => ({
-            idActividad: Number(item.idActividad),
-            descripcion: item.descripcion,
-            orden: Number(item.orden),
-            periodo: Number(item.periodo)
+    private mapActivities(raw: unknown): Activity[] {
+        if (!raw) return [];
+        return this.toArray(raw).map((item: Record<string, unknown>) => ({
+            id: Number(item.idActividad),
+            description: item.descripcion as string,
+            order: Number(item.orden),
+            period: Number(item.periodo),
         }));
     }
 
-    private mapImpuestos(i: any): any[] {
-        if (!i) return [];
-        const list = this.ensureArray(i);
-        return list.map(item => ({
-            idImpuesto: Number(item.idImpuesto),
-            descripcion: item.descripcion,
-            periodo: Number(item.periodo)
+    private mapTaxRecords(raw: unknown): TaxRecord[] {
+        if (!raw) return [];
+        return this.toArray(raw).map((item: Record<string, unknown>) => ({
+            id: Number(item.idImpuesto),
+            description: item.descripcion as string,
+            period: Number(item.periodo),
         }));
     }
 
-    private checkImpuesto(p: any, id: number): boolean {
-        const impuestos = p.impuesto;
-        if (!impuestos) return false;
-        const list = this.ensureArray(impuestos);
-        return list.some((i: any) => Number(i.idImpuesto) === id);
+    private hasTaxId(p: Record<string, unknown>, id: number): boolean {
+        const taxes = p.impuesto;
+        if (!taxes) return false;
+        return this.toArray(taxes).some((i: Record<string, unknown>) => Number(i.idImpuesto) === id);
     }
 
     /**
-     * Helper para normalizar la respuesta de XML que puede ser objeto único o array
+     * Normaliza un valor que puede ser un objeto único o un array (comportamiento de fast-xml-parser)
      */
-    private ensureArray(data: any): any[] {
+    private toArray(data: unknown): Record<string, unknown>[] {
         if (data === undefined || data === null) return [];
-        return Array.isArray(data) ? data : [data];
+        if (Array.isArray(data)) return data as Record<string, unknown>[];
+        return [data as Record<string, unknown>];
     }
 }

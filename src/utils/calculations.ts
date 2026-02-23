@@ -1,49 +1,48 @@
-import type { FacturaItem } from '../types/wsfe';
+import type { InvoiceItem } from '../types/wsfe';
 
 /**
  * Calcula el subtotal de items (sin IVA)
  */
-export function calcularSubtotal(items: FacturaItem[], incluyeIva = false): number {
+export function calculateSubtotal(items: InvoiceItem[], includesVAT = false): number {
     return items.reduce((sum, item) => {
-        let precioNeto = item.precioUnitario;
-        if (incluyeIva && item.alicuotaIva) {
-            precioNeto = item.precioUnitario / (1 + (item.alicuotaIva / 100));
+        let netPrice = item.unitPrice;
+        if (includesVAT && item.vatRate) {
+            netPrice = item.unitPrice / (1 + (item.vatRate / 100));
         }
-        return sum + (item.cantidad * precioNeto);
+        return sum + (item.quantity * netPrice);
     }, 0);
 }
-
 
 /**
  * Calcula el IVA total de items
  */
-export function calcularIVA(items: FacturaItem[], incluyeIva = false): number {
+export function calculateVAT(items: InvoiceItem[], includesVAT = false): number {
     return items.reduce((sum, item) => {
-        const alicuota = item.alicuotaIva || 0;
-        let precioNeto = item.precioUnitario;
-        if (incluyeIva && alicuota) {
-            precioNeto = item.precioUnitario / (1 + (alicuota / 100));
+        const rate = item.vatRate || 0;
+        let netPrice = item.unitPrice;
+        if (includesVAT && rate) {
+            netPrice = item.unitPrice / (1 + (rate / 100));
         }
-        const subtotalNeto = item.cantidad * precioNeto;
-        return sum + (subtotalNeto * alicuota / 100);
+        const netSubtotal = item.quantity * netPrice;
+        return sum + (netSubtotal * rate / 100);
     }, 0);
 }
 
 /**
  * Calcula el total de la factura (subtotal + IVA)
  */
-export function calcularTotal(items: FacturaItem[], incluyeIva = false): number {
-    if (incluyeIva) {
-        return items.reduce((sum, item) => sum + (item.cantidad * item.precioUnitario), 0);
+export function calculateTotal(items: InvoiceItem[], includesVAT = false): number {
+    if (includesVAT) {
+        return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
     }
-    const subtotal = calcularSubtotal(items, false);
-    const iva = calcularIVA(items, false);
-    return subtotal + iva;
+    const subtotal = calculateSubtotal(items, false);
+    const vat = calculateVAT(items, false);
+    return subtotal + vat;
 }
 
 /**
  * Redondea a 2 decimales
  */
-export function redondear(valor: number): number {
-    return Math.round(valor * 100) / 100;
+export function round(value: number): number {
+    return Math.round(value * 100) / 100;
 }

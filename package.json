@@ -1,6 +1,6 @@
 {
   "name": "arca-sdk",
-  "version": "0.5.0",
+  "version": "1.0.0",
   "description": "SDK moderna en TypeScript para ARCA (ex-AFIP)",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -16,6 +16,7 @@
   "files": [
     "dist",
     "README.md",
+    "CHANGELOG.md",
     "LICENSE"
   ],
   "scripts": {
@@ -51,7 +52,7 @@
     "typescript",
     "sdk"
   ],
-  "author": "Marcela Borgarello <ginialym@gmail.com>",
+  "author": "Marcela Borgarello <imprenart@gmail.com>",
   "repository": {
     "type": "git",
     "url": "https://github.com/marcelaborgarello/arca-sdk.git"

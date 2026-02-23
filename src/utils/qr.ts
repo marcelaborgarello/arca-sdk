@@ -1,8 +1,8 @@
-import type { CAEResponse, Comprador } from '../types/wsfe';
-import { TipoDocumento } from '../types/wsfe';
+import type { CAEResponse, Buyer } from '../types/wsfe';
+import { TaxIdType } from '../types/wsfe';
 
 /**
- * Interfaz de los datos requeridos por ARCA para el QR
+ * Datos requeridos por ARCA para el QR (estructura oficial)
  * @see https://www.afip.gob.ar/fe/qr/especificaciones.asp
  */
 interface AFIPQRData {
@@ -15,74 +15,69 @@ interface AFIPQRData {
     importe: number;
     moneda: string;
     ctz: number;
-    tipoDocRec: number;
-    nroDocRec: number;
+    tipoDocRec?: number;
+    nroDocRec?: number;
     tipoCodAut: string;
     codAut: number;
 }
 
 /**
  * Genera la URL completa con el código QR para un comprobante emitido.
- * Implementación robusta (Versión 11) que limpia inputs y asegura compatibilidad total con ARCA.
- * 
+ * Implementa la versión oficial con orden estricto de campos según spec de ARCA.
+ *
  * @param caeResponse Respuesta obtenida al emitir la factura (CAEResponse)
- * @param cuitEmisor Tu CUIT (con o sin guiones)
+ * @param issuerCUIT CUIT del emisor (con o sin guiones)
  * @param total Importe total del comprobante
- * @param comprador Datos del comprador (opcional)
- * @returns La URL lista para embeber en un generador de QR
+ * @param buyer Datos del comprador (opcional)
+ * @returns URL lista para embeber en un generador de QR
  */
-export function generarUrlQR(
+export function generateQRUrl(
     caeResponse: CAEResponse,
-    cuitEmisor: string,
+    issuerCUIT: string,
     total: number,
-    comprador?: Comprador
+    buyer?: Buyer
 ): string {
-    // 1. Limpieza estricta de CUIT y CAE (solo números)
-    const cleanCuit = cuitEmisor.replace(/\D/g, '');
-    const cleanCae = caeResponse.cae.replace(/\D/g, '');
+    // Clean CUIT and CAE (digits only)
+    const cleanCUIT = issuerCUIT.replace(/\D/g, '');
+    const cleanCAE = caeResponse.cae.replace(/\D/g, '');
 
-    // 2. Formatear fecha a YYYY-MM-DD (ARCA la devuelve como YYYYMMDD)
-    const fDate = caeResponse.fecha;
-    const fechaFormat = fDate.length === 8
-        ? `${fDate.substring(0, 4)}-${fDate.substring(4, 6)}-${fDate.substring(6, 8)}`
-        : fDate;
+    // Format date to YYYY-MM-DD (ARCA returns YYYYMMDD)
+    const rawDate = caeResponse.date;
+    const formattedDate = rawDate.length === 8
+        ? `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`
+        : rawDate;
 
-    // 3. Determinar comprador
-    const docTipo = comprador?.tipoDocumento || TipoDocumento.CONSUMIDOR_FINAL;
-    const docNro = comprador?.nroDocumento ? comprador.nroDocumento.replace(/\D/g, '') : '0';
+    // Buyer document info
+    const docType = buyer?.docType || TaxIdType.FINAL_CONSUMER;
+    const docNumber = buyer?.docNumber ? buyer.docNumber.replace(/\D/g, '') : '0';
 
-    // 4. Armar objeto JSON con ORDEN ESTRICTO de campos
-    // El orden de las propiedades en JS se mantiene si se definen así (en la mayoría de los motores modernos)
-    const qrObj: any = {
+    // Build QR object with STRICT field order (required by ARCA spec)
+    const qrData: any = {
         ver: 1,
-        fecha: fechaFormat,
-        cuit: Number(cleanCuit),
-        ptoVta: Number(caeResponse.puntoVenta),
-        tipoCmp: Number(caeResponse.tipoComprobante),
-        nroCmp: Number(caeResponse.nroComprobante),
+        fecha: formattedDate,
+        cuit: Number(cleanCUIT),
+        ptoVta: Number(caeResponse.pointOfSale),
+        tipoCmp: Number(caeResponse.invoiceType),
+        nroCmp: Number(caeResponse.invoiceNumber),
         importe: Number(parseFloat(total.toFixed(2))),
         moneda: 'PES',
-        ctz: 1
+        ctz: 1,
     };
 
-    // Omitir datos del receptor si es Consumidor Final (99) y el importe es bajo (evita "datos incompletos")
-    // O simplemente incluirlos si se desea, pero ARCA es más feliz con el objeto limpio si no hay receptor real.
-    if (docTipo !== TipoDocumento.CONSUMIDOR_FINAL || Number(docNro) > 0) {
-        qrObj.tipoDocRec = Number(docTipo);
-        qrObj.nroDocRec = Number(docNro);
+    // Omit buyer fields for anonymous final consumers
+    if (docType !== TaxIdType.FINAL_CONSUMER || Number(docNumber) > 0) {
+        qrData.tipoDocRec = Number(docType);
+        qrData.nroDocRec = Number(docNumber);
     }
 
-    qrObj.tipoCodAut = 'E';
-    qrObj.codAut = Number(cleanCae);
+    qrData.tipoCodAut = 'E';
+    qrData.codAut = Number(cleanCAE);
 
-    // 5. Convertir a String -> Base64
-    const jsonString = JSON.stringify(qrObj);
-
-    // Uso robusto de Buffer para evitar problemas de btoa en Node/Edge
-    let base64 = typeof Buffer !== 'undefined'
+    // Encode to Base64 (Buffer for Node.js, btoa fallback for browsers)
+    const jsonString = JSON.stringify(qrData);
+    const base64 = typeof Buffer !== 'undefined'
         ? Buffer.from(jsonString).toString('base64')
-        : btoa(jsonString); // Fallback para navegadores
+        : btoa(jsonString);
 
-    // 6. Retornar URL lista con URL-Safe Encoding
     return `https://www.afip.gob.ar/fe/qr/?p=${encodeURIComponent(base64)}`;
 }

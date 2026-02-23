@@ -19,16 +19,15 @@ describe('PadronService (A13)', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
-    // Mock login to avoid crypto validation/signing issues in this test suite
     vi.spyOn(WsaaService.prototype, 'login').mockResolvedValue({
       token: 'mock-token',
       sign: 'mock-sign',
       generationTime: new Date(),
-      expirationTime: new Date(Date.now() + 3600000)
+      expirationTime: new Date(Date.now() + 3600000),
     } as any);
   });
 
-  it('should parse a successful getPersona response correctly', async () => {
+  it('should parse a successful getTaxpayer response correctly', async () => {
     const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -68,17 +67,18 @@ describe('PadronService (A13)', () => {
       text: async () => mockPadronXml,
     });
 
-    const result = await service.getPersona('20123456789');
+    const result = await service.getTaxpayer('20123456789');
 
-    expect(result.persona).toBeDefined();
-    expect(result.persona?.nombre).toBe('JUAN');
-    expect(result.persona?.apellido).toBe('PEREZ');
-    expect(result.persona?.esInscriptoIVA).toBe(true);
-    expect(result.persona?.esMonotributista).toBe(false);
-    expect(result.persona?.domicilio[0].direccion).toBe('CALLE FALSA 123');
+    expect(result.taxpayer).toBeDefined();
+    expect(result.taxpayer?.firstName).toBe('JUAN');
+    expect(result.taxpayer?.lastName).toBe('PEREZ');
+    expect(result.taxpayer?.isVATRegistered).toBe(true);
+    expect(result.taxpayer?.isMonotax).toBe(false);
+    expect(result.taxpayer?.addresses[0].street).toBe('CALLE FALSA 123');
+    expect(result.taxpayer?.addresses[0].province).toBe('CIUDAD AUTONOMA BUENOS AIRES');
   });
 
-  it('should handle "CUIT no encontrado" response', async () => {
+  it('should handle "CUIT not found" response', async () => {
     const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -97,7 +97,7 @@ describe('PadronService (A13)', () => {
       text: async () => mockPadronXml,
     });
 
-    const result = await service.getPersona('22222222222');
+    const result = await service.getTaxpayer('22222222222');
     expect(result.error).toBe('CUIT no encontrado');
   });
 });

@@ -2,7 +2,7 @@ import type { ArcaConfig } from './common';
 import type { TokenStorage } from '../auth/storage';
 
 /**
- * Configuración para WSAA
+ * Configuración para WsaaService
  */
 export interface WsaaConfig extends ArcaConfig {
     /** Certificado X.509 en formato PEM */
@@ -23,16 +23,8 @@ export interface LoginTicket {
     token: string;
     /** Firma del token */
     sign: string;
-    /** Fecha de generación (ISO 8601) */
+    /** Fecha de generación */
     generationTime: Date;
-    /** Fecha de expiración (ISO 8601) */
+    /** Fecha de expiración */
     expirationTime: Date;
-}
-
-/**
- * Respuesta del servicio WSAA
- */
-export interface WsaaResponse {
-    /** Credenciales obtenidas */
-    credentials: LoginTicket;
 }

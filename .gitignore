@@ -5,22 +5,30 @@ node_modules/
 dist/
 *.tsbuildinfo
 
+# Certificados ARCA (NUNCA commitear claves privadas)
+certs/
+*.pem
+*.key
+*.p12
+*.pfx
+
 # Secretos
 .env
 .env.local
-.npmrc
+.env*.local
 
-# Tests y Performance
+# Logs y performance
 coverage/
 *.log
 test_output*.txt
 
-# IDEs y Editores
+# IDEs y editores
 .vscode/
 .idea/
 .DS_Store
+Thumbs.db
 *.swp
 *.swo
 
-# Proyectos Propios
+# Documentación interna
 docs/

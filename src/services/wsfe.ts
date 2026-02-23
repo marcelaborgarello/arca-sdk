@@ -2,47 +2,52 @@ import { getWsfeEndpoint } from '../constants/endpoints';
 import { ArcaError, ArcaValidationError } from '../types/common';
 import type {
     WsfeConfig,
-    EmitirFacturaRequest,
+    IssueInvoiceRequest,
     CAEResponse,
-    FacturaItem,
-    Comprador,
+    InvoiceItem,
+    Buyer,
     ServiceStatus,
+    InvoiceDetails,
+    PointOfSale,
 } from '../types/wsfe';
 import {
-    TipoComprobante,
-    Concepto,
-    TipoDocumento
+    InvoiceType,
+    BillingConcept,
+    TaxIdType,
 } from '../types/wsfe';
 import {
-    calcularSubtotal,
-    calcularIVA,
-    calcularTotal,
-    redondear,
+    calculateSubtotal,
+    calculateVAT,
+    calculateTotal,
+    round,
 } from '../utils/calculations';
 import { parseXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
-import { generarUrlQR } from '../utils/qr';
+import { generateQRUrl } from '../utils/qr';
 import { getArcaHint } from '../constants/errors';
 
 /**
- * Servicio de Facturación Electrónica (WSFE v1)
- * 
+ * Servicio de Facturación Electrónica WSFE v1
+ *
  * @example
  * ```typescript
  * const wsfe = new WsfeService({
  *   environment: 'homologacion',
  *   cuit: '20123456789',
  *   ticket: await wsaa.login(),
- *   puntoVenta: 4,
+ *   pointOfSale: 4,
  * });
- * 
- * const cae = await wsfe.emitirFacturaC({
- *   items: [
- *     { descripcion: 'Producto 1', cantidad: 2, precioUnitario: 100 }
- *   ]
- * });
- * 
+ *
+ * // Ticket C rápido
+ * const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
  * console.log('CAE:', cae.cae);
+ * console.log('QR:', cae.qrUrl);
+ *
+ * // Factura A/B con IVA discriminado
+ * const cae = await wsfe.issueInvoiceB({
+ *   items: [{ description: 'Servicio', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+ *   buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+ * });
  * ```
  */
 export class WsfeService {
@@ -57,42 +62,27 @@ export class WsfeService {
         if (!config.ticket || !config.ticket.token) {
             throw new ArcaValidationError(
                 'Ticket WSAA requerido. Ejecutá wsaa.login() primero.',
-                { hint: 'El ticket se obtiene del servicio WSAA' }
+                { hint: 'El ticket se obtiene del servicio WsaaService' }
             );
         }
 
-        if (!config.puntoVenta || config.puntoVenta < 1 || config.puntoVenta > 9999) {
+        if (!config.pointOfSale || config.pointOfSale < 1 || config.pointOfSale > 9999) {
             throw new ArcaValidationError(
                 'Punto de venta inválido: debe ser un número entre 1 y 9999',
-                { puntoVenta: config.puntoVenta }
+                { pointOfSale: config.pointOfSale }
             );
         }
     }
 
-    /**
-     * Emite un Ticket C de forma simple (solo total)
-     * Tipo de comprobante: 83
-     */
-    async emitirTicketCSimple(params: {
-        total: number;
-        concepto?: Concepto;
-        fecha?: Date;
-    }): Promise<CAEResponse> {
-        return this.emitirComprobante({
-            tipo: TipoComprobante.TICKET_C,
-            concepto: params.concepto || Concepto.PRODUCTOS,
-            total: params.total,
-            fecha: params.fecha,
-            comprador: {
-                tipoDocumento: TipoDocumento.CONSUMIDOR_FINAL,
-                nroDocumento: '0',
-            },
-        });
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Estado de los servidores
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Verifica el estado de los servidores de ARCA (FEDummy)
-     * No requiere autenticación ni instancia configurada.
+     * Verifica el estado de los servidores de ARCA (FEDummy).
+     * No requiere autenticación. Útil para health checks.
+     *
+     * @param environment Ambiente a consultar (default: 'homologacion')
      */
     static async checkStatus(environment: 'homologacion' | 'produccion' = 'homologacion'): Promise<ServiceStatus> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -105,7 +95,6 @@ export class WsfeService {
 </soapenv:Envelope>`;
 
         const endpoint = getWsfeEndpoint(environment);
-
         const response = await callArcaApi(endpoint, {
             method: 'POST',
             headers: {
@@ -129,218 +118,330 @@ export class WsfeService {
         }
 
         return {
-            AppServer: data.AppServer,
-            DbServer: data.DbServer,
-            AuthServer: data.AuthServer,
+            appServer: data.AppServer,
+            dbServer: data.DbServer,
+            authServer: data.AuthServer,
         };
     }
 
     /**
-     * Verifica el estado de los servidores de ARCA (FEDummy)
-     * No requiere autenticación.
+     * Verifica el estado de los servidores de ARCA.
+     * Versión de instancia — usa el ambiente configurado.
      */
     async checkStatus(): Promise<ServiceStatus> {
         return WsfeService.checkStatus(this.config.environment);
     }
 
-    /**
-     * Emite un Ticket C completo (con detalle de items)
-     * Los items no se envían a ARCA, pero se retornan en la respuesta.
-     */
-    async emitirTicketC(params: {
-        items: FacturaItem[];
-        concepto?: Concepto;
-        fecha?: Date;
-    }): Promise<CAEResponse> {
-        const total = redondear(calcularTotal(params.items));
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Emisión de comprobantes
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-        const cae = await this.emitirComprobante({
-            tipo: TipoComprobante.TICKET_C,
-            concepto: params.concepto || Concepto.PRODUCTOS,
+    /**
+     * Emite un Ticket C simple (solo monto total, sin detalle de items).
+     * Ideal para registros mínimos, como una app móvil de punto de venta.
+     */
+    async issueSimpleReceipt(params: {
+        total: number;
+        concept?: BillingConcept;
+        date?: Date;
+    }): Promise<CAEResponse> {
+        return this.issueDocument({
+            type: InvoiceType.TICKET_C,
+            concept: params.concept || BillingConcept.PRODUCTS,
+            total: params.total,
+            date: params.date,
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+            },
+        });
+    }
+
+    /**
+     * Emite un Ticket C con detalle de items.
+     * Los items se guardan en la respuesta pero no se envían a ARCA.
+     */
+    async issueReceipt(params: {
+        items: InvoiceItem[];
+        concept?: BillingConcept;
+        date?: Date;
+    }): Promise<CAEResponse> {
+        const total = round(calculateTotal(params.items));
+
+        const cae = await this.issueDocument({
+            type: InvoiceType.TICKET_C,
+            concept: params.concept || BillingConcept.PRODUCTS,
             total,
-            fecha: params.fecha,
-            comprador: {
-                tipoDocumento: TipoDocumento.CONSUMIDOR_FINAL,
-                nroDocumento: '0',
+            date: params.date,
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
             },
         });
 
-        return {
-            ...cae,
-            items: params.items,
-        };
+        return { ...cae, items: params.items };
     }
-    /**
-     * Emite una Factura B (monotributo a responsable inscripto)
-     * REQUIERE detalle de items con IVA discriminado
-     */
-    async emitirFacturaB(params: {
-        items: FacturaItem[];
-        comprador: Comprador;
-        concepto?: Concepto;
-        fecha?: Date;
-        incluyeIva?: boolean;
-    }): Promise<CAEResponse> {
-        this.validateItemsWithIVA(params.items);
-        const incluyeIva = params.incluyeIva || false;
-        const ivaData = this.calcularIVAPorAlicuota(params.items, incluyeIva);
 
-        return this.emitirComprobante({
-            tipo: TipoComprobante.FACTURA_B,
-            concepto: params.concepto || Concepto.PRODUCTOS,
+    /**
+     * Emite una Factura C (consumidor final, sin discriminación de IVA).
+     */
+    async issueInvoiceC(params: {
+        items: InvoiceItem[];
+        concept?: BillingConcept;
+        date?: Date;
+    }): Promise<CAEResponse> {
+        const total = round(calculateTotal(params.items));
+
+        return this.issueDocument({
+            type: InvoiceType.FACTURA_C,
+            concept: params.concept || BillingConcept.PRODUCTS,
+            total,
+            date: params.date,
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+            },
             items: params.items,
-            comprador: params.comprador,
-            fecha: params.fecha,
-            ivaData,
-            incluyeIva,
         });
     }
 
     /**
-     * Emite una Factura A (RI a RI)
-     * REQUIERE detalle de items con IVA discriminado
+     * Emite una Factura B (con IVA discriminado).
+     * REQUIERE `vatRate` en todos los items.
      */
-    async emitirFacturaA(params: {
-        items: FacturaItem[];
-        comprador: Comprador;
-        concepto?: Concepto;
-        fecha?: Date;
-        incluyeIva?: boolean;
+    async issueInvoiceB(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
     }): Promise<CAEResponse> {
-        this.validateItemsWithIVA(params.items);
-        const incluyeIva = params.incluyeIva || false;
-        const ivaData = this.calcularIVAPorAlicuota(params.items, incluyeIva);
+        this.validateItemsWithVAT(params.items);
+        const includesVAT = params.includesVAT || false;
+        const vatData = this.calculateVATByRate(params.items, includesVAT);
 
-        return this.emitirComprobante({
-            tipo: TipoComprobante.FACTURA_A,
-            concepto: params.concepto || Concepto.PRODUCTOS,
+        return this.issueDocument({
+            type: InvoiceType.FACTURA_B,
+            concept: params.concept || BillingConcept.PRODUCTS,
             items: params.items,
-            comprador: params.comprador,
-            fecha: params.fecha,
-            ivaData,
-            incluyeIva,
+            buyer: params.buyer,
+            date: params.date,
+            vatData,
+            includesVAT,
         });
     }
 
     /**
-     * Valida que todos los items tengan alícuota IVA definida
+     * Emite una Factura A (Responsable Inscripto a Responsable Inscripto, con IVA discriminado).
+     * REQUIERE `vatRate` en todos los items.
      */
-    private validateItemsWithIVA(items: FacturaItem[]): void {
-        const sinIva = items.filter(item =>
-            item.alicuotaIva === undefined || item.alicuotaIva === null
-        );
+    async issueInvoiceA(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        this.validateItemsWithVAT(params.items);
+        const includesVAT = params.includesVAT || false;
+        const vatData = this.calculateVATByRate(params.items, includesVAT);
 
-        if (sinIva.length > 0) {
-            throw new ArcaValidationError(
-                'Esta operación requiere IVA discriminado en todos los items',
-                {
-                    itemsSinIva: sinIva.map(i => i.descripcion),
-                    hint: 'Agregá alicuotaIva a cada item (21, 10.5, 27, o 0)'
-                }
+        return this.issueDocument({
+            type: InvoiceType.FACTURA_A,
+            concept: params.concept || BillingConcept.PRODUCTS,
+            items: params.items,
+            buyer: params.buyer,
+            date: params.date,
+            vatData,
+            includesVAT,
+        });
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Consultas
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Consulta un comprobante ya emitido (FECompConsultar).
+     *
+     * @param type Tipo de comprobante
+     * @param invoiceNumber Número de comprobante
+     */
+    async getInvoice(type: InvoiceType, invoiceNumber: number): Promise<InvoiceDetails> {
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FECompConsultar>
+      <ar:Auth>
+        <ar:Token>${this.config.ticket.token}</ar:Token>
+        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
+        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+      </ar:Auth>
+      <ar:FeCompConsReq>
+        <ar:CbteTipo>${type}</ar:CbteTipo>
+        <ar:CbteNro>${invoiceNumber}</ar:CbteNro>
+        <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
+      </ar:FeCompConsReq>
+    </ar:FECompConsultar>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const endpoint = getWsfeEndpoint(this.config.environment);
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompConsultar',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout,
+        });
+
+        if (!response.ok) {
+            throw new ArcaError(`Error HTTP al consultar comprobante: ${response.status}`, 'HTTP_ERROR');
+        }
+
+        const responseXml = await response.text();
+        const result = parseXml(responseXml);
+        const data = result?.Envelope?.Body?.FECompConsultarResponse?.FECompConsultarResult;
+
+        if (!data) {
+            throw new ArcaError('Respuesta FECompConsultar inválida', 'PARSE_ERROR', { xml: responseXml });
+        }
+
+        if (data.Errors) {
+            const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
+            const code = error?.Code || 'UNKNOWN';
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+                getArcaHint(code)
             );
         }
+
+        const det = data.ResultGet;
+        return {
+            invoiceType: Number(det.CbteTipo),
+            pointOfSale: Number(det.PtoVta),
+            invoiceNumber: Number(det.CbteDesde),
+            date: String(det.CbteFch),
+            concept: Number(det.Concepto),
+            docType: Number(det.DocTipo),
+            docNumber: Number(det.DocNro),
+            total: Number(det.ImpTotal),
+            net: Number(det.ImpNeto),
+            vat: Number(det.ImpIVA),
+            cae: String(det.CodAutorizacion),
+            caeExpiry: String(det.FchVto),
+            result: det.Resultado as 'A' | 'R',
+        };
     }
 
     /**
-     * Calcula IVA agrupado por alícuota
-     * ARCA requiere esto para Factura B/A
+     * Lista los puntos de venta habilitados para el CUIT autenticado (FEParamGetPtosVenta).
      */
-    private calcularIVAPorAlicuota(items: FacturaItem[], incluyeIva = false): {
-        alicuota: number;
-        baseImponible: number;
-        importe: number;
-    }[] {
-        const porAlicuota = new Map<number, { base: number; importe: number }>();
+    async getPointsOfSale(): Promise<PointOfSale[]> {
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:FEParamGetPtosVenta>
+      <ar:Auth>
+        <ar:Token>${this.config.ticket.token}</ar:Token>
+        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
+        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+      </ar:Auth>
+    </ar:FEParamGetPtosVenta>
+  </soapenv:Body>
+</soapenv:Envelope>`;
 
-        items.forEach(item => {
-            const alicuota = item.alicuotaIva || 0;
-            let precioNeto = item.precioUnitario;
-
-            if (incluyeIva && alicuota) {
-                precioNeto = item.precioUnitario / (1 + (alicuota / 100));
-            }
-
-            const base = item.cantidad * precioNeto;
-            const importe = base * alicuota / 100;
-
-            const actual = porAlicuota.get(alicuota) || { base: 0, importe: 0 };
-            porAlicuota.set(alicuota, {
-                base: actual.base + base,
-                importe: actual.importe + importe,
-            });
+        const endpoint = getWsfeEndpoint(this.config.environment);
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout,
         });
 
-        return Array.from(porAlicuota.entries()).map(([alicuota, valores]) => ({
-            alicuota,
-            baseImponible: redondear(valores.base),
-            importe: redondear(valores.importe),
+        if (!response.ok) {
+            throw new ArcaError(`Error HTTP al consultar puntos de venta: ${response.status}`, 'HTTP_ERROR');
+        }
+
+        const responseXml = await response.text();
+        const result = parseXml(responseXml);
+        const data = result?.Envelope?.Body?.FEParamGetPtosVentaResponse?.FEParamGetPtosVentaResult;
+
+        if (!data) {
+            throw new ArcaError('Respuesta FEParamGetPtosVenta inválida', 'PARSE_ERROR', { xml: responseXml });
+        }
+
+        if (data.Errors) {
+            const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
+            throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
+        }
+
+        const raw = data.ResultGet?.PtoVenta;
+        if (!raw) return [];
+
+        const list = Array.isArray(raw) ? raw : [raw];
+        return list.map((pv: Record<string, unknown>) => ({
+            number: Number(pv.Nro),
+            type: String(pv.EmisionTipo),
+            isBlocked: pv.Bloqueado === 'S',
+            blockedSince: pv.FchBaja ? String(pv.FchBaja) : undefined,
         }));
     }
 
-    /**
-     * Emite una Factura C (consumidor final)
-     * Forma simplificada sin especificar comprador
-     */
-    async emitirFacturaC(params: {
-        items: FacturaItem[];
-        concepto?: Concepto;
-        fecha?: Date;
-    }): Promise<CAEResponse> {
-        const total = redondear(calcularTotal(params.items));
-
-        return this.emitirComprobante({
-            tipo: TipoComprobante.FACTURA_C,
-            concepto: params.concepto || Concepto.PRODUCTOS,
-            total,
-            fecha: params.fecha,
-            comprador: {
-                tipoDocumento: TipoDocumento.CONSUMIDOR_FINAL,
-                nroDocumento: '0',
-            },
-            items: params.items,
-        });
-    }
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Métodos internos
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Emite un comprobante (método genérico interno)
+     * Método genérico interno para emitir cualquier tipo de comprobante.
      */
-    async emitirComprobante(request: EmitirFacturaRequest): Promise<CAEResponse> {
-        // 1. Obtener próximo número de comprobante
-        const nroComprobante = await this.obtenerProximoNumero(request.tipo);
+    private async issueDocument(request: IssueInvoiceRequest): Promise<CAEResponse> {
+        // 1. Get next invoice number
+        const invoiceNumber = await this.getNextInvoiceNumber(request.type);
 
-        // 2. Determinar total
+        // 2. Calculate totals
         let total = request.total || 0;
-        let subtotal = total; // Para Factura C/Ticket C, el neto es igual al total si no discriminamos
-        let iva = 0;
+        let net = total;
+        let vat = 0;
 
         if (request.items && request.items.length > 0) {
-            const incluyeIva = request.incluyeIva || false;
-            subtotal = redondear(calcularSubtotal(request.items, incluyeIva));
-            iva = redondear(calcularIVA(request.items, incluyeIva));
-            total = redondear(calcularTotal(request.items, incluyeIva));
+            const includesVAT = request.includesVAT || false;
+            net = round(calculateSubtotal(request.items, includesVAT));
+            vat = round(calculateVAT(request.items, includesVAT));
+            total = round(calculateTotal(request.items, includesVAT));
         }
 
         if (total <= 0) {
             throw new ArcaValidationError('El monto total debe ser mayor a 0');
         }
 
-        // 3. Preparar request SOAP
-        const soapRequest = this.buildCAESolicitarRequest({
-            tipo: request.tipo,
-            puntoVenta: this.config.puntoVenta,
-            nroComprobante,
-            concepto: request.concepto,
-            fecha: request.fecha || new Date(),
-            comprador: request.comprador,
-            subtotal,
-            iva,
+        // 3. Build SOAP request
+        const soapRequest = this.buildCAERequest({
+            type: request.type,
+            pointOfSale: this.config.pointOfSale,
+            invoiceNumber,
+            concept: request.concept,
+            date: request.date || new Date(),
+            buyer: request.buyer,
+            net,
+            vat,
             total,
-            ivaData: request.ivaData,
+            vatData: request.vatData,
         });
 
-        // 4. Enviar a ARCA
+        // 4. Send to ARCA
         const endpoint = getWsfeEndpoint(this.config.environment);
-
         const response = await callArcaApi(endpoint, {
             method: 'POST',
             headers: {
@@ -361,30 +462,25 @@ export class WsfeService {
 
         const responseXml = await response.text();
 
-        // 5. Parsear respuesta CAE
+        // 5. Parse CAE response
         const result = await this.parseCAEResponse(responseXml);
 
-        // 6. Generar URL de QR (simplificación para el usuario)
-        const urlQr = generarUrlQR(
-            result,
-            this.config.cuit,
-            total,
-            request.comprador
-        );
+        // 6. Generate QR URL
+        const qrUrl = generateQRUrl(result, this.config.cuit, total, request.buyer);
 
         return {
             ...result,
             items: request.items,
-            iva: request.ivaData,
-            urlQr,
+            vat: request.vatData,
+            qrUrl,
         };
     }
 
     /**
-     * Obtiene el próximo número de comprobante disponible
+     * Obtiene el próximo número de comprobante disponible (FECompUltimoAutorizado + 1)
      */
-    private async obtenerProximoNumero(tipo: TipoComprobante): Promise<number> {
-        const soapRequest = this.buildProximoNumeroRequest(tipo);
+    private async getNextInvoiceNumber(type: InvoiceType): Promise<number> {
+        const soapRequest = this.buildLastInvoiceRequest(type);
         const endpoint = getWsfeEndpoint(this.config.environment);
 
         const response = await callArcaApi(endpoint, {
@@ -398,12 +494,11 @@ export class WsfeService {
         });
 
         if (!response.ok) {
-            throw new ArcaError(`Error HTTP al consultar próximo número: ${response.status}`, 'HTTP_ERROR');
+            throw new ArcaError(`Error HTTP al consultar último comprobante: ${response.status}`, 'HTTP_ERROR');
         }
 
         const responseXml = await response.text();
         const result = parseXml(responseXml);
-
         const data = result?.Envelope?.Body?.FECompUltimoAutorizadoResponse?.FECompUltimoAutorizadoResult;
 
         if (data?.Errors) {
@@ -417,36 +512,115 @@ export class WsfeService {
             );
         }
 
-        const nro = data?.CbteNro;
-        return typeof nro === 'number' ? nro + 1 : 1;
+        const lastNumber = data?.CbteNro;
+        return typeof lastNumber === 'number' ? lastNumber + 1 : 1;
     }
 
-    private buildCAESolicitarRequest(params: {
-        tipo: TipoComprobante;
-        puntoVenta: number;
-        nroComprobante: number;
-        concepto: Concepto;
-        fecha: Date;
-        comprador?: EmitirFacturaRequest['comprador'];
-        subtotal: number;
-        iva: number;
-        total: number;
-        ivaData?: EmitirFacturaRequest['ivaData'];
-    }): string {
-        const fechaStr = params.fecha.toISOString().split('T')[0].replace(/-/g, '');
+    /**
+     * Valida que todos los items tengan alícuota IVA definida
+     */
+    private validateItemsWithVAT(items: InvoiceItem[]): void {
+        const missingVAT = items.filter(item =>
+            item.vatRate === undefined || item.vatRate === null
+        );
 
-        let ivaXml = '';
-        if (params.ivaData && params.ivaData.length > 0) {
-            ivaXml = '<ar:Iva>';
-            params.ivaData.forEach(aliquot => {
-                ivaXml += `
+        if (missingVAT.length > 0) {
+            throw new ArcaValidationError(
+                'Esta operación requiere `vatRate` en todos los items',
+                {
+                    itemsMissingVAT: missingVAT.map(i => i.description),
+                    hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)'
+                }
+            );
+        }
+    }
+
+    /**
+     * Calcula el IVA agrupado por alícuota (requerido por ARCA para Factura A/B)
+     */
+    private calculateVATByRate(items: InvoiceItem[], includesVAT = false): {
+        rate: number;
+        taxBase: number;
+        amount: number;
+    }[] {
+        const byRate = new Map<number, { base: number; amount: number }>();
+
+        items.forEach(item => {
+            const rate = item.vatRate || 0;
+            let netPrice = item.unitPrice;
+
+            if (includesVAT && rate) {
+                netPrice = item.unitPrice / (1 + (rate / 100));
+            }
+
+            const base = item.quantity * netPrice;
+            const amount = base * rate / 100;
+
+            const current = byRate.get(rate) || { base: 0, amount: 0 };
+            byRate.set(rate, {
+                base: current.base + base,
+                amount: current.amount + amount,
+            });
+        });
+
+        return Array.from(byRate.entries()).map(([rate, values]) => ({
+            rate,
+            taxBase: round(values.base),
+            amount: round(values.amount),
+        }));
+    }
+
+    /**
+     * Mapea alícuota % al código interno de ARCA
+     */
+    private getVATCode(percentage: number): number {
+        const map: Record<number, number> = {
+            0: 3,
+            10.5: 4,
+            21: 5,
+            27: 6,
+        };
+
+        const code = map[percentage];
+        if (code === undefined) {
+            throw new ArcaValidationError(
+                `Alícuota IVA inválida: ${percentage}%`,
+                {
+                    validRates: [0, 10.5, 21, 27],
+                    hint: 'Usá una de las alícuotas oficiales de Argentina'
+                }
+            );
+        }
+
+        return code;
+    }
+
+    private buildCAERequest(params: {
+        type: InvoiceType;
+        pointOfSale: number;
+        invoiceNumber: number;
+        concept: BillingConcept;
+        date: Date;
+        buyer?: IssueInvoiceRequest['buyer'];
+        net: number;
+        vat: number;
+        total: number;
+        vatData?: IssueInvoiceRequest['vatData'];
+    }): string {
+        const dateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
+
+        let vatXml = '';
+        if (params.vatData && params.vatData.length > 0) {
+            vatXml = '<ar:Iva>';
+            params.vatData.forEach(entry => {
+                vatXml += `
         <ar:AlicIva>
-          <ar:Id>${this.getCodigoAlicuota(aliquot.alicuota)}</ar:Id>
-          <ar:BaseImp>${aliquot.baseImponible.toFixed(2)}</ar:BaseImp>
-          <ar:Importe>${aliquot.importe.toFixed(2)}</ar:Importe>
+          <ar:Id>${this.getVATCode(entry.rate)}</ar:Id>
+          <ar:BaseImp>${entry.taxBase.toFixed(2)}</ar:BaseImp>
+          <ar:Importe>${entry.amount.toFixed(2)}</ar:Importe>
         </ar:AlicIva>`;
             });
-            ivaXml += '\n      </ar:Iva>';
+            vatXml += '\n      </ar:Iva>';
         }
 
         return `<?xml version="1.0" encoding="UTF-8"?>
@@ -463,26 +637,26 @@ export class WsfeService {
       <ar:FeCAEReq>
         <ar:FeCabReq>
           <ar:CantReg>1</ar:CantReg>
-          <ar:PtoVta>${params.puntoVenta}</ar:PtoVta>
-          <ar:CbteTipo>${params.tipo}</ar:CbteTipo>
+          <ar:PtoVta>${params.pointOfSale}</ar:PtoVta>
+          <ar:CbteTipo>${params.type}</ar:CbteTipo>
         </ar:FeCabReq>
         <ar:FeDetReq>
           <ar:FECAEDetRequest>
-            <ar:Concepto>${params.concepto}</ar:Concepto>
-            <ar:DocTipo>${params.comprador?.tipoDocumento || 99}</ar:DocTipo>
-            <ar:DocNro>${params.comprador?.nroDocumento || 0}</ar:DocNro>
-            <ar:CbteDesde>${params.nroComprobante}</ar:CbteDesde>
-            <ar:CbteHasta>${params.nroComprobante}</ar:CbteHasta>
-            <ar:CbteFch>${fechaStr}</ar:CbteFch>
+            <ar:Concepto>${params.concept}</ar:Concepto>
+            <ar:DocTipo>${params.buyer?.docType || 99}</ar:DocTipo>
+            <ar:DocNro>${params.buyer?.docNumber || 0}</ar:DocNro>
+            <ar:CbteDesde>${params.invoiceNumber}</ar:CbteDesde>
+            <ar:CbteHasta>${params.invoiceNumber}</ar:CbteHasta>
+            <ar:CbteFch>${dateStr}</ar:CbteFch>
             <ar:ImpTotal>${params.total.toFixed(2)}</ar:ImpTotal>
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
-            <ar:ImpNeto>${params.subtotal.toFixed(2)}</ar:ImpNeto>
+            <ar:ImpNeto>${params.net.toFixed(2)}</ar:ImpNeto>
             <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>${params.iva.toFixed(2)}</ar:ImpIVA>
+            <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>PES</ar:MonId>
             <ar:MonCotiz>1</ar:MonCotiz>
-            ${ivaXml}
+            ${vatXml}
           </ar:FECAEDetRequest>
         </ar:FeDetReq>
       </ar:FeCAEReq>
@@ -491,32 +665,7 @@ export class WsfeService {
 </soapenv:Envelope>`;
     }
 
-    /**
-     * Mapea alícuota % a código ARCA
-     */
-    private getCodigoAlicuota(porcentaje: number): number {
-        const mapa: Record<number, number> = {
-            0: 3,
-            10.5: 4,
-            21: 5,
-            27: 6,
-        };
-
-        const codigo = mapa[porcentaje];
-        if (!codigo) {
-            throw new ArcaValidationError(
-                `Alícuota IVA inválida: ${porcentaje}%`,
-                {
-                    alicuotasValidas: [0, 10.5, 21, 27],
-                    hint: 'Usar una de las alícuotas oficiales de Argentina'
-                }
-            );
-        }
-
-        return codigo;
-    }
-
-    private buildProximoNumeroRequest(tipo: TipoComprobante): string {
+    private buildLastInvoiceRequest(type: InvoiceType): string {
         return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -528,8 +677,8 @@ export class WsfeService {
         <ar:Sign>${this.config.ticket.sign}</ar:Sign>
         <ar:Cuit>${this.config.cuit}</ar:Cuit>
       </ar:Auth>
-      <ar:PtoVta>${this.config.puntoVenta}</ar:PtoVta>
-      <ar:CbteTipo>${tipo}</ar:CbteTipo>
+      <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
+      <ar:CbteTipo>${type}</ar:CbteTipo>
     </ar:FECompUltimoAutorizado>
   </soapenv:Body>
 </soapenv:Envelope>`;
@@ -563,23 +712,23 @@ export class WsfeService {
             throw new ArcaError('Respuesta WSFE incompleta: falta detalle del comprobante', 'PARSE_ERROR');
         }
 
-        const observaciones: string[] = [];
+        const observations: string[] = [];
         if (det.Observaciones) {
             const obsArray = Array.isArray(det.Observaciones.Obs)
                 ? det.Observaciones.Obs
                 : [det.Observaciones.Obs];
-            obsArray.forEach((o: any) => observaciones.push(o.Msg));
+            obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
         }
 
         return {
-            tipoComprobante: cab.CbteTipo,
-            puntoVenta: cab.PtoVta,
-            nroComprobante: Number(det.CbteDesde),
-            fecha: det.CbteFch,
+            invoiceType: cab.CbteTipo,
+            pointOfSale: cab.PtoVta,
+            invoiceNumber: Number(det.CbteDesde),
+            date: det.CbteFch,
             cae: String(det.CAE),
-            vencimientoCae: String(det.CAEFchVto),
-            resultado: det.Resultado,
-            observaciones: observaciones.length > 0 ? observaciones : undefined,
+            caeExpiry: String(det.CAEFchVto),
+            result: det.Resultado,
+            observations: observations.length > 0 ? observations : undefined,
         };
     }
 }

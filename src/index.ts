@@ -1,5 +1,5 @@
 /**
- * arca-sdk - SDK moderna para ARCA (ex-AFIP)
+ * arca-sdk — SDK moderna para ARCA (ex-AFIP)
  */
 
 // Servicios principales
@@ -22,26 +22,31 @@ export type { TokenStorage } from './auth/storage';
 
 // Tipos Padrón
 export type {
-    PadronConfig,
-    Persona,
-    Domicilio,
-    PadronResponse,
+    TaxpayerServiceConfig,
+    Taxpayer,
+    Address,
+    Activity,
+    TaxRecord,
+    TaxpayerResponse,
 } from './types/padron';
 
 // Tipos WSFE
 export type {
     WsfeConfig,
-    FacturaItem,
-    Comprador,
-    EmitirFacturaRequest,
+    InvoiceItem,
+    Buyer,
+    IssueInvoiceRequest,
     CAEResponse,
+    InvoiceDetails,
+    PointOfSale,
+    ServiceStatus,
 } from './types/wsfe';
 
 // Enums WSFE
 export {
-    TipoComprobante,
-    Concepto,
-    TipoDocumento,
+    InvoiceType,
+    BillingConcept,
+    TaxIdType,
 } from './types/wsfe';
 
 // Errores
@@ -49,7 +54,8 @@ export {
     ArcaError,
     ArcaAuthError,
     ArcaValidationError,
+    ArcaNetworkError,
 } from './types/common';
 
-// Utilidades útiles para Frontend/Impresión
-export { generarUrlQR } from './utils/qr';
+// Utilidades para Frontend/Impresión
+export { generateQRUrl } from './utils/qr';
