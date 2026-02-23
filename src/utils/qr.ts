@@ -41,8 +41,8 @@ export function generateQRUrl(
     const cleanCUIT = issuerCUIT.replace(/\D/g, '');
     const cleanCAE = caeResponse.cae.replace(/\D/g, '');
 
-    // Format date to YYYY-MM-DD (ARCA returns YYYYMMDD)
-    const rawDate = caeResponse.date;
+    // Format date to YYYY-MM-DD (ARCA returns YYYYMMDD as string or number)
+    const rawDate = String(caeResponse.date); // Ensure string — fast-xml-parser may return number
     const formattedDate = rawDate.length === 8
         ? `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`
         : rawDate;

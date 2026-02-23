@@ -721,10 +721,10 @@ export class WsfeService {
         }
 
         return {
-            invoiceType: cab.CbteTipo,
-            pointOfSale: cab.PtoVta,
+            invoiceType: Number(cab.CbteTipo),
+            pointOfSale: Number(cab.PtoVta),
             invoiceNumber: Number(det.CbteDesde),
-            date: det.CbteFch,
+            date: String(det.CbteFch),
             cae: String(det.CAE),
             caeExpiry: String(det.CAEFchVto),
             result: det.Resultado,
