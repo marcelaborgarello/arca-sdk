@@ -4,6 +4,26 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.0.1] — 2026-02-23
+
+### 🐛 Bugfix crítico — QR URL
+
+`generateQRUrl` usaba `encodeURIComponent` sobre el string base64, convirtiendo:
+- `+` → `%2B`
+- `=` → `%3D`
+- `/` → `%2F`
+
+El scanner de ARCA intenta decodificar el parámetro `?p=` como base64 puro. Al recibir `%2B` en lugar de `+`, la decodificación falla parcialmente: el CUIT y el CAE se rescatan por un camino alternativo interno, pero la fecha, punto de venta, número de comprobante e importe llegan vacíos.
+
+**Fix:** El base64 ahora se embebe directamente sin URL-encoding, tal como especifica la [documentación oficial de ARCA](https://www.afip.gob.ar/fe/qr/especificaciones.asp).
+
+```diff
+- return `https://www.afip.gob.ar/fe/qr/?p=${encodeURIComponent(base64)}`;
++ return `https://www.afip.gob.ar/fe/qr/?p=${base64}`;
+```
+
+---
+
 ## [1.0.0] — 2026-02-23
 
 ### 🔴 Breaking Changes

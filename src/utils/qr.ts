@@ -73,11 +73,13 @@ export function generateQRUrl(
     qrData.tipoCodAut = 'E';
     qrData.codAut = Number(cleanCAE);
 
-    // Encode to Base64 (Buffer for Node.js, btoa fallback for browsers)
+    // IMPORTANT: ARCA's scanner decodes raw base64, NOT URL-encoded base64.
+    // Using encodeURIComponent here converts + to %2B and = to %3D, which
+    // breaks ARCA's QR scanner. The raw base64 string must be used as-is.
     const jsonString = JSON.stringify(qrData);
     const base64 = typeof Buffer !== 'undefined'
         ? Buffer.from(jsonString).toString('base64')
         : btoa(jsonString);
 
-    return `https://www.afip.gob.ar/fe/qr/?p=${encodeURIComponent(base64)}`;
+    return `https://www.afip.gob.ar/fe/qr/?p=${base64}`;
 }
