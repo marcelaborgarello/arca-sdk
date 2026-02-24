@@ -46,6 +46,34 @@ pnpm add arca-sdk
 
 ---
 
+## 🔐 Security & Responsibility / Seguridad y Responsabilidad
+
+### 🇺🇸 English
+
+**arca-sdk** is designed to be **stateless and cloud-native**. It does **NOT** persist certificates or private keys to the filesystem.
+
+It is the responsibility of the implementing application to:
+1.  **Securely store** the Private Key (`.key`) and Certificate (`.crt`). (Recommended: Encrypted Database, AWS KMS, HashiCorp Vault).
+2.  **Decrypt** credentials only at runtime.
+3.  Pass the raw strings/buffers to the SDK constructors.
+
+> [!WARNING]
+> Never commit your `.key` files to Git or expose them in public folders. The SDK operates in-memory to ensure maximum security in Serverless environments (Vercel, AWS Lambda).
+
+### 🇦🇷 Español
+
+**arca-sdk** está diseñado para ser **stateless** (sin estado) y **cloud-native**. **NO** guarda certificados ni claves privadas en el sistema de archivos.
+
+Es responsabilidad de la aplicación que implementa el SDK:
+1.  **Almacenar de forma segura** la Clave Privada (`.key`) y el Certificado (`.crt`). (Recomendado: Base de Datos encriptada, AWS KMS, HashiCorp Vault).
+2.  **Desencriptar** las credenciales solo en tiempo de ejecución.
+3.  Pasar los strings o buffers crudos a los constructores del SDK.
+
+> [!CAUTION]
+> Nunca subas tus archivos `.key` a Git ni los expongas en carpetas públicas. El SDK opera en memoria para garantizar la máxima seguridad en entornos Serverless (Vercel, AWS Lambda).
+
+---
+
 ## Quick Start — 5 minutos y estás facturando
 
 ```typescript
