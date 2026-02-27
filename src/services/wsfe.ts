@@ -14,6 +14,7 @@ import {
     InvoiceType,
     BillingConcept,
     TaxIdType,
+    TaxCondition,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -144,6 +145,7 @@ export class WsfeService {
         total: number;
         concept?: BillingConcept;
         date?: Date;
+        taxConditionBuyer?: TaxCondition
     }): Promise<CAEResponse> {
         return this.issueDocument({
             type: InvoiceType.TICKET_C,
@@ -154,6 +156,7 @@ export class WsfeService {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
         });
     }
 
@@ -165,6 +168,7 @@ export class WsfeService {
         items: InvoiceItem[];
         concept?: BillingConcept;
         date?: Date;
+        taxConditionBuyer?: TaxCondition
     }): Promise<CAEResponse> {
         const total = round(calculateTotal(params.items));
 
@@ -177,6 +181,7 @@ export class WsfeService {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
         });
 
         return { ...cae, items: params.items };
@@ -189,6 +194,7 @@ export class WsfeService {
         items: InvoiceItem[];
         concept?: BillingConcept;
         date?: Date;
+        taxConditionBuyer: TaxCondition;
     }): Promise<CAEResponse> {
         const total = round(calculateTotal(params.items));
 
@@ -201,6 +207,7 @@ export class WsfeService {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER,
             items: params.items,
         });
     }
@@ -215,6 +222,7 @@ export class WsfeService {
         concept?: BillingConcept;
         date?: Date;
         includesVAT?: boolean;
+        taxConditionBuyer?: TaxCondition
     }): Promise<CAEResponse> {
         this.validateItemsWithVAT(params.items);
         const includesVAT = params.includesVAT || false;
@@ -228,6 +236,7 @@ export class WsfeService {
             date: params.date,
             vatData,
             includesVAT,
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
         });
     }
 
@@ -254,6 +263,7 @@ export class WsfeService {
             date: params.date,
             vatData,
             includesVAT,
+            taxCondition: TaxCondition.REGISTERED_TAXPAYER
         });
     }
 
@@ -438,6 +448,7 @@ export class WsfeService {
             vat,
             total,
             vatData: request.vatData,
+            taxCondition: request.taxCondition
         });
 
         // 4. Send to ARCA
@@ -606,6 +617,7 @@ export class WsfeService {
         vat: number;
         total: number;
         vatData?: IssueInvoiceRequest['vatData'];
+        taxCondition: TaxCondition
     }): string {
         const dateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
 
@@ -648,6 +660,7 @@ export class WsfeService {
             <ar:CbteDesde>${params.invoiceNumber}</ar:CbteDesde>
             <ar:CbteHasta>${params.invoiceNumber}</ar:CbteHasta>
             <ar:CbteFch>${dateStr}</ar:CbteFch>
+            <ar:CondicionIVAReceptorId>${params.taxCondition}</ar:CondicionIVAReceptorId>
             <ar:ImpTotal>${params.total.toFixed(2)}</ar:ImpTotal>
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>${params.net.toFixed(2)}</ar:ImpNeto>
