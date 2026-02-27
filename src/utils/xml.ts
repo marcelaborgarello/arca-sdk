@@ -1,6 +1,7 @@
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { ArcaAuthError } from '../types/common';
 import type { LoginTicket } from '../types/wsaa';
+import { formatArcaDate } from './formatArcaDate';
 
 /**
  * Genera el XML TRA (Ticket de Requerimiento de Acceso)
@@ -11,15 +12,16 @@ import type { LoginTicket } from '../types/wsaa';
  */
 export function buildTRA(service: string, cuit: string): string {
     const now = new Date();
-    const expirationTime = new Date(now.getTime() + 12 * 60 * 60 * 1000); // +12 horas
+    const genTime = new Date(now.getTime() - (10 * 60 * 1000)); 
+    const expTime = new Date(now.getTime() + (12 * 60 * 60 * 1000));
 
     const tra = {
         loginTicketRequest: {
             '@_version': '1.0',
             header: {
                 uniqueId: Math.floor(now.getTime() / 1000),
-                generationTime: now.toISOString(),
-                expirationTime: expirationTime.toISOString(),
+                generationTime: formatArcaDate(genTime),
+                expirationTime: formatArcaDate(expTime),
             },
             service,
         },
