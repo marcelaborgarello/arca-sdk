@@ -1,1 +1,0 @@
-docs: v1.0.3 - README profesional con badges, ejemplos reales y tabla de compatibilidad

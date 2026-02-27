@@ -4,6 +4,15 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.0.4] — 2026-02-27
+
+### 🐛 Bugfix — Timezone Handling
+
+- Se ajustó la generación de fechas para forzar la zona horaria UTC-3 (Argentina) independientemente de la zona horaria del servidor (ej: AWS, Vercel).
+- Se restan 10 minutos al tiempo de generación en los TRA para evitar errores de desincronización con los servidores de ARCA.
+
+---
+
 ## [1.0.1] — 2026-02-23
 
 ### 🐛 Bugfix crítico — QR URL
