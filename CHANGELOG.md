@@ -4,6 +4,19 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.1.0] — 2026-02-28
+
+### ✨ Nuevos Comprobantes (Vouchers)
+
+Se expandió la funcionalidad del servicio de facturación (`WsfeService`) para cubrir el espectro completo de comprobantes básicos:
+
+- **Notas de Crédito**: Agregados métodos `issueCreditNoteA()`, `issueCreditNoteB()` y `issueCreditNoteC()`.
+- **Notas de Débito**: Agregados métodos `issueDebitNoteA()`, `issueDebitNoteB()` y `issueDebitNoteC()`.
+- **Recibos**: Agregados métodos `issueReceiptA()`, `issueReceiptB()` y `issueReceiptC()`.
+- **Comprobantes Asociados**: El SDK ahora genera correctamente el nodo `<ar:CbtesAsoc>` de forma obligatoria para emitir NC/ND, asegurando que la operación de contingencia (anulación total o parcial de una factura) respete el estándar del ente recaudador. 
+
+---
+
 ## [1.0.4] — 2026-02-27
 
 ### 🐛 Bugfix — Timezone Handling

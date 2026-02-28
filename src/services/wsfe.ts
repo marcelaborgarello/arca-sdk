@@ -3,6 +3,7 @@ import { ArcaError, ArcaValidationError } from '../types/common';
 import type {
     WsfeConfig,
     IssueInvoiceRequest,
+    AssociatedInvoice,
     CAEResponse,
     InvoiceItem,
     Buyer,
@@ -183,26 +184,17 @@ export class WsfeService {
     }
 
     /**
-     * Emite una Factura C (consumidor final, sin discriminación de IVA).
+     * Emite una Factura A (Responsable Inscripto a Responsable Inscripto, con IVA discriminado).
+     * REQUIERE `vatRate` en todos los items.
      */
-    async issueInvoiceC(params: {
+    async issueInvoiceA(params: {
         items: InvoiceItem[];
+        buyer: Buyer;
         concept?: BillingConcept;
         date?: Date;
+        includesVAT?: boolean;
     }): Promise<CAEResponse> {
-        const total = round(calculateTotal(params.items));
-
-        return this.issueDocument({
-            type: InvoiceType.FACTURA_C,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            total,
-            date: params.date,
-            buyer: {
-                docType: TaxIdType.FINAL_CONSUMER,
-                docNumber: '0',
-            },
-            items: params.items,
-        });
+        return this.issueInvoiceWithVAT(InvoiceType.FACTURA_A, params);
     }
 
     /**
@@ -216,45 +208,157 @@ export class WsfeService {
         date?: Date;
         includesVAT?: boolean;
     }): Promise<CAEResponse> {
-        this.validateItemsWithVAT(params.items);
-        const includesVAT = params.includesVAT || false;
-        const vatData = this.calculateVATByRate(params.items, includesVAT);
-
-        return this.issueDocument({
-            type: InvoiceType.FACTURA_B,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            items: params.items,
-            buyer: params.buyer,
-            date: params.date,
-            vatData,
-            includesVAT,
-        });
+        return this.issueInvoiceWithVAT(InvoiceType.FACTURA_B, params);
     }
 
     /**
-     * Emite una Factura A (Responsable Inscripto a Responsable Inscripto, con IVA discriminado).
-     * REQUIERE `vatRate` en todos los items.
+     * Emite una Factura C (consumidor final, sin discriminación de IVA).
      */
-    async issueInvoiceA(params: {
+    async issueInvoiceC(params: {
+        items: InvoiceItem[];
+        concept?: BillingConcept;
+        date?: Date;
+        buyer?: Buyer;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithoutVAT(InvoiceType.FACTURA_C, params);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Recibos
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Emite un Recibo A (con IVA discriminado).
+     */
+    async issueReceiptA(params: {
         items: InvoiceItem[];
         buyer: Buyer;
         concept?: BillingConcept;
         date?: Date;
         includesVAT?: boolean;
     }): Promise<CAEResponse> {
-        this.validateItemsWithVAT(params.items);
-        const includesVAT = params.includesVAT || false;
-        const vatData = this.calculateVATByRate(params.items, includesVAT);
+        return this.issueInvoiceWithVAT(InvoiceType.RECIBO_A, params);
+    }
 
-        return this.issueDocument({
-            type: InvoiceType.FACTURA_A,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            items: params.items,
-            buyer: params.buyer,
-            date: params.date,
-            vatData,
-            includesVAT,
-        });
+    /**
+     * Emite un Recibo B (con IVA discriminado).
+     */
+    async issueReceiptB(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithVAT(InvoiceType.RECIBO_B, params);
+    }
+
+    /**
+     * Emite un Recibo C (sin discriminación de IVA).
+     */
+    async issueReceiptC(params: {
+        items: InvoiceItem[];
+        concept?: BillingConcept;
+        date?: Date;
+        buyer?: Buyer;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithoutVAT(InvoiceType.RECIBO_C, params);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Notas de Crédito
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Emite una Nota de Crédito A.
+     * REQUIERE especificar la Factura A original en `associatedInvoices`.
+     */
+    async issueCreditNoteA(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithVAT(InvoiceType.NOTA_CREDITO_A, params);
+    }
+
+    /**
+     * Emite una Nota de Crédito B.
+     * REQUIERE especificar la Factura B original en `associatedInvoices`.
+     */
+    async issueCreditNoteB(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithVAT(InvoiceType.NOTA_CREDITO_B, params);
+    }
+
+    /**
+     * Emite una Nota de Crédito C.
+     * REQUIERE especificar la Factura C original en `associatedInvoices`.
+     */
+    async issueCreditNoteC(params: {
+        items: InvoiceItem[];
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        buyer?: Buyer;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_CREDITO_C, params);
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Notas de Débito
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Emite una Nota de Débito A.
+     * REQUIERE especificar la Factura A original en `associatedInvoices`.
+     */
+    async issueDebitNoteA(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithVAT(InvoiceType.NOTA_DEBITO_A, params);
+    }
+
+    /**
+     * Emite una Nota de Débito B.
+     * REQUIERE especificar la Factura B original en `associatedInvoices`.
+     */
+    async issueDebitNoteB(params: {
+        items: InvoiceItem[];
+        buyer: Buyer;
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        includesVAT?: boolean;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithVAT(InvoiceType.NOTA_DEBITO_B, params);
+    }
+
+    /**
+     * Emite una Nota de Débito C.
+     * REQUIERE especificar la Factura C original en `associatedInvoices`.
+     */
+    async issueDebitNoteC(params: {
+        items: InvoiceItem[];
+        associatedInvoices: AssociatedInvoice[];
+        concept?: BillingConcept;
+        date?: Date;
+        buyer?: Buyer;
+    }): Promise<CAEResponse> {
+        return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_DEBITO_C, params);
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -404,6 +508,86 @@ export class WsfeService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
+     * Helper para emitir comprobantes tipo A/B que requieren IVA
+     */
+    private async issueInvoiceWithVAT(
+        type: InvoiceType,
+        params: {
+            items: InvoiceItem[];
+            buyer: Buyer;
+            associatedInvoices?: AssociatedInvoice[];
+            concept?: BillingConcept;
+            date?: Date;
+            includesVAT?: boolean;
+        }
+    ): Promise<CAEResponse> {
+        this.validateItemsWithVAT(params.items);
+        this.validateAssociatedInvoices(type, params.associatedInvoices);
+
+        const includesVAT = params.includesVAT || false;
+        const vatData = this.calculateVATByRate(params.items, includesVAT);
+
+        return this.issueDocument({
+            type,
+            concept: params.concept || BillingConcept.PRODUCTS,
+            items: params.items,
+            buyer: params.buyer,
+            associatedInvoices: params.associatedInvoices,
+            date: params.date,
+            vatData,
+            includesVAT,
+        });
+    }
+
+    /**
+     * Helper para emitir comprobantes tipo C que no discriminan IVA
+     */
+    private async issueInvoiceWithoutVAT(
+        type: InvoiceType,
+        params: {
+            items: InvoiceItem[];
+            associatedInvoices?: AssociatedInvoice[];
+            concept?: BillingConcept;
+            date?: Date;
+            buyer?: Buyer;
+        }
+    ): Promise<CAEResponse> {
+        this.validateAssociatedInvoices(type, params.associatedInvoices);
+        const total = round(calculateTotal(params.items));
+
+        return this.issueDocument({
+            type,
+            concept: params.concept || BillingConcept.PRODUCTS,
+            total,
+            date: params.date,
+            buyer: params.buyer || {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+            },
+            items: params.items,
+            associatedInvoices: params.associatedInvoices,
+        });
+    }
+
+    /**
+     * Validación obligatoria para NC/ND
+     */
+    private validateAssociatedInvoices(type: InvoiceType, associatedInvoices?: AssociatedInvoice[]): void {
+        const needsAssociation = [
+            InvoiceType.NOTA_CREDITO_A, InvoiceType.NOTA_DEBITO_A,
+            InvoiceType.NOTA_CREDITO_B, InvoiceType.NOTA_DEBITO_B,
+            InvoiceType.NOTA_CREDITO_C, InvoiceType.NOTA_DEBITO_C
+        ].includes(type);
+
+        if (needsAssociation && (!associatedInvoices || associatedInvoices.length === 0)) {
+            throw new ArcaValidationError(
+                'Las Notas de Crédito y Débito requieren al menos un comprobante asociado.',
+                { hint: 'Debes enviar el arreglo `associatedInvoices` con la factura original a la cual haces referencia' }
+            );
+        }
+    }
+
+    /**
      * Método genérico interno para emitir cualquier tipo de comprobante.
      */
     private async issueDocument(request: IssueInvoiceRequest): Promise<CAEResponse> {
@@ -434,6 +618,7 @@ export class WsfeService {
             concept: request.concept,
             date: request.date || new Date(),
             buyer: request.buyer,
+            associatedInvoices: request.associatedInvoices,
             net,
             vat,
             total,
@@ -602,6 +787,7 @@ export class WsfeService {
         concept: BillingConcept;
         date: Date;
         buyer?: IssueInvoiceRequest['buyer'];
+        associatedInvoices?: AssociatedInvoice[];
         net: number;
         vat: number;
         total: number;
@@ -621,6 +807,22 @@ export class WsfeService {
         </ar:AlicIva>`;
             });
             vatXml += '\n      </ar:Iva>';
+        }
+
+        let asocXml = '';
+        if (params.associatedInvoices && params.associatedInvoices.length > 0) {
+            asocXml = '<ar:CbtesAsoc>';
+            params.associatedInvoices.forEach(asoc => {
+                asocXml += `
+        <ar:CbteAsoc>
+          <ar:Tipo>${asoc.type}</ar:Tipo>
+          <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
+          <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
+          ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
+          ${asoc.date ? `<ar:CbteFch>${asoc.date.toISOString().split('T')[0].replace(/-/g, '')}</ar:CbteFch>` : ''}
+        </ar:CbteAsoc>`;
+            });
+            asocXml += '\n      </ar:CbtesAsoc>';
         }
 
         return `<?xml version="1.0" encoding="UTF-8"?>
@@ -656,6 +858,7 @@ export class WsfeService {
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>PES</ar:MonId>
             <ar:MonCotiz>1</ar:MonCotiz>
+            ${asocXml}
             ${vatXml}
           </ar:FECAEDetRequest>
         </ar:FeDetReq>

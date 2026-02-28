@@ -127,9 +127,12 @@ console.log('QR:', result.qrUrl);             // 'https://www.afip.gob.ar/fe/qr/
 |--------|-------------|---------------|
 | `issueSimpleReceipt()` | Ticket C | Monto total, sin detalle. Ideal para POS simple |
 | `issueReceipt()` | Ticket C + items | Con detalle de productos guardado localmente |
-| `issueInvoiceC()` | Factura C | Monotributistas a consumidor final |
+| `issueInvoiceC()` | Factura C | Monotributistas a consumidor final / Empresas |
 | `issueInvoiceB()` | Factura B | Responsable Inscripto a consumidor final / Monotributo |
 | `issueInvoiceA()` | Factura A | Responsable Inscripto a Responsable Inscripto |
+| `issueCreditNoteA/B/C()` | Nota de Crédito | Anulación/Devolución (Requiere asociar la factura original) |
+| `issueDebitNoteA/B/C()` | Nota de Débito | Cobro extra/Penalidad (Requiere asociar la factura original) |
+| `issueReceiptA/B/C()` | Recibo | Comprobante de pago (misma emisión que una factura) |
 
 ### ✅ Consultas disponibles
 
@@ -178,6 +181,26 @@ const result = await wsfe.issueInvoiceB({
 result.vat?.forEach(v => {
   console.log(`IVA ${v.rate}%: base $${v.taxBase} → $${v.amount}`);
 });
+```
+
+### Nota de Crédito (Anulando factura previa)
+
+```typescript
+import { InvoiceType } from 'arca-sdk';
+
+const result = await wsfe.issueCreditNoteC({
+  items: [
+    { description: 'Anulación de equipo defectuoso', quantity: 1, unitPrice: 45000 },
+  ],
+  // ⚠️ Obligatorio en NC/ND: especificar el comprobante original afectado
+  associatedInvoices: [{
+    type: InvoiceType.FACTURA_C, // La factura que estoy anulando
+    pointOfSale: 4,
+    invoiceNumber: 15302,
+  }],
+});
+
+console.log('CAE de anulación:', result.cae);
 ```
 
 ### Consulta de Padrón A13
@@ -269,6 +292,9 @@ try {
   }
 }
 ```
+
+### 🚚 Acerca de los Remitos
+> **¡Atención!** Este SDK implementa nativamente el servicio `WSFE` (Facturación Electrónica). Si tu negocio necesita emitir **Remitos Electrónicos Oficiales** para el traslado físico de mercaderías (Remitos Cárnicos, Azucareros, Harineros, etc.), tené en cuenta que la AFIP exige usar un webservice totalmente distinto llamado `WSREM` o similares. Estos servicios aún no están cubiertos por esta versión del SDK.
 
 ---
 

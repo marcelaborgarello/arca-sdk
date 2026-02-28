@@ -16,8 +16,20 @@ export interface WsfeConfig extends ArcaConfig {
  */
 export enum InvoiceType {
     FACTURA_A = 1,
+    NOTA_DEBITO_A = 2,
+    NOTA_CREDITO_A = 3,
+    RECIBO_A = 4,
+
     FACTURA_B = 6,
+    NOTA_DEBITO_B = 7,
+    NOTA_CREDITO_B = 8,
+    RECIBO_B = 9,
+
     FACTURA_C = 11,
+    NOTA_DEBITO_C = 12,
+    NOTA_CREDITO_C = 13,
+    RECIBO_C = 15,
+
     TICKET_A = 81,
     TICKET_B = 82,
     TICKET_C = 83,
@@ -78,6 +90,22 @@ export interface Buyer {
 }
 
 /**
+ * Comprobante asociado (Requerido al emitir Notas de Crédito/Débito)
+ */
+export interface AssociatedInvoice {
+    /** Tipo de comprobante original (ej. FACTURA_C) */
+    type: InvoiceType;
+    /** Punto de venta original */
+    pointOfSale: number;
+    /** Número de comprobante original */
+    invoiceNumber: number;
+    /** CUIT emisor (requerido a veces en MiPyME, opcional para resto) */
+    cuit?: string;
+    /** Fecha de emisión del comprobante original */
+    date?: Date;
+}
+
+/**
  * Request para emitir comprobante
  */
 export interface IssueInvoiceRequest {
@@ -89,6 +117,8 @@ export interface IssueInvoiceRequest {
     buyer?: Buyer;
     /** Items de la factura */
     items?: InvoiceItem[];
+    /** Comprobantes asociados (Obligatorio para Nota de Crédito/Débito) */
+    associatedInvoices?: AssociatedInvoice[];
     /** Monto total (requerido si no hay items) */
     total?: number;
     /** Desglose de IVA (requerido para Factura A/B) */
