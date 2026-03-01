@@ -148,6 +148,7 @@ export class WsaaService {
             },
             body: this.buildSoapRequest(cms),
             timeout: this.config.timeout,
+            logArcaReponse: true,
         });
 
         if (!response.ok) {

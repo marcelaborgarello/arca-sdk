@@ -14,7 +14,7 @@ export interface CallApiOptions {
     headers: Record<string, string>;
     body: string;
     timeout?: number;
-    logArcaReponse?: string;
+    logArcaReponse?: boolean;
 }
 
 /**
