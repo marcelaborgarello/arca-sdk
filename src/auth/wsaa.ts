@@ -3,7 +3,7 @@ import { ArcaAuthError, ArcaValidationError } from '../types/common';
 import type { LoginTicket, WsaaConfig } from '../types/wsaa';
 import { signCMS, validateCertificate, validatePrivateKey } from '../utils/crypto';
 import { callArcaApi } from '../utils/network';
-import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
+import { buildTRA, parseWsaaResponse, validateCUIT, parseWsaaErrorResponse } from '../utils/xml';
 import { TicketManager } from './ticket';
 
 /**
@@ -152,8 +152,16 @@ export class WsaaService {
         });
 
         if (!response.ok) {
+            const textXml = await response.text();
+
+            if (!textXml)
+                throw new ArcaAuthError(
+                    `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
+                    { status: response.status, statusText: response.statusText },
+                );
+
             throw new ArcaAuthError(
-                `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
+                `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}, message: ${parseWsaaErrorResponse(textXml)}`,
                 { status: response.status, statusText: response.statusText },
             );
         }

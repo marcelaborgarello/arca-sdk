@@ -100,6 +100,44 @@ export function parseWsaaResponse(xml: string): LoginTicket {
 }
 
 /**
+ * Parsea la respuesta de error XML de WSAA
+ *
+ * @param xml - XML de respuesta
+ * @returns Mensaje de error
+ */
+export function parseWsaaErrorResponse(xml: string): string {
+    const parser = new XMLParser({
+        ignoreAttributes: false,
+        parseAttributeValue: true,
+        removeNSPrefix: true,
+    });
+
+    try {
+        const envelope = parser.parse(xml);
+        let message = '';
+
+        const faultCode = envelope?.Envelope?.Body?.Fault?.faultcode;
+        const faultText = envelope?.Envelope?.Body?.Fault?.faultstring;
+
+        if (faultCode) message += `Fault code "${faultCode} \n"`;
+        if (faultText) message += `Fault text "${faultText} \n"`;
+
+        if (!message) message = 'Ha ocurrido un error inesperado';
+
+        return message;
+    } catch (error) {
+        if (error instanceof ArcaAuthError) throw error;
+        throw new ArcaAuthError(
+            'Error al parsear respuesta WSAA (posible XML anidado malformado)',
+            {
+                originalError: error instanceof Error ? error.message : String(error),
+                receivedXml: xml.substring(0, 5000),
+            },
+        );
+    }
+}
+
+/**
  * Parsea un XML genérico de ARCA
  *
  * @param xml - XML de respuesta
