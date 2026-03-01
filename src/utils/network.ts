@@ -14,6 +14,7 @@ export interface CallApiOptions {
     headers: Record<string, string>;
     body: string;
     timeout?: number;
+    logArcaReponse?: string;
 }
 
 /**
@@ -57,6 +58,7 @@ export async function callArcaApi(url: string, options: CallApiOptions): Promise
                     data += chunk;
                 });
                 res.on('end', () => {
+                    if (options.logArcaReponse) console.log('[ARCA] response: ', data);
                     // Simular objeto Response de fetch
                     const response = {
                         ok: (res.statusCode || 0) >= 200 && (res.statusCode || 0) < 300,
