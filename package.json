@@ -1,6 +1,6 @@
 {
-  "name": "arca-sdk",
-  "version": "1.0.4",
+  "name": "@Romero67/arca-sdk",
+  "version": "1.0.6-fork.1",
   "description": "SDK moderna en TypeScript para ARCA (ex-AFIP)",
   "type": "module",
   "main": "./dist/index.cjs",
@@ -20,6 +20,7 @@
     "LICENSE"
   ],
   "scripts": {
+    "prepare": "npm run build",
     "dev": "tsup src/index.ts --watch",
     "build": "tsup",
     "test": "vitest run",
