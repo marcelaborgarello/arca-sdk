@@ -29,7 +29,8 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     10044: 'El importe de IVA no cuadra con la base imponible × alícuota.',
 
     // === Padrón ===
-    PADRON_ERROR: 'El servicio de Padrón suele ser inestable en homologación. Reintentá en unos minutos.',
+    PADRON_ERROR:
+        'El servicio de Padrón suele ser inestable en homologación. Reintentá en unos minutos.',
     CUIT_NOT_FOUND: 'El CUIT consultado no existe en el Padrón de ARCA.',
 };
 

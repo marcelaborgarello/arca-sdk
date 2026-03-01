@@ -60,25 +60,25 @@ export enum TaxIdType {
 export enum TaxCondition {
     /** 1 - Registered Taxpayer (Responsable Inscripto) */
     REGISTERED_TAXPAYER = 1,
-    
+
     /** 4 - Exempt (IVA Exento) */
     EXEMPT = 4,
-    
+
     /** 5 - Final Consumer (Consumidor Final) */
     FINAL_CONSUMER = 5,
-    
+
     /** 6 - Simple Taxpayer / Monotax (Monotributista) */
     MONOTAX_PAYER = 6,
-    
+
     /** 8 - Foreign Supplier (Proveedor del Exterior) */
     FOREIGN_SUPPLIER = 8,
-    
+
     /** 9 - Foreign Client (Cliente del Exterior) */
     FOREIGN_CLIENT = 9,
-    
+
     /** 10 - VAT Not Applicable (IVA No Alcanzado) */
     VAT_NOT_APPLICABLE = 10,
-    
+
     /** 13 - Social Monotax (Monotributista Social) */
     SOCIAL_MONOTAX = 13,
 }

@@ -1,14 +1,14 @@
 import { getWsaaEndpoint } from '../constants/endpoints';
 import { ArcaAuthError, ArcaValidationError } from '../types/common';
-import type { WsaaConfig, LoginTicket } from '../types/wsaa';
-import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
-import { validateCertificate, validatePrivateKey, signCMS } from '../utils/crypto';
-import { TicketManager } from './ticket';
+import type { LoginTicket, WsaaConfig } from '../types/wsaa';
+import { signCMS, validateCertificate, validatePrivateKey } from '../utils/crypto';
 import { callArcaApi } from '../utils/network';
+import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
+import { TicketManager } from './ticket';
 
 /**
  * Servicio de autenticación WSAA (Web Service de Autenticación y Autorización)
- * 
+ *
  * @example
  * ```typescript
  * const wsaa = new WsaaService({
@@ -18,7 +18,7 @@ import { callArcaApi } from '../utils/network';
  *   key: fs.readFileSync('key.pem', 'utf-8'),
  *   service: 'wsfe',
  * });
- * 
+ *
  * const ticket = await wsaa.login();
  * console.log('Token:', ticket.token);
  * ```
@@ -38,42 +38,38 @@ export class WsaaService {
      */
     private validateConfig(config: WsaaConfig): void {
         if (!validateCUIT(config.cuit)) {
-            throw new ArcaValidationError(
-                'CUIT inválido: debe tener 11 dígitos sin guiones',
-                { cuit: config.cuit }
-            );
+            throw new ArcaValidationError('CUIT inválido: debe tener 11 dígitos sin guiones', {
+                cuit: config.cuit,
+            });
         }
 
         if (!validateCertificate(config.cert)) {
-            throw new ArcaValidationError(
-                'Certificado inválido: debe estar en formato PEM',
-                { hint: 'Debe contener -----BEGIN CERTIFICATE-----' }
-            );
+            throw new ArcaValidationError('Certificado inválido: debe estar en formato PEM', {
+                hint: 'Debe contener -----BEGIN CERTIFICATE-----',
+            });
         }
 
         if (!validatePrivateKey(config.key)) {
-            throw new ArcaValidationError(
-                'Clave privada inválida: debe estar en formato PEM',
-                { hint: 'Debe contener -----BEGIN PRIVATE KEY----- o -----BEGIN RSA PRIVATE KEY-----' }
-            );
+            throw new ArcaValidationError('Clave privada inválida: debe estar en formato PEM', {
+                hint: 'Debe contener -----BEGIN PRIVATE KEY----- o -----BEGIN RSA PRIVATE KEY-----',
+            });
         }
 
         if (!config.service || config.service.trim() === '') {
-            throw new ArcaValidationError(
-                'Servicio ARCA no especificado',
-                { hint: 'Ejemplos: "wsfe", "wsmtxca"' }
-            );
+            throw new ArcaValidationError('Servicio ARCA no especificado', {
+                hint: 'Ejemplos: "wsfe", "wsmtxca"',
+            });
         }
     }
 
     /**
      * Obtiene un ticket de acceso válido.
-     * 
+     *
      * Prioridad de búsqueda:
      * 1. Memoria (TicketManager cache)
      * 2. Persistencia (si config.storage está definido)
      * 3. Nueva solicitud a WSAA
-     * 
+     *
      * @returns Ticket de acceso
      */
     async login(): Promise<LoginTicket> {
@@ -86,12 +82,17 @@ export class WsaaService {
         // 2. Intentar usar persistencia externa si está disponible
         if (this.config.storage) {
             try {
-                const storedTicket = await this.config.storage.get(this.config.cuit, this.config.environment);
+                const storedTicket = await this.config.storage.get(
+                    this.config.cuit,
+                    this.config.environment,
+                );
                 if (storedTicket) {
                     // Validar si el ticket devuelto por el storage no está expirado
                     // Agrego un margen de 5 minutos
                     const now = new Date();
-                    if (new Date(storedTicket.expirationTime) > new Date(now.getTime() + 5 * 60000)) {
+                    if (
+                        new Date(storedTicket.expirationTime) > new Date(now.getTime() + 5 * 60000)
+                    ) {
                         this.ticketManager.setTicket(storedTicket);
                         return storedTicket;
                     }
@@ -131,10 +132,9 @@ export class WsaaService {
         try {
             cms = signCMS(tra, this.config.cert, this.config.key);
         } catch (error) {
-            throw new ArcaAuthError(
-                'Error al firmar TRA con certificado',
-                { originalError: error }
-            );
+            throw new ArcaAuthError('Error al firmar TRA con certificado', {
+                originalError: error,
+            });
         }
 
         // 3. Enviar CMS a WSAA
@@ -144,7 +144,7 @@ export class WsaaService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': '',
+                SOAPAction: '',
             },
             body: this.buildSoapRequest(cms),
             timeout: this.config.timeout,
@@ -153,7 +153,7 @@ export class WsaaService {
         if (!response.ok) {
             throw new ArcaAuthError(
                 `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
-                { status: response.status, statusText: response.statusText }
+                { status: response.status, statusText: response.statusText },
             );
         }
 

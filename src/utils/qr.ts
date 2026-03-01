@@ -1,4 +1,4 @@
-import type { CAEResponse, Buyer } from '../types/wsfe';
+import type { Buyer, CAEResponse } from '../types/wsfe';
 import { TaxIdType } from '../types/wsfe';
 
 /**
@@ -35,7 +35,7 @@ export function generateQRUrl(
     caeResponse: CAEResponse,
     issuerCUIT: string,
     total: number,
-    buyer?: Buyer
+    buyer?: Buyer,
 ): string {
     // Clean CUIT and CAE (digits only)
     const cleanCUIT = issuerCUIT.replace(/\D/g, '');
@@ -43,9 +43,10 @@ export function generateQRUrl(
 
     // Format date to YYYY-MM-DD (ARCA returns YYYYMMDD as string or number)
     const rawDate = String(caeResponse.date); // Ensure string — fast-xml-parser may return number
-    const formattedDate = rawDate.length === 8
-        ? `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`
-        : rawDate;
+    const formattedDate =
+        rawDate.length === 8
+            ? `${rawDate.substring(0, 4)}-${rawDate.substring(4, 6)}-${rawDate.substring(6, 8)}`
+            : rawDate;
 
     // Buyer document info
     const docType = buyer?.docType || TaxIdType.FINAL_CONSUMER;
@@ -77,9 +78,10 @@ export function generateQRUrl(
     // Using encodeURIComponent here converts + to %2B and = to %3D, which
     // breaks ARCA's QR scanner. The raw base64 string must be used as-is.
     const jsonString = JSON.stringify(qrData);
-    const base64 = typeof Buffer !== 'undefined'
-        ? Buffer.from(jsonString).toString('base64')
-        : btoa(jsonString);
+    const base64 =
+        typeof Buffer !== 'undefined'
+            ? Buffer.from(jsonString).toString('base64')
+            : btoa(jsonString);
 
     return `https://www.afip.gob.ar/fe/qr/?p=${base64}`;
 }

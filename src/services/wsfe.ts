@@ -1,31 +1,21 @@
 import { getWsfeEndpoint } from '../constants/endpoints';
+import { getArcaHint } from '../constants/errors';
 import { ArcaError, ArcaValidationError } from '../types/common';
 import type {
-    WsfeConfig,
-    IssueInvoiceRequest,
-    CAEResponse,
-    InvoiceItem,
     Buyer,
-    ServiceStatus,
+    CAEResponse,
     InvoiceDetails,
+    InvoiceItem,
+    IssueInvoiceRequest,
     PointOfSale,
+    ServiceStatus,
+    WsfeConfig,
 } from '../types/wsfe';
-import {
-    InvoiceType,
-    BillingConcept,
-    TaxIdType,
-    TaxCondition,
-} from '../types/wsfe';
-import {
-    calculateSubtotal,
-    calculateVAT,
-    calculateTotal,
-    round,
-} from '../utils/calculations';
-import { parseXml } from '../utils/xml';
+import { BillingConcept, InvoiceType, TaxCondition, TaxIdType } from '../types/wsfe';
+import { calculateSubtotal, calculateTotal, calculateVAT, round } from '../utils/calculations';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
-import { getArcaHint } from '../constants/errors';
+import { parseXml } from '../utils/xml';
 
 /**
  * Servicio de Facturación Electrónica WSFE v1
@@ -61,16 +51,15 @@ export class WsfeService {
 
     private validateConfig(config: WsfeConfig): void {
         if (!config.ticket || !config.ticket.token) {
-            throw new ArcaValidationError(
-                'Ticket WSAA requerido. Ejecutá wsaa.login() primero.',
-                { hint: 'El ticket se obtiene del servicio WsaaService' }
-            );
+            throw new ArcaValidationError('Ticket WSAA requerido. Ejecutá wsaa.login() primero.', {
+                hint: 'El ticket se obtiene del servicio WsaaService',
+            });
         }
 
         if (!config.pointOfSale || config.pointOfSale < 1 || config.pointOfSale > 9999) {
             throw new ArcaValidationError(
                 'Punto de venta inválido: debe ser un número entre 1 y 9999',
-                { pointOfSale: config.pointOfSale }
+                { pointOfSale: config.pointOfSale },
             );
         }
     }
@@ -85,7 +74,9 @@ export class WsfeService {
      *
      * @param environment Ambiente a consultar (default: 'homologacion')
      */
-    static async checkStatus(environment: 'homologacion' | 'produccion' = 'homologacion'): Promise<ServiceStatus> {
+    static async checkStatus(
+        environment: 'homologacion' | 'produccion' = 'homologacion',
+    ): Promise<ServiceStatus> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -100,7 +91,7 @@ export class WsfeService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEDummy',
+                SOAPAction: 'http://ar.gov.afip.dif.FEV1/FEDummy',
             },
             body: soapRequest,
             timeout: 10000,
@@ -145,7 +136,7 @@ export class WsfeService {
         total: number;
         concept?: BillingConcept;
         date?: Date;
-        taxConditionBuyer?: TaxCondition
+        taxConditionBuyer?: TaxCondition;
     }): Promise<CAEResponse> {
         return this.issueDocument({
             type: InvoiceType.TICKET_C,
@@ -156,7 +147,7 @@ export class WsfeService {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
-            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER,
         });
     }
 
@@ -168,7 +159,7 @@ export class WsfeService {
         items: InvoiceItem[];
         concept?: BillingConcept;
         date?: Date;
-        taxConditionBuyer?: TaxCondition
+        taxConditionBuyer?: TaxCondition;
     }): Promise<CAEResponse> {
         const total = round(calculateTotal(params.items));
 
@@ -181,7 +172,7 @@ export class WsfeService {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
-            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER,
         });
 
         return { ...cae, items: params.items };
@@ -222,7 +213,7 @@ export class WsfeService {
         concept?: BillingConcept;
         date?: Date;
         includesVAT?: boolean;
-        taxConditionBuyer?: TaxCondition
+        taxConditionBuyer?: TaxCondition;
     }): Promise<CAEResponse> {
         this.validateItemsWithVAT(params.items);
         const includesVAT = params.includesVAT || false;
@@ -236,7 +227,7 @@ export class WsfeService {
             date: params.date,
             vatData,
             includesVAT,
-            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER
+            taxCondition: params.taxConditionBuyer || TaxCondition.FINAL_CONSUMER,
         });
     }
 
@@ -263,7 +254,7 @@ export class WsfeService {
             date: params.date,
             vatData,
             includesVAT,
-            taxCondition: TaxCondition.REGISTERED_TAXPAYER
+            taxCondition: TaxCondition.REGISTERED_TAXPAYER,
         });
     }
 
@@ -303,14 +294,17 @@ export class WsfeService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompConsultar',
+                SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompConsultar',
             },
             body: soapRequest,
             timeout: this.config.timeout,
         });
 
         if (!response.ok) {
-            throw new ArcaError(`Error HTTP al consultar comprobante: ${response.status}`, 'HTTP_ERROR');
+            throw new ArcaError(
+                `Error HTTP al consultar comprobante: ${response.status}`,
+                'HTTP_ERROR',
+            );
         }
 
         const responseXml = await response.text();
@@ -318,7 +312,9 @@ export class WsfeService {
         const data = result?.Envelope?.Body?.FECompConsultarResponse?.FECompConsultarResult;
 
         if (!data) {
-            throw new ArcaError('Respuesta FECompConsultar inválida', 'PARSE_ERROR', { xml: responseXml });
+            throw new ArcaError('Respuesta FECompConsultar inválida', 'PARSE_ERROR', {
+                xml: responseXml,
+            });
         }
 
         if (data.Errors) {
@@ -328,7 +324,7 @@ export class WsfeService {
                 `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
                 'ARCA_ERROR',
                 data.Errors,
-                getArcaHint(code)
+                getArcaHint(code),
             );
         }
 
@@ -374,14 +370,17 @@ export class WsfeService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta',
+                SOAPAction: 'http://ar.gov.afip.dif.FEV1/FEParamGetPtosVenta',
             },
             body: soapRequest,
             timeout: this.config.timeout,
         });
 
         if (!response.ok) {
-            throw new ArcaError(`Error HTTP al consultar puntos de venta: ${response.status}`, 'HTTP_ERROR');
+            throw new ArcaError(
+                `Error HTTP al consultar puntos de venta: ${response.status}`,
+                'HTTP_ERROR',
+            );
         }
 
         const responseXml = await response.text();
@@ -389,12 +388,18 @@ export class WsfeService {
         const data = result?.Envelope?.Body?.FEParamGetPtosVentaResponse?.FEParamGetPtosVentaResult;
 
         if (!data) {
-            throw new ArcaError('Respuesta FEParamGetPtosVenta inválida', 'PARSE_ERROR', { xml: responseXml });
+            throw new ArcaError('Respuesta FEParamGetPtosVenta inválida', 'PARSE_ERROR', {
+                xml: responseXml,
+            });
         }
 
         if (data.Errors) {
             const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
-            throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+            );
         }
 
         const raw = data.ResultGet?.PtoVenta;
@@ -448,7 +453,7 @@ export class WsfeService {
             vat,
             total,
             vatData: request.vatData,
-            taxCondition: request.taxCondition
+            taxCondition: request.taxCondition,
         });
 
         // 4. Send to ARCA
@@ -457,7 +462,7 @@ export class WsfeService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
+                SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECAESolicitar',
             },
             body: soapRequest,
             timeout: this.config.timeout,
@@ -467,7 +472,7 @@ export class WsfeService {
             throw new ArcaError(
                 `Error HTTP al comunicarse con WSFE: ${response.status}`,
                 'HTTP_ERROR',
-                { status: response.status }
+                { status: response.status },
             );
         }
 
@@ -498,19 +503,23 @@ export class WsfeService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
+                SOAPAction: 'http://ar.gov.afip.dif.FEV1/FECompUltimoAutorizado',
             },
             body: soapRequest,
             timeout: this.config.timeout,
         });
 
         if (!response.ok) {
-            throw new ArcaError(`Error HTTP al consultar último comprobante: ${response.status}`, 'HTTP_ERROR');
+            throw new ArcaError(
+                `Error HTTP al consultar último comprobante: ${response.status}`,
+                'HTTP_ERROR',
+            );
         }
 
         const responseXml = await response.text();
         const result = parseXml(responseXml);
-        const data = result?.Envelope?.Body?.FECompUltimoAutorizadoResponse?.FECompUltimoAutorizadoResult;
+        const data =
+            result?.Envelope?.Body?.FECompUltimoAutorizadoResponse?.FECompUltimoAutorizadoResult;
 
         if (data?.Errors) {
             const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
@@ -519,7 +528,7 @@ export class WsfeService {
                 `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
                 'ARCA_ERROR',
                 data.Errors,
-                getArcaHint(code)
+                getArcaHint(code),
             );
         }
 
@@ -531,41 +540,41 @@ export class WsfeService {
      * Valida que todos los items tengan alícuota IVA definida
      */
     private validateItemsWithVAT(items: InvoiceItem[]): void {
-        const missingVAT = items.filter(item =>
-            item.vatRate === undefined || item.vatRate === null
+        const missingVAT = items.filter(
+            (item) => item.vatRate === undefined || item.vatRate === null,
         );
 
         if (missingVAT.length > 0) {
-            throw new ArcaValidationError(
-                'Esta operación requiere `vatRate` en todos los items',
-                {
-                    itemsMissingVAT: missingVAT.map(i => i.description),
-                    hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)'
-                }
-            );
+            throw new ArcaValidationError('Esta operación requiere `vatRate` en todos los items', {
+                itemsMissingVAT: missingVAT.map((i) => i.description),
+                hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)',
+            });
         }
     }
 
     /**
      * Calcula el IVA agrupado por alícuota (requerido por ARCA para Factura A/B)
      */
-    private calculateVATByRate(items: InvoiceItem[], includesVAT = false): {
+    private calculateVATByRate(
+        items: InvoiceItem[],
+        includesVAT = false,
+    ): {
         rate: number;
         taxBase: number;
         amount: number;
     }[] {
         const byRate = new Map<number, { base: number; amount: number }>();
 
-        items.forEach(item => {
+        items.forEach((item) => {
             const rate = item.vatRate || 0;
             let netPrice = item.unitPrice;
 
             if (includesVAT && rate) {
-                netPrice = item.unitPrice / (1 + (rate / 100));
+                netPrice = item.unitPrice / (1 + rate / 100);
             }
 
             const base = item.quantity * netPrice;
-            const amount = base * rate / 100;
+            const amount = (base * rate) / 100;
 
             const current = byRate.get(rate) || { base: 0, amount: 0 };
             byRate.set(rate, {
@@ -594,13 +603,10 @@ export class WsfeService {
 
         const code = map[percentage];
         if (code === undefined) {
-            throw new ArcaValidationError(
-                `Alícuota IVA inválida: ${percentage}%`,
-                {
-                    validRates: [0, 10.5, 21, 27],
-                    hint: 'Usá una de las alícuotas oficiales de Argentina'
-                }
-            );
+            throw new ArcaValidationError(`Alícuota IVA inválida: ${percentage}%`, {
+                validRates: [0, 10.5, 21, 27],
+                hint: 'Usá una de las alícuotas oficiales de Argentina',
+            });
         }
 
         return code;
@@ -617,14 +623,14 @@ export class WsfeService {
         vat: number;
         total: number;
         vatData?: IssueInvoiceRequest['vatData'];
-        taxCondition: TaxCondition
+        taxCondition: TaxCondition;
     }): string {
         const dateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
 
         let vatXml = '';
         if (params.vatData && params.vatData.length > 0) {
             vatXml = '<ar:Iva>';
-            params.vatData.forEach(entry => {
+            params.vatData.forEach((entry) => {
                 vatXml += `
         <ar:AlicIva>
           <ar:Id>${this.getVATCode(entry.rate)}</ar:Id>
@@ -702,7 +708,11 @@ export class WsfeService {
         const data = result?.Envelope?.Body?.FECAESolicitarResponse?.FECAESolicitarResult;
 
         if (!data) {
-            throw new ArcaError('Respuesta WSFE inválida: estructura no reconocida', 'PARSE_ERROR', { xml });
+            throw new ArcaError(
+                'Respuesta WSFE inválida: estructura no reconocida',
+                'PARSE_ERROR',
+                { xml },
+            );
         }
 
         if (data.Errors) {
@@ -712,7 +722,7 @@ export class WsfeService {
                 `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
                 'ARCA_ERROR',
                 data.Errors,
-                getArcaHint(code)
+                getArcaHint(code),
             );
         }
 
@@ -722,7 +732,10 @@ export class WsfeService {
             : data.FeDetResp.FECAEDetResponse;
 
         if (!det) {
-            throw new ArcaError('Respuesta WSFE incompleta: falta detalle del comprobante', 'PARSE_ERROR');
+            throw new ArcaError(
+                'Respuesta WSFE incompleta: falta detalle del comprobante',
+                'PARSE_ERROR',
+            );
         }
 
         const observations: string[] = [];

@@ -1,16 +1,16 @@
+import { XMLParser } from 'fast-xml-parser';
 import { WsaaService } from '../auth/wsaa';
 import { getPadronEndpoint } from '../constants/endpoints';
-import { ArcaNetworkError, ArcaError } from '../types/common';
+import { ArcaError, ArcaNetworkError } from '../types/common';
 import type {
-    TaxpayerServiceConfig,
+    Activity,
+    Address,
     Taxpayer,
     TaxpayerResponse,
-    Address,
-    Activity,
+    TaxpayerServiceConfig,
     TaxRecord,
 } from '../types/padron';
 import { callArcaApi } from '../utils/network';
-import { XMLParser } from 'fast-xml-parser';
 
 /**
  * Servicio para consultar el Padrón de AFIP (ws_sr_padron_a13)
@@ -76,7 +76,7 @@ export class PadronService {
             method: 'POST',
             headers: {
                 'Content-Type': 'text/xml; charset=utf-8',
-                'SOAPAction': '',
+                SOAPAction: '',
             },
             body: soapRequest,
             timeout: this.config.timeout || 15000,
@@ -85,7 +85,7 @@ export class PadronService {
         if (!response.ok) {
             throw new ArcaNetworkError(
                 `Error HTTP al comunicarse con Padrón A13: ${response.status}`,
-                { status: response.status }
+                { status: response.status },
             );
         }
 
@@ -105,7 +105,10 @@ export class PadronService {
 
         const body = result.Envelope?.Body;
         if (!body) {
-            throw new ArcaError('Respuesta del Padrón inválida: Body no encontrado', 'PADRON_ERROR');
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: Body no encontrado',
+                'PADRON_ERROR',
+            );
         }
 
         const response = body.getPersonaResponse?.personaReturn;
@@ -137,9 +140,9 @@ export class PadronService {
             activities: this.mapActivities(p.actividad),
             taxes: this.mapTaxRecords(p.impuesto),
             mainActivity: p.descripcionActividadPrincipal,
-            isVATRegistered: this.hasTaxId(p, 30),   // 30 = IVA
-            isMonotax: this.hasTaxId(p, 20),          // 20 = Monotributo
-            isVATExempt: this.hasTaxId(p, 32),        // 32 = IVA Exento
+            isVATRegistered: this.hasTaxId(p, 30), // 30 = IVA
+            isMonotax: this.hasTaxId(p, 20), // 20 = Monotributo
+            isVATExempt: this.hasTaxId(p, 32), // 32 = IVA Exento
         };
 
         return { taxpayer };
@@ -179,7 +182,9 @@ export class PadronService {
     private hasTaxId(p: Record<string, unknown>, id: number): boolean {
         const taxes = p.impuesto;
         if (!taxes) return false;
-        return this.toArray(taxes).some((i: Record<string, unknown>) => Number(i.idImpuesto) === id);
+        return this.toArray(taxes).some(
+            (i: Record<string, unknown>) => Number(i.idImpuesto) === id,
+        );
     }
 
     /**

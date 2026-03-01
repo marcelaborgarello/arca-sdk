@@ -27,7 +27,7 @@ export class ArcaError extends Error {
         message: string,
         public code: string,
         public details?: unknown,
-        public hint?: string
+        public hint?: string,
     ) {
         super(message);
         this.name = 'ArcaError';

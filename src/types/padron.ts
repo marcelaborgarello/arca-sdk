@@ -1,5 +1,5 @@
-import type { ArcaConfig } from './common';
 import type { TokenStorage } from '../auth/storage';
+import type { ArcaConfig } from './common';
 
 /**
  * Configuración para PadronService

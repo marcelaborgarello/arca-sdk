@@ -7,9 +7,9 @@ export function calculateSubtotal(items: InvoiceItem[], includesVAT = false): nu
     return items.reduce((sum, item) => {
         let netPrice = item.unitPrice;
         if (includesVAT && item.vatRate) {
-            netPrice = item.unitPrice / (1 + (item.vatRate / 100));
+            netPrice = item.unitPrice / (1 + item.vatRate / 100);
         }
-        return sum + (item.quantity * netPrice);
+        return sum + item.quantity * netPrice;
     }, 0);
 }
 
@@ -21,10 +21,10 @@ export function calculateVAT(items: InvoiceItem[], includesVAT = false): number 
         const rate = item.vatRate || 0;
         let netPrice = item.unitPrice;
         if (includesVAT && rate) {
-            netPrice = item.unitPrice / (1 + (rate / 100));
+            netPrice = item.unitPrice / (1 + rate / 100);
         }
         const netSubtotal = item.quantity * netPrice;
-        return sum + (netSubtotal * rate / 100);
+        return sum + (netSubtotal * rate) / 100;
     }, 0);
 }
 
@@ -33,7 +33,7 @@ export function calculateVAT(items: InvoiceItem[], includesVAT = false): number 
  */
 export function calculateTotal(items: InvoiceItem[], includesVAT = false): number {
     if (includesVAT) {
-        return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+        return items.reduce((sum, item) => sum + item.quantity * item.unitPrice, 0);
     }
     const subtotal = calculateSubtotal(items, false);
     const vat = calculateVAT(items, false);

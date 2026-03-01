@@ -3,7 +3,7 @@ import { ArcaAuthError } from '../types/common';
 
 /**
  * Firma un XML en formato CMS (PKCS#7) usando certificado y clave privada
- * 
+ *
  * @param xml - Contenido XML a firmar (TRA)
  * @param certPem - Certificado en formato PEM
  * @param keyPem - Clave privada en formato PEM
@@ -58,13 +58,10 @@ export function signCMS(xml: string, certPem: string, keyPem: string): string {
         return base64;
     } catch (error) {
         if (error instanceof ArcaAuthError) throw error;
-        throw new ArcaAuthError(
-            'Error al firmar XML con certificado usando PKCS#7',
-            {
-                originalError: error,
-                hint: 'Verificar que el certificado y la clave privada sean válidos y correspondan entre sí'
-            }
-        );
+        throw new ArcaAuthError('Error al firmar XML con certificado usando PKCS#7', {
+            originalError: error,
+            hint: 'Verificar que el certificado y la clave privada sean válidos y correspondan entre sí',
+        });
     }
 }
 
@@ -72,8 +69,9 @@ export function signCMS(xml: string, certPem: string, keyPem: string): string {
  * Valida formato de certificado PEM
  */
 export function validateCertificate(cert: string): boolean {
-    return cert.includes('-----BEGIN CERTIFICATE-----') &&
-        cert.includes('-----END CERTIFICATE-----');
+    return (
+        cert.includes('-----BEGIN CERTIFICATE-----') && cert.includes('-----END CERTIFICATE-----')
+    );
 }
 
 /**

@@ -14,4 +14,4 @@ export function formatArcaDate(date: Date) {
     const ss = pad(baTime.getUTCSeconds());
 
     return `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}-03:00`;
-};
+}
