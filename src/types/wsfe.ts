@@ -87,6 +87,8 @@ export interface Buyer {
     docType: TaxIdType;
     /** Número de documento (sin guiones) */
     docNumber: string;
+    /** Opcional: Condición frente al IVA del receptor (ej: 5 para Consumidor Final, 2 para Monotributo) */
+    vatCondition?: number;
 }
 
 /**
@@ -116,6 +118,15 @@ export interface InvoiceOptional {
 }
 
 /**
+ * Fechas de servicio (Obligatorio si concept es 2 o 3)
+ */
+export interface ServiceDates {
+    startDate: Date;
+    endDate: Date;
+    dueDate: Date;
+}
+
+/**
  * Request para emitir comprobante
  */
 export interface IssueInvoiceRequest {
@@ -129,6 +140,8 @@ export interface IssueInvoiceRequest {
     items?: InvoiceItem[];
     /** Comprobantes asociados (Obligatorio para Nota de Crédito/Débito) */
     associatedInvoices?: AssociatedInvoice[];
+    /** Fechas de servicio (Obligatorio si concept es 2 o 3) */
+    serviceDates?: ServiceDates;
     /** Monto total (requerido si no hay items) */
     total?: number;
     /** Desglose de IVA (requerido para Factura A/B) */

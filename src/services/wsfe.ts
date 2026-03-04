@@ -11,6 +11,7 @@ import type {
     InvoiceDetails,
     PointOfSale,
     InvoiceOptional,
+    ServiceDates,
 } from '../types/wsfe';
 import {
     InvoiceType,
@@ -546,6 +547,7 @@ export class WsfeService {
             date?: Date;
             includesVAT?: boolean;
             optionals?: InvoiceOptional[];
+            serviceDates?: ServiceDates;
         }
     ): Promise<CAEResponse> {
         this.validateItemsWithVAT(params.items);
@@ -564,6 +566,7 @@ export class WsfeService {
             vatData,
             includesVAT,
             optionals: params.optionals,
+            serviceDates: params.serviceDates,
         });
     }
 
@@ -579,6 +582,7 @@ export class WsfeService {
             date?: Date;
             buyer?: Buyer;
             optionals?: InvoiceOptional[];
+            serviceDates?: ServiceDates;
         }
     ): Promise<CAEResponse> {
         this.validateAssociatedInvoices(type, params.associatedInvoices);
@@ -596,6 +600,7 @@ export class WsfeService {
             items: params.items,
             associatedInvoices: params.associatedInvoices,
             optionals: params.optionals,
+            serviceDates: params.serviceDates,
         });
     }
 
@@ -649,6 +654,7 @@ export class WsfeService {
             date: request.date || new Date(),
             buyer: request.buyer,
             associatedInvoices: request.associatedInvoices,
+            serviceDates: request.serviceDates,
             net,
             vat,
             total,
@@ -824,6 +830,7 @@ export class WsfeService {
         total: number;
         vatData?: IssueInvoiceRequest['vatData'];
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): string {
         const dateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
 
@@ -857,6 +864,38 @@ export class WsfeService {
             asocXml += '\n      </ar:CbtesAsoc>';
         }
 
+        let optXml = '';
+        if (params.optionals && params.optionals.length > 0) {
+            optXml = '<ar:Opcionales>';
+            params.optionals.forEach(opt => {
+                optXml += `
+        <ar:Opcional>
+          <ar:Id>${opt.id}</ar:Id>
+          <ar:Valor>${opt.value}</ar:Valor>
+        </ar:Opcional>`;
+            });
+            optXml += '\n      </ar:Opcionales>';
+        }
+
+        // RG 5616: Si hay condición de IVA del receptor (ej. 5 Consumidor Final, 2 Monotributo)
+        const condicionIVAReceptorXml = params.buyer?.vatCondition !== undefined
+            ? `\n            <ar:CondicionIVAReceptorId>${params.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
+            : '';
+
+        // Fechas de servicio (Obligatorio si concept es 2 (Servicios) o 3 (Productos y Servicios))
+        let fechasServicioXml = '';
+        if (params.concept === BillingConcept.SERVICES || params.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
+            const defaultDateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
+            const startDateStr = params.serviceDates?.startDate ? params.serviceDates.startDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
+            const endDateStr = params.serviceDates?.endDate ? params.serviceDates.endDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
+            const dueDateStr = params.serviceDates?.dueDate ? params.serviceDates.dueDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
+
+            fechasServicioXml = `
+            <ar:FchServDesde>${startDateStr}</ar:FchServDesde>
+            <ar:FchServHasta>${endDateStr}</ar:FchServHasta>
+            <ar:FchVtoPago>${dueDateStr}</ar:FchVtoPago>`;
+        }
+
         return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
                   xmlns:ar="http://ar.gov.afip.dif.FEV1/">
@@ -878,7 +917,7 @@ export class WsfeService {
           <ar:FECAEDetRequest>
             <ar:Concepto>${params.concept}</ar:Concepto>
             <ar:DocTipo>${params.buyer?.docType || 99}</ar:DocTipo>
-            <ar:DocNro>${params.buyer?.docNumber || 0}</ar:DocNro>
+            <ar:DocNro>${params.buyer?.docNumber || 0}</ar:DocNro>${condicionIVAReceptorXml}
             <ar:CbteDesde>${params.invoiceNumber}</ar:CbteDesde>
             <ar:CbteHasta>${params.invoiceNumber}</ar:CbteHasta>
             <ar:CbteFch>${dateStr}</ar:CbteFch>
@@ -889,9 +928,10 @@ export class WsfeService {
             <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>
             <ar:ImpTrib>0.00</ar:ImpTrib>
             <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>
+            <ar:MonCotiz>1</ar:MonCotiz>${fechasServicioXml}
             ${asocXml}
             ${vatXml}
+            ${optXml}
           </ar:FECAEDetRequest>
         </ar:FeDetReq>
       </ar:FeCAEReq>

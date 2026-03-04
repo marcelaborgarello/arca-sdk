@@ -228,4 +228,40 @@ describe('WsfeService', () => {
       expect(status.authServer).toBe('OK');
     });
   });
+
+  describe('RG 5616 and Service Dates (CondicionIVAReceptorId & FchServDesde)', () => {
+    it('should inject CondicionIVAReceptorId and service dates when concept is 2 and buyer has vat condition', async () => {
+      let capturedXml = '';
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockImplementationOnce((url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => buildMockCAEXml(11) });
+        });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const testDate = new Date('2026-03-04T10:00:00Z');
+
+      await wsfe.issueInvoiceC({
+        concept: BillingConcept.SERVICES,
+        date: testDate,
+        items: [{ description: 'Test', quantity: 1, unitPrice: 1000 }],
+        buyer: {
+          docType: TaxIdType.CUIT,
+          docNumber: '20111111112',
+          vatCondition: 2 // Monotributo
+        },
+        serviceDates: {
+          startDate: new Date('2026-03-01T10:00:00Z'),
+          endDate: new Date('2026-03-31T10:00:00Z'),
+          dueDate: new Date('2026-04-10T10:00:00Z'),
+        }
+      });
+
+      expect(capturedXml).toContain('<ar:CondicionIVAReceptorId>2</ar:CondicionIVAReceptorId>');
+      expect(capturedXml).toContain('<ar:FchServDesde>20260301</ar:FchServDesde>');
+      expect(capturedXml).toContain('<ar:FchServHasta>20260331</ar:FchServHasta>');
+      expect(capturedXml).toContain('<ar:FchVtoPago>20260410</ar:FchVtoPago>');
+    });
+  });
 });

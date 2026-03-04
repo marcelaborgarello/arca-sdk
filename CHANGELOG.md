@@ -4,6 +4,15 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.1.2] — 2026-03-04
+
+### 🐛 Fixes en Nodos para Facturas de Servicios (RG 5616)
+
+- **Condición IVA Receptor Nativas**: Se solucionó un bug por el cual `<ar:CondicionIVAReceptorId>` no se renderizaba como nodo de primer nivel en `FECAEDetRequest`, requisito fundamental de la RG 5616 para Factura C de ciertos compradores. Ahora puede enviarse vía `buyer.vatCondition`.
+- **Fechas de Servicio**: Se añadió inyección nativa de `<ar:FchServDesde>`, `<ar:FchServHasta>` y `<ar:FchVtoPago>` para cuando se facturan Conceptos `2` o `3` (Servicios o Productos + Servicios). Se puede especificar enviando el parámetro `serviceDates` en la Request.
+
+---
+
 ## [1.1.1] — 2026-03-03
 
 ### ✨ Soporte para Opcionales y Resolución General 5616
