@@ -1,0 +1,25 @@
+src/services/wsfe.ts(5,12): error TS1005: ',' expected.
+src/services/wsfe.ts(5,15): error TS1003: Identifier expected.
+src/services/wsfe.ts(11,13): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(11,14): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(13,9): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(86,5): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(88,5): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(88,41): error TS1005: ',' expected.
+src/services/wsfe.ts(88,55): error TS1005: ';' expected.
+src/services/wsfe.ts(88,57): error TS1434: Unexpected keyword or identifier.
+src/services/wsfe.ts(107,5): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(107,13): error TS1434: Unexpected keyword or identifier.
+src/services/wsfe.ts(107,39): error TS1005: ',' expected.
+src/services/wsfe.ts(107,48): error TS1005: ';' expected.
+src/services/wsfe.ts(108,11): error TS1005: ':' expected.
+src/services/wsfe.ts(108,33): error TS1005: ',' expected.
+src/services/wsfe.ts(109,11): error TS1005: ':' expected.
+src/services/wsfe.ts(109,86): error TS1005: ',' expected.
+src/services/wsfe.ts(111,8): error TS1003: Identifier expected.
+src/services/wsfe.ts(115,9): error TS1005: ',' expected.
+src/services/wsfe.ts(115,16): error TS1005: ',' expected.
+src/services/wsfe.ts(115,23): error TS1005: ',' expected.
+src/services/wsfe.ts(115,25): error TS1136: Property assignment expected.
+src/services/wsfe.ts(153,5): error TS1128: Declaration or statement expected.
+src/services/wsfe.ts(154,1): error TS1128: Declaration or statement expected.
