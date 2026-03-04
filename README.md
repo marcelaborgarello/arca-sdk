@@ -183,6 +183,26 @@ result.vat?.forEach(v => {
 });
 ```
 
+### Factura C con Parámetros Opcionales (Ej: Condición IVA Receptor - RG 5616)
+
+AFIP requiere mediante la RG 5616 incluir la "Condición frente al IVA del receptor" en ciertas Facturas C, lo cual se envía a través del campo Opcionales.
+
+```typescript
+const result = await wsfe.issueInvoiceC({
+  items: [
+    { description: 'Licencia de software', quantity: 1, unitPrice: 15000 },
+  ],
+  optionals: [
+    {
+      id: 1010, // ID 1010: Condición IVA Receptor
+      value: '2' // 2: Responsable Monotributo
+    }
+  ]
+});
+
+console.log('Factura emitida exitosamente con Opcionales integrados.');
+```
+
 ### Nota de Crédito (Anulando factura previa)
 
 ```typescript
@@ -326,7 +346,7 @@ import { InvoiceType, BillingConcept, TaxIdType } from 'arca-sdk';
 import type { WsaaConfig, WsfeConfig, TaxpayerServiceConfig } from 'arca-sdk';
 
 // Tipos de respuesta
-import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus } from 'arca-sdk';
+import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus, InvoiceOptional } from 'arca-sdk';
 import type { TaxpayerResponse, Taxpayer, Address, Activity, TaxRecord } from 'arca-sdk';
 
 // Items de factura

@@ -106,6 +106,16 @@ export interface AssociatedInvoice {
 }
 
 /**
+ * Campo opcional de AFIP (ej. Condición IVA Receptor RG 5616)
+ */
+export interface InvoiceOptional {
+    /** ID del dato opcional (ej. 1010) */
+    id: string | number;
+    /** Valor del dato opcional */
+    value: string;
+}
+
+/**
  * Request para emitir comprobante
  */
 export interface IssueInvoiceRequest {
@@ -131,6 +141,8 @@ export interface IssueInvoiceRequest {
     includesVAT?: boolean;
     /** Fecha del comprobante (default: hoy) */
     date?: Date;
+    /** Campos opcionales adjuntos (ej: Condición IVA receptor ID 1010) */
+    optionals?: InvoiceOptional[];
 }
 
 /**
@@ -195,6 +207,8 @@ export interface InvoiceDetails {
     caeExpiry: string;
     /** Resultado */
     result: 'A' | 'R';
+    /** Campos opcionales adjuntos */
+    optionals?: InvoiceOptional[];
 }
 
 /**

@@ -4,6 +4,16 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.1.1] — 2026-03-03
+
+### ✨ Soporte para Opcionales y Resolución General 5616
+
+- **Opcionales en WSFE**: Se agregó soporte completo para enviar el campo `<ar:Opcionales>` en todas las operaciones de emisión de comprobantes (Facturas A/B/C, Notas de Crédito, Notas de Débito, Recibos y Tickets).
+- **Condición IVA Receptor**: Esto permite dar pleno cumplimiento a la reciente RG 5616 de AFIP, que hace obligatorio enviar la Condición frente al IVA del receptor en ciertas Facturas C, enviando el ID `1010` dentro de los opcionales.
+- **Consulta de Comprobantes**: El método `WsfeService.getInvoice()` ahora retorna el array de `optionals` si el comprobante los posee.
+
+---
+
 ## [1.1.0] — 2026-02-28
 
 ### ✨ Nuevos Comprobantes (Vouchers)
