@@ -1,8 +1,8 @@
 import { getWsaaEndpoint } from '../constants/endpoints';
-import { ArcaAuthError, ArcaValidationError } from '../types/common';
+import { ArcaAuthError, ArcaValidationError, ServiceName } from '../types/common';
 import type { LoginTicket, WsaaConfig } from '../types/wsaa';
 import { signCMS, validateCertificate, validatePrivateKey } from '../utils/crypto';
-import { callArcaApi } from '../utils/network';
+import { callArcaApi, handleErrorArcaApi } from '../utils/network';
 import { buildTRA, parseWsaaResponse, validateCUIT, parseWsaaErrorResponse } from '../utils/xml';
 import { TicketManager } from './ticket';
 
@@ -72,12 +72,12 @@ export class WsaaService {
      *
      * @returns Ticket de acceso
      */
-    async login(): Promise<LoginTicket> {
+    async login(service: ServiceName): Promise<LoginTicket> {
         // 1. Intentar usar ticket en memoria (muy rápido)
-        const cachedTicket = this.ticketManager.getTicket();
-        if (cachedTicket) {
-            return cachedTicket;
-        }
+        // const cachedTicket = this.ticketManager.getTicket();
+        // if (cachedTicket) {
+        //     return cachedTicket;
+        // }
 
         // 2. Intentar usar persistencia externa si está disponible
         if (this.config.storage) {
@@ -85,6 +85,7 @@ export class WsaaService {
                 const storedTicket = await this.config.storage.get(
                     this.config.cuit,
                     this.config.environment,
+                    service,
                 );
                 if (storedTicket) {
                     // Validar si el ticket devuelto por el storage no está expirado
@@ -103,7 +104,7 @@ export class WsaaService {
         }
 
         // 3. Generar nuevo ticket (llamada a AFIP)
-        const ticket = await this.requestNewTicket();
+        const ticket = await this.requestNewTicket(service);
 
         // Guardar en memoria
         this.ticketManager.setTicket(ticket);
@@ -111,7 +112,12 @@ export class WsaaService {
         // Guardar en persistencia externa
         if (this.config.storage) {
             try {
-                await this.config.storage.save(this.config.cuit, this.config.environment, ticket);
+                await this.config.storage.save(
+                    this.config.cuit,
+                    this.config.environment,
+                    ticket,
+                    service,
+                );
             } catch (error) {
                 console.warn('[ARCA-SDK] TokenStorage.save falló:', error);
             }
@@ -123,9 +129,9 @@ export class WsaaService {
     /**
      * Solicita un nuevo ticket a WSAA
      */
-    private async requestNewTicket(): Promise<LoginTicket> {
+    private async requestNewTicket(service: ServiceName): Promise<LoginTicket> {
         // 1. Generar TRA (Ticket de Requerimiento de Acceso)
-        const tra = buildTRA(this.config.service, this.config.cuit);
+        const tra = buildTRA(service);
 
         // 2. Firmar TRA con certificado (genera CMS)
         let cms: string;
@@ -148,22 +154,11 @@ export class WsaaService {
             },
             body: this.buildSoapRequest(cms),
             timeout: this.config.timeout,
-            logArcaReponse: true,
+            logArcaReponse: false,
         });
 
         if (!response.ok) {
-            const textXml = await response.text();
-
-            if (!textXml)
-                throw new ArcaAuthError(
-                    `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
-                    { status: response.status, statusText: response.statusText },
-                );
-
-            throw new ArcaAuthError(
-                `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}, message: ${parseWsaaErrorResponse(textXml)}`,
-                { status: response.status, statusText: response.statusText },
-            );
+            await handleErrorArcaApi(response);
         }
 
         const responseXml = await response.text();

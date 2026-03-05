@@ -10,10 +10,10 @@ export interface TokenStorage {
      * Retrieves a stored ticket for a specific CUIT and environment.
      * Should return null if not found or expired.
      */
-    get(cuit: string, env: string): Promise<LoginTicket | null>;
+    get(cuit: string, env: string, service: string): Promise<LoginTicket | null>;
 
     /**
      * Persists a new ticket.
      */
-    save(cuit: string, env: string, ticket: LoginTicket): Promise<void>;
+    save(cuit: string, env: string, ticket: LoginTicket, service: string): Promise<void>;
 }

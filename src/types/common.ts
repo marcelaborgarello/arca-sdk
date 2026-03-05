@@ -8,6 +8,11 @@
 export type Environment = 'homologacion' | 'produccion';
 
 /**
+ * Servicio a ejecutar
+ */
+export type ServiceName = 'wsfe' | 'ws_sr_padron_a13';
+
+/**
  * Configuración base para servicios ARCA
  */
 export interface ArcaConfig {
@@ -61,4 +66,26 @@ export class ArcaNetworkError extends ArcaError {
         super(message, 'NETWORK_ERROR', details);
         this.name = 'ArcaNetworkError';
     }
+}
+
+/**
+ * Parámetros para generar un CSR (Certificate Signing Request)
+ */
+export interface GenerateCSRParams {
+    /** Nombre de la organización (campo O del subject) */
+    organization: string;
+    /** Common Name (campo CN del subject) */
+    commonName: string;
+    /** CUIT del contribuyente (11 dígitos sin guiones) */
+    cuit: string;
+}
+
+/**
+ * Resultado de la generación de CSR
+ */
+export interface GenerateCSRResult {
+    /** CSR en formato PEM */
+    csr: string;
+    /** Clave privada RSA en formato PEM */
+    privateKey: string;
 }

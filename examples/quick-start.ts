@@ -27,7 +27,7 @@ const wsaa = new WsaaService({
 // ⚡ Paso 2: Crear servicio de facturación y emitir
 async function run() {
     try {
-        const ticket = await wsaa.login();
+        const ticket = await wsaa.login('wsfe');
         console.log('✅ Autenticado! Token:', ticket.token.substring(0, 30) + '...');
 
         const wsfe = new WsfeService({

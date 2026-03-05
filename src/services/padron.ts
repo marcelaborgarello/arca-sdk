@@ -10,7 +10,7 @@ import type {
     TaxpayerServiceConfig,
     TaxRecord,
 } from '../types/padron';
-import { callArcaApi } from '../utils/network';
+import { callArcaApi, handleErrorArcaApi } from '../utils/network';
 
 /**
  * Servicio para consultar el Padrón de AFIP (ws_sr_padron_a13)
@@ -54,7 +54,7 @@ export class PadronService {
      * @returns Datos del contribuyente o mensaje de error
      */
     async getTaxpayer(taxId: string): Promise<TaxpayerResponse> {
-        const ticket = await this.wsaa.login();
+        const ticket = await this.wsaa.login('ws_sr_padron_a13');
 
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
@@ -83,10 +83,7 @@ export class PadronService {
         });
 
         if (!response.ok) {
-            throw new ArcaNetworkError(
-                `Error HTTP al comunicarse con Padrón A13: ${response.status}`,
-                { status: response.status },
-            );
+            await handleErrorArcaApi(response);
         }
 
         const xml = await response.text();

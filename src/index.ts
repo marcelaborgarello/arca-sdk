@@ -54,3 +54,6 @@ export {
 
 // Utilidades para Frontend/Impresión
 export { generateQRUrl } from './utils/qr';
+// Utilidades de criptografía
+export { generateCSR } from './utils/crypto';
+export type { GenerateCSRParams, GenerateCSRResult } from './types/common';

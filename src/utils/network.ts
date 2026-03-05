@@ -1,5 +1,6 @@
 import https from 'https';
-import { ArcaNetworkError } from '../types/common';
+import { ArcaAuthError, ArcaNetworkError } from '../types/common';
+import { parseWsaaErrorResponse } from './xml';
 
 /**
  * Entornos compatibles
@@ -124,4 +125,23 @@ export async function callArcaApi(url: string, options: CallApiOptions): Promise
     } finally {
         clearTimeout(timeoutId);
     }
+}
+
+/**
+ * Manejar el error si ARCA no devuelve OK
+ */
+export async function handleErrorArcaApi(response: Response) {
+    const textXml = await response.text();
+
+    if (!textXml)
+        throw new ArcaAuthError(
+            `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
+            { status: response.status, statusText: response.statusText },
+        );
+
+    const { message, faultCode, faultText } = parseWsaaErrorResponse(textXml);
+    throw new ArcaAuthError(
+        `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}, message: ${message}`,
+        { status: response.status, statusText: response.statusText, faultCode, faultText },
+    );
 }

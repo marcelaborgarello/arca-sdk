@@ -1,5 +1,5 @@
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
-import { ArcaAuthError } from '../types/common';
+import { ArcaAuthError, ServiceName } from '../types/common';
 import type { LoginTicket } from '../types/wsaa';
 import { formatArcaDate } from './formatArcaDate';
 
@@ -10,7 +10,7 @@ import { formatArcaDate } from './formatArcaDate';
  * @param cuit - CUIT del contribuyente
  * @returns XML del TRA
  */
-export function buildTRA(service: string, cuit: string): string {
+export function buildTRA(service: ServiceName): string {
     const now = new Date();
     const genTime = new Date(now.getTime() - 10 * 60 * 1000);
     const expTime = new Date(now.getTime() + 12 * 60 * 60 * 1000);
@@ -105,7 +105,7 @@ export function parseWsaaResponse(xml: string): LoginTicket {
  * @param xml - XML de respuesta
  * @returns Mensaje de error
  */
-export function parseWsaaErrorResponse(xml: string): string {
+export function parseWsaaErrorResponse(xml: string) {
     const parser = new XMLParser({
         ignoreAttributes: false,
         parseAttributeValue: true,
@@ -124,7 +124,7 @@ export function parseWsaaErrorResponse(xml: string): string {
 
         if (!message) message = 'Ha ocurrido un error inesperado';
 
-        return message;
+        return { message, faultCode, faultText };
     } catch (error) {
         if (error instanceof ArcaAuthError) throw error;
         throw new ArcaAuthError(

@@ -1,4 +1,6 @@
-import * as forge from 'node-forge';
+import * as forgeXd from 'node-forge';
+const forge = (forgeXd as any).default || forgeXd;
+import type { GenerateCSRParams, GenerateCSRResult } from '../types/common';
 import { ArcaAuthError } from '../types/common';
 
 /**
@@ -84,4 +86,30 @@ export function validatePrivateKey(key: string): boolean {
         (key.includes('-----BEGIN RSA PRIVATE KEY-----') &&
             key.includes('-----END RSA PRIVATE KEY-----'))
     );
+}
+
+/**
+ * Genera un CSR (Certificate Signing Request) y su clave privada RSA.
+ * Equivalente a:
+ * openssl req -new -newkey rsa:2048 -nodes -keyout privada.key -subj "/C=AR/O={org}/CN={cn}/serialNumber=CUIT {cuit}" -out pedido.csr
+ */
+export function generateCSR(params: GenerateCSRParams): GenerateCSRResult {
+    const { organization, commonName, cuit } = params;
+
+    const keyPair = forge.pki.rsa.generateKeyPair(2048);
+
+    const csr = forge.pki.createCertificationRequest();
+    csr.publicKey = keyPair.publicKey;
+    csr.setSubject([
+        { name: 'countryName', value: 'AR' },
+        { name: 'organizationName', value: organization },
+        { name: 'commonName', value: commonName },
+        { name: 'serialNumber', value: `CUIT ${cuit}` },
+    ]);
+    csr.sign(keyPair.privateKey, forge.md.sha256.create());
+
+    return {
+        csr: forge.pki.certificationRequestToPem(csr),
+        privateKey: forge.pki.privateKeyToPem(keyPair.privateKey),
+    };
 }

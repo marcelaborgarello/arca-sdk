@@ -37,7 +37,7 @@ async function main() {
         service: 'wsfe',
     });
 
-    const ticket = await wsaa.login();
+    const ticket = await wsaa.login('wsfe');
     console.log('✅ Autenticado\n');
 
     // 2. Crear servicio de facturación

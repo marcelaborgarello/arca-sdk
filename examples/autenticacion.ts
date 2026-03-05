@@ -31,7 +31,7 @@ async function main() {
     try {
         console.log('🔐 Autenticando con ARCA...\n');
 
-        const ticket = await wsaa.login();
+        const ticket = await wsaa.login('wsfe');
 
         console.log('✅ Autenticación exitosa!\n');
         console.log('Token:', ticket.token.substring(0, 50) + '...');
