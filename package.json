@@ -1,6 +1,6 @@
 {
   "name": "@Romero67/arca-sdk",
-  "version": "1.0.6-fork.1",
+  "version": "1.0.6-fork.1.0.1",
   "description": "SDK moderna en TypeScript para ARCA (ex-AFIP)",
   "type": "module",
   "main": "./dist/index.cjs",

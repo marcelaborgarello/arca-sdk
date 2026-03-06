@@ -50,6 +50,7 @@ export {
     BillingConcept,
     InvoiceType,
     TaxIdType,
+    TaxCondition,
 } from './types/wsfe';
 
 // Utilidades para Frontend/Impresión
