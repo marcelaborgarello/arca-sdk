@@ -148,6 +148,7 @@ export class WsfeService {
         concept?: BillingConcept;
         date?: Date;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueDocument({
             type: InvoiceType.TICKET_C,
@@ -159,6 +160,7 @@ export class WsfeService {
                 docNumber: '0',
             },
             optionals: params.optionals,
+            serviceDates: params.serviceDates,
         });
     }
 
@@ -171,6 +173,7 @@ export class WsfeService {
         concept?: BillingConcept;
         date?: Date;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         const total = round(calculateTotal(params.items));
 
@@ -184,6 +187,7 @@ export class WsfeService {
                 docNumber: '0',
             },
             optionals: params.optionals,
+            serviceDates: params.serviceDates,
         });
 
         return { ...cae, items: params.items };
@@ -200,6 +204,7 @@ export class WsfeService {
         date?: Date;
         includesVAT?: boolean;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.FACTURA_A, params);
     }
@@ -215,6 +220,7 @@ export class WsfeService {
         date?: Date;
         includesVAT?: boolean;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.FACTURA_B, params);
     }
@@ -228,6 +234,7 @@ export class WsfeService {
         date?: Date;
         buyer?: Buyer;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.FACTURA_C, params);
     }
@@ -246,6 +253,7 @@ export class WsfeService {
         date?: Date;
         includesVAT?: boolean;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.RECIBO_A, params);
     }
@@ -260,6 +268,7 @@ export class WsfeService {
         date?: Date;
         includesVAT?: boolean;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.RECIBO_B, params);
     }
@@ -273,6 +282,7 @@ export class WsfeService {
         date?: Date;
         buyer?: Buyer;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.RECIBO_C, params);
     }
@@ -324,6 +334,7 @@ export class WsfeService {
         date?: Date;
         buyer?: Buyer;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_CREDITO_C, params);
     }
@@ -375,6 +386,7 @@ export class WsfeService {
         date?: Date;
         buyer?: Buyer;
         optionals?: InvoiceOptional[];
+        serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_DEBITO_C, params);
     }
