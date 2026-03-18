@@ -4,6 +4,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.2.0] — 2026-03-18
+
+### ✨ Developer Experience (DX) y Normativas 2025
+
+- **VatCondition Enum**: Se introdujo el enumerador fuertemente tipado `VatCondition` para facilitar el envío del parámetro `<ar:CondicionIVAReceptorId>` (obligatorio para ciertas Facturas C según la RG 5616/2024 efectiva desde 2025). Ahora la interfaz `Buyer` acepta este enum en su propiedad `vatCondition`, previniendo errores por el uso de números mágicos (ej. `VatCondition.CONSUMIDOR_FINAL` en lugar de `5`).
+
+---
+
 ## [1.1.2] — 2026-03-04
 
 ### 🐛 Fixes en Nodos para Facturas de Servicios (RG 5616)

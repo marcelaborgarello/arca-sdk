@@ -47,6 +47,7 @@ export {
     InvoiceType,
     BillingConcept,
     TaxIdType,
+    VatCondition,
 } from './types/wsfe';
 
 // Errores

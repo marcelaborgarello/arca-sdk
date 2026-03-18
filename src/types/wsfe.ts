@@ -80,6 +80,24 @@ export interface InvoiceItem {
 }
 
 /**
+ * Condición frente al IVA del receptor (según catálogo ARCA/AFIP)
+ */
+export enum VatCondition {
+    IVA_RESPONSABLE_INSCRIPTO = 1,
+    IVA_RESPONSABLE_NO_INSCRIPTO = 2,
+    IVA_NO_RESPONSABLE = 3,
+    IVA_SUJETO_EXENTO = 4,
+    CONSUMIDOR_FINAL = 5,
+    RESPONSABLE_MONOTRIBUTO = 6,
+    SUJETO_NO_CATEGORIZADO = 7,
+    PROVEEDOR_DEL_EXTERIOR = 8,
+    CLIENTE_DEL_EXTERIOR = 9,
+    IVA_LIBERADO_LEY_19640 = 10,
+    IVA_RESPONSABLE_INSCRIPTO_AGENTE_PERCEPCION = 11,
+    MONOTRIBUTISTA_SOCIAL = 13,
+}
+
+/**
  * Datos del comprador
  */
 export interface Buyer {
@@ -87,8 +105,8 @@ export interface Buyer {
     docType: TaxIdType;
     /** Número de documento (sin guiones) */
     docNumber: string;
-    /** Opcional: Condición frente al IVA del receptor (ej: 5 para Consumidor Final, 2 para Monotributo) */
-    vatCondition?: number;
+    /** Opcional: Condición frente al IVA del receptor (ej: VatCondition.CONSUMIDOR_FINAL) */
+    vatCondition?: VatCondition | number;
 }
 
 /**
