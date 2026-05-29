@@ -107,7 +107,7 @@ describe('WsfeService', () => {
       expect(result.invoiceType).toBe(83);
       expect(result.invoiceNumber).toBe(1);
       expect(result.result).toBe('A');
-      expect(result.qrUrl).toContain('afip.gob.ar/fe/qr');
+      expect(result.qrUrl).toContain('arca.gob.ar/fe/qr');
       expect(callArcaApi).toHaveBeenCalledTimes(2);
     });
   });

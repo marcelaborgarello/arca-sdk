@@ -4,6 +4,18 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.2.1] — 2026-05-29
+
+### 🌐 Normativas ARCA 2026 & Actualizaciones de Infraestructura
+
+- **Migración a Dominios ARCA**: Se actualizaron todos los endpoints predeterminados SOAP del SDK (`WSAA`, `WSFE` y `Padrón A13`) reemplazando los antiguos servidores `*.afip.gov.ar` / `*.afip.gob.ar` por la infraestructura oficial y definitiva de ARCA (`*.arca.gob.ar`).
+- **URL del Código QR Oficial**: Se actualizó la URL de validación del QR de comprobantes electrónicos a `https://www.arca.gob.ar/fe/qr/?p=...` según la normativa vigente en 2026.
+- **Documentación de Normativas Recientes**:
+  - **Identificación de Comprador (RG 5824/2026)**: Se documentó en el `README.md` el nuevo tope legal de **$10.000.000** a partir del cual es obligatorio identificar al receptor en facturas de Consumidores Finales.
+  - **Facturación A con Leyenda (RG 5762/2025)**: Se documentó cómo utilizar el campo `optionals` del SDK para dar cumplimiento a la disolución de la Factura Clase "M" mediante la emisión de Facturas A tradicionales con leyendas de retención impositivas ("OPERACIÓN SUJETA A RETENCIÓN" o "PAGO EN CBU INFORMADA").
+
+---
+
 ## [1.2.0] — 2026-03-18
 
 ### ✨ Developer Experience (DX) y Normativas 2025

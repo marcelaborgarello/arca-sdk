@@ -3,7 +3,7 @@ import { TaxIdType } from '../types/wsfe';
 
 /**
  * Datos requeridos por ARCA para el QR (estructura oficial)
- * @see https://www.afip.gob.ar/fe/qr/especificaciones.asp
+ * @see https://www.arca.gob.ar/fe/qr/especificaciones.asp
  */
 interface AFIPQRData {
     ver: number;
@@ -81,5 +81,5 @@ export function generateQRUrl(
         ? Buffer.from(jsonString).toString('base64')
         : btoa(jsonString);
 
-    return `https://www.afip.gob.ar/fe/qr/?p=${base64}`;
+    return `https://www.arca.gob.ar/fe/qr/?p=${base64}`;
 }

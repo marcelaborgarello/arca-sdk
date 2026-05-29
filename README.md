@@ -104,7 +104,7 @@ const result = await wsfe.issueSimpleReceipt({ total: 1500 });
 
 console.log('CAE:', result.cae);              // '75157992335329'
 console.log('Vto:', result.caeExpiry);        // '20260302'
-console.log('QR:', result.qrUrl);             // 'https://www.afip.gob.ar/fe/qr/?p=...'
+console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/?p=...'
 ```
 
 > Los certificados se obtienen en el [portal de ARCA](https://auth.afip.gob.ar/contribuyente_/login.xhtml) (CLAVE FISCAL nivel 3+).
@@ -283,7 +283,38 @@ console.log(result.qrUrl); // listo para embeber en un generador de QR
 const url = generateQRUrl(caeResponse, '20123456789', 1500.00);
 ```
 
-> **Nota:** La URL usa base64 crudo sin `encodeURIComponent`. Es un quirk documentado del spec de ARCA — su scanner no acepta caracteres URL-encoded.
+> **Nota:** La URL usa base64 crudo sin `encodeURIComponent`. Es un quirk del spec oficial de ARCA — su scanner no acepta caracteres URL-encoded.
+
+### 📋 Normativas ARCA 2026 & Buenas Prácticas
+
+`arca-sdk` está completamente adaptada a las últimas directivas de la **Agencia de Recaudación y Control Aduanero (ARCA)**:
+
+#### 1. Identificación del Comprador (RG 5824/2026)
+* A partir de 2026, el monto límite para compras de **Consumidores Finales** sin identificar se elevó a **$10.000.000**.
+* Si el importe acumulado del comprobante es **igual o mayor a $10.000.000**, es **obligatorio** identificar al comprador mediante su DNI, CUIT, CUIL o CDI en el objeto `buyer`.
+* Si el cliente solicita el comprobante para deducir el gasto en el Impuesto a las Ganancias, es obligatorio identificarlo con su CUIT sin importar el monto.
+
+#### 2. Emisión de Facturas Clase "A" con Leyenda (RG 5762/2025)
+Con la eliminación total de la Factura Clase "M", ARCA instruyó el uso de Facturas Clase "A" tradicionales acompañadas de leyendas impositivas obligatorias. La SDK permite resolver este requerimiento utilizando el bloque de campos opcionales del protocolo SOAP:
+
+* **Operación Sujeta a Retención (Reemplazo de Factura M):**
+  Para emitir una Factura A sujeta al régimen de retención, debés pasar en la propiedad `optionals` el identificador oficial provisto por ARCA:
+  ```typescript
+  const result = await wsfe.issueInvoiceA({
+    items: [...],
+    buyer: { docType: TaxIdType.CUIT, docNumber: '30716024941' },
+    optionals: [
+      {
+        id: 5, // ID opcional para indicar la condicion
+        value: '1' // Valor segun catalogo de ARCA
+      }
+    ]
+  });
+  ```
+* **Pago en CBU Informada:**
+  De igual modo, si te corresponde emitir con la leyenda de obligatoriedad de CBU, se adjunta el opcional correspondiente declarando tu cuenta bancaria asociada.
+
+---
 
 ### Manejo de errores
 

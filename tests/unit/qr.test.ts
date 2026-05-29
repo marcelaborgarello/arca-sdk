@@ -17,7 +17,7 @@ describe('QR Generation Utility', () => {
 
         const url = generateQRUrl(caeResponse as CAEResponse, '20123456789', 1500.50);
 
-        expect(url).toContain('https://www.afip.gob.ar/fe/qr/?p=');
+        expect(url).toContain('https://www.arca.gob.ar/fe/qr/?p=');
 
         // Extract base64 part
         const base64 = url.split('?p=')[1];
