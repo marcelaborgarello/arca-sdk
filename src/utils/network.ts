@@ -1,4 +1,5 @@
 import https from 'https';
+import tls from 'tls';
 import { ArcaNetworkError } from '../types/common';
 
 /**
@@ -14,6 +15,38 @@ export interface CallApiOptions {
     headers: Record<string, string>;
     body: string;
     timeout?: number;
+}
+
+/**
+ * Valida la identidad del servidor de ARCA manejando inconsistencias en sus certificados SSL.
+ * Si la validación falla por discrepancia de nombre de host en el nuevo dominio de ARCA (*.arca.gob.ar),
+ * reintenta validando contra el dominio histórico equivalente de AFIP (*.afip.gov.ar).
+ *
+ * @param hostname Nombre de host del servidor
+ * @param cert Certificado SSL del servidor
+ * @returns Error en caso de que la validación sea fallida, o undefined si es aprobada
+ */
+export function checkArcaServerIdentity(
+    hostname: string,
+    cert: tls.PeerCertificate
+): Error | undefined {
+    // 1. Realizar la validación estándar
+    const error = tls.checkServerIdentity(hostname, cert);
+
+    // 2. Si falla por discrepancia de nombre de host en el nuevo dominio de ARCA
+    if (error && hostname.endsWith('arca.gob.ar')) {
+        // Reintentar validando contra el dominio equivalente anterior de AFIP
+        const fallbackHost = hostname.replace('arca.gob.ar', 'afip.gov.ar');
+        const retryError = tls.checkServerIdentity(fallbackHost, cert);
+
+        // Si con el host de AFIP sí valida correctamente, aprobamos la conexión
+        if (!retryError) {
+            return undefined;
+        }
+    }
+
+    // Si no es un host de ARCA o también falla con el dominio de AFIP, retornamos el error original
+    return error;
 }
 
 /**
@@ -42,6 +75,7 @@ export async function callArcaApi(
                 // @ts-ignore - Propiedad específica para mitigar "dh key too small" en Node 18+
                 minDHSize: 1024,
                 rejectUnauthorized: true,
+                checkServerIdentity: checkArcaServerIdentity,
             });
 
             const reqOptions: https.RequestOptions = {
