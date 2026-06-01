@@ -5,6 +5,7 @@ import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
 import { validateCertificate, validatePrivateKey, signCMS } from '../utils/crypto';
 import { TicketManager } from './ticket';
 import { callArcaApi } from '../utils/network';
+import { XMLParser } from 'fast-xml-parser';
 
 /**
  * Servicio de autenticación WSAA (Web Service de Autenticación y Autorización)
@@ -150,14 +151,31 @@ export class WsaaService {
             timeout: this.config.timeout,
         });
 
+        const responseText = await response.text();
+
         if (!response.ok) {
+            let errorMessage = `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`;
+            try {
+                const parser = new XMLParser({
+                    ignoreAttributes: false,
+                    removeNSPrefix: true,
+                });
+                const result = parser.parse(responseText);
+                const fault = result.Envelope?.Body?.Fault;
+                if (fault && fault.faultstring) {
+                    errorMessage = `Error AFIP WSAA: ${fault.faultstring}`;
+                }
+            } catch (e) {
+                // Ignorar error de parseo si no es XML válido
+            }
+            
             throw new ArcaAuthError(
-                `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`,
-                { status: response.status, statusText: response.statusText }
+                errorMessage,
+                { status: response.status, statusText: response.statusText, body: responseText }
             );
         }
 
-        const responseXml = await response.text();
+        const responseXml = responseText;
 
         // 4. Parsear respuesta
         return parseWsaaResponse(responseXml);

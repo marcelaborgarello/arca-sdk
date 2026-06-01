@@ -6,6 +6,7 @@
 export { WsaaService } from './auth/wsaa';
 export { WsfeService } from './services/wsfe';
 export { PadronService } from './services/padron';
+export { CaeaService } from './services/caea';
 
 // Tipos comunes
 export type {
@@ -41,6 +42,16 @@ export type {
     PointOfSale,
     ServiceStatus,
 } from './types/wsfe';
+
+// Tipos CAEA
+export type {
+    CaeaConfig,
+    CAEASolicitarRequest,
+    CAEASolicitarResponse,
+    CAEAConsultarResponse,
+    CaeaInvoice,
+    CAEARegInformativoResponse,
+} from './types/caea';
 
 // Enums WSFE
 export {

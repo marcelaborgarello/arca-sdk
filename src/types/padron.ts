@@ -67,8 +67,10 @@ export interface Taxpayer {
     mainActivity?: string;
     /** ¿Está inscripto en IVA? */
     isVATRegistered: boolean;
-    /** ¿Es monotributista? */
+    /** ¿Es monotributista (Régimen General o Social)? */
     isMonotax: boolean;
+    /** ¿Es exclusivamente Monotributista Social / Autónomo / Promovido? */
+    isSocialMonotax: boolean;
     /** ¿Es exento de IVA? */
     isVATExempt: boolean;
 }

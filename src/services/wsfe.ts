@@ -638,10 +638,7 @@ export class WsfeService {
      * Método genérico interno para emitir cualquier tipo de comprobante.
      */
     private async issueDocument(request: IssueInvoiceRequest): Promise<CAEResponse> {
-        // 1. Get next invoice number
-        const invoiceNumber = await this.getNextInvoiceNumber(request.type);
-
-        // 2. Calculate totals
+        // 1. Calculate totals
         let total = request.total || 0;
         let net = total;
         let vat = 0;
@@ -657,7 +654,13 @@ export class WsfeService {
             throw new ArcaValidationError('El monto total debe ser mayor a 0');
         }
 
-        // 3. Build SOAP request
+        // 2. Pre-flight validations
+        this.validateBuyer(request.buyer, total);
+
+        // 3. Get next invoice number
+        const invoiceNumber = await this.getNextInvoiceNumber(request.type);
+
+        // 4. Build SOAP request
         const soapRequest = this.buildCAERequest({
             type: request.type,
             pointOfSale: this.config.pointOfSale,
@@ -766,6 +769,28 @@ export class WsfeService {
                     hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)'
                 }
             );
+        }
+    }
+
+    /**
+     * Valida obligatoriamente al comprador cuando el monto es mayor o igual a $10.000.000 para consumidor final
+     */
+    private validateBuyer(buyer: Buyer | undefined, total: number): void {
+        const isFinalConsumer = !buyer || 
+            buyer.docType === TaxIdType.FINAL_CONSUMER || 
+            buyer.docNumber === '0' || 
+            buyer.docNumber === '';
+
+        if (total >= 10000000 && isFinalConsumer) {
+            const errorMessage = 'Para importes mayores o iguales a $10.000.000 es obligatorio identificar al comprador (RG 5824/2026).';
+            if (process.env.NODE_ENV !== 'production') {
+                console.warn(`[arca-sdk WARNING] ${errorMessage}`);
+            }
+            throw new ArcaValidationError(errorMessage, {
+                total,
+                buyer,
+                hint: 'Actualizá el objeto buyer con un tipo de documento válido (DNI, CUIT, CUIL) y su número correspondiente.'
+            });
         }
     }
 

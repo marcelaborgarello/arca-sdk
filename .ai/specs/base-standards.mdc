@@ -1,0 +1,38 @@
+---
+description: Single source of truth for AI development behavior
+alwaysApply: true
+---
+
+# Base Standards
+
+These standards apply to all agents, prompts, and adapters.
+
+## Core Constraints
+
+1. Spec-first behavior: if functionality changes, update the spec first.
+2. Never invent APIs, dependencies, or hidden assumptions.
+3. Keep changes minimal, traceable, and reversible when possible.
+4. Explicitly state uncertainty and assumptions.
+5. Preserve module boundaries and established architecture.
+
+## Required Inputs Before Implementation
+
+- Approved spec
+- Acceptance criteria
+- Relevant contracts
+- Relevant ADRs (if architecture-impacting)
+
+## Required Outputs
+
+- Brief change summary
+- Validation against acceptance criteria
+- Updated traceability
+- Test evidence
+
+## Quality Gate
+
+Before marking work as done:
+
+- Pass guardrails and checklists in `docs/sdd/quality/`
+- Confirm acceptance criteria coverage
+- Record notable lessons when applicable

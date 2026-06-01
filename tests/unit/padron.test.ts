@@ -100,4 +100,36 @@ describe('PadronService (A13)', () => {
     const result = await service.getTaxpayer('22222222222');
     expect(result.error).toBe('CUIT no encontrado');
   });
+
+  it('should parse Monotributo Social correctly (idImpuesto 24)', async () => {
+    const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <getPersonaResponse xmlns="http://a13.soap.ws.server.puc.sr/">
+      <personaReturn>
+        <persona>
+          <idPersona>27111111112</idPersona>
+          <tipoPersona>FISICA</tipoPersona>
+          <nombre>MARIA</nombre>
+          <impuesto>
+            <idImpuesto>24</idImpuesto>
+            <descripcionImpuesto>MONOTRIBUTO TRABAJADOR INDEPENDIENTE PROMOVIDO</descripcionImpuesto>
+          </impuesto>
+        </persona>
+      </personaReturn>
+    </getPersonaResponse>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    (callArcaApi as any).mockResolvedValue({
+      ok: true,
+      text: async () => mockPadronXml,
+    });
+
+    const result = await service.getTaxpayer('27111111112');
+    expect(result.taxpayer).toBeDefined();
+    expect(result.taxpayer?.isMonotax).toBe(true);
+    expect(result.taxpayer?.isSocialMonotax).toBe(true);
+  });
 });
+

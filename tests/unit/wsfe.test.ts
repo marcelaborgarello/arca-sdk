@@ -264,4 +264,46 @@ describe('WsfeService', () => {
       expect(capturedXml).toContain('<ar:FchVtoPago>20260410</ar:FchVtoPago>');
     });
   });
+
+  describe('buyer identification validation (RG 5824/2026)', () => {
+    it('should throw an ArcaValidationError when total is >= 10,000,000 and buyer is FINAL_CONSUMER/unidentified', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      
+      // Con buyer omitido (que por defecto es consumidor final sin identificar)
+      await expect(wsfe.issueSimpleReceipt({
+        total: 10000000,
+      })).rejects.toThrow('es obligatorio identificar al comprador');
+
+      // Con buyer explícitamente como FINAL_CONSUMER y número 0
+      await expect(wsfe.issueInvoiceC({
+        items: [{ description: 'Servicio', quantity: 1, unitPrice: 12000000 }],
+        buyer: {
+          docType: TaxIdType.FINAL_CONSUMER,
+          docNumber: '0',
+        }
+      })).rejects.toThrow('es obligatorio identificar al comprador');
+    });
+
+    it('should NOT throw when total is < 10,000,000 and buyer is unidentified', async () => {
+      mockCalls(83);
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueSimpleReceipt({
+        total: 9999999.99,
+      });
+      expect(result.cae).toBeDefined();
+    });
+
+    it('should NOT throw when total is >= 10,000,000 but buyer is identified', async () => {
+      mockCalls(11);
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueInvoiceC({
+        items: [{ description: 'Servicio premium', quantity: 1, unitPrice: 15000000 }],
+        buyer: {
+          docType: TaxIdType.DNI,
+          docNumber: '20123456',
+        }
+      });
+      expect(result.cae).toBeDefined();
+    });
+  });
 });

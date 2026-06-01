@@ -1,0 +1,3 @@
+- This file is a reference adapter for portability.
+- For Cursor native autoload, use `/.cursor/rules/general.mdc` as the operational source.
+- Keep this file aligned with the operational bridge and `.ai/specs/base-standards.mdc`.

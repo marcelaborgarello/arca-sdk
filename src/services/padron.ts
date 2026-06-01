@@ -138,7 +138,8 @@ export class PadronService {
             taxes: this.mapTaxRecords(p.impuesto),
             mainActivity: p.descripcionActividadPrincipal,
             isVATRegistered: this.hasTaxId(p, 30),   // 30 = IVA
-            isMonotax: this.hasTaxId(p, 20),          // 20 = Monotributo
+            isMonotax: this.hasTaxId(p, 20) || this.hasTaxId(p, 24) || this.hasTaxId(p, 21), // General o Social/Autónomo
+            isSocialMonotax: this.hasTaxId(p, 24) || this.hasTaxId(p, 21), // 24 = Obra Social / Promovido, 21 = Autónomo
             isVATExempt: this.hasTaxId(p, 32),        // 32 = IVA Exento
         };
 
