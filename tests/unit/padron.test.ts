@@ -130,6 +130,38 @@ describe('PadronService (A13)', () => {
     expect(result.taxpayer).toBeDefined();
     expect(result.taxpayer?.isMonotax).toBe(true);
     expect(result.taxpayer?.isSocialMonotax).toBe(true);
+    // Verificar mapeo automático de IVA
+    expect(result.taxpayer?.vatCondition).toBe(6); // RESPONSABLE_MONOTRIBUTO
+  });
+
+  it('should parse regular Monotributo correctly (idImpuesto 20) to VatCondition 6', async () => {
+    const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <getPersonaResponse xmlns="http://a13.soap.ws.server.puc.sr/">
+      <personaReturn>
+        <persona>
+          <idPersona>20111111112</idPersona>
+          <tipoPersona>FISICA</tipoPersona>
+          <nombre>CARLOS</nombre>
+          <impuesto>
+            <idImpuesto>20</idImpuesto>
+            <descripcionImpuesto>MONOTRIBUTO</descripcionImpuesto>
+          </impuesto>
+        </persona>
+      </personaReturn>
+    </getPersonaResponse>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    (callArcaApi as any).mockResolvedValue({
+      ok: true,
+      text: async () => mockPadronXml,
+    });
+
+    const result = await service.getTaxpayer('20111111112');
+    expect(result.taxpayer).toBeDefined();
+    expect(result.taxpayer?.vatCondition).toBe(6); // RESPONSABLE_MONOTRIBUTO
   });
 });
 

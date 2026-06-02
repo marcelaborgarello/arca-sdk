@@ -11,6 +11,7 @@ import type {
 } from '../types/padron';
 import { callArcaApi } from '../utils/network';
 import { XMLParser } from 'fast-xml-parser';
+import { VatCondition } from '../types/wsfe';
 
 /**
  * Servicio para consultar el Padrón de AFIP (ws_sr_padron_a13)
@@ -126,6 +127,17 @@ export class PadronService {
             return { error: 'CUIT no encontrado' };
         }
 
+        let vatCondition: VatCondition | undefined;
+        if (this.hasTaxId(p, 30)) {
+            vatCondition = VatCondition.IVA_RESPONSABLE_INSCRIPTO;
+        } else if (this.hasTaxId(p, 32)) {
+            vatCondition = VatCondition.IVA_SUJETO_EXENTO;
+        } else if (this.hasTaxId(p, 20) || this.hasTaxId(p, 21) || this.hasTaxId(p, 22) || this.hasTaxId(p, 24)) {
+            vatCondition = VatCondition.RESPONSABLE_MONOTRIBUTO;
+        } else {
+            vatCondition = VatCondition.CONSUMIDOR_FINAL;
+        }
+
         const taxpayer: Taxpayer = {
             taxId: Number(p.idPersona),
             personType: p.tipoPersona as 'FISICA' | 'JURIDICA',
@@ -138,9 +150,10 @@ export class PadronService {
             taxes: this.mapTaxRecords(p.impuesto),
             mainActivity: p.descripcionActividadPrincipal,
             isVATRegistered: this.hasTaxId(p, 30),   // 30 = IVA
-            isMonotax: this.hasTaxId(p, 20) || this.hasTaxId(p, 24) || this.hasTaxId(p, 21), // General o Social/Autónomo
+            isMonotax: this.hasTaxId(p, 20) || this.hasTaxId(p, 24) || this.hasTaxId(p, 21) || this.hasTaxId(p, 22), // General o Social/Autónomo
             isSocialMonotax: this.hasTaxId(p, 24) || this.hasTaxId(p, 21), // 24 = Obra Social / Promovido, 21 = Autónomo
             isVATExempt: this.hasTaxId(p, 32),        // 32 = IVA Exento
+            vatCondition,
         };
 
         return { taxpayer };

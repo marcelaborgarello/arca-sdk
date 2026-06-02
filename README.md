@@ -314,6 +314,11 @@ Con la eliminación total de la Factura Clase "M", ARCA instruyó el uso de Fact
 * **Pago en CBU Informada:**
   De igual modo, si te corresponde emitir con la leyenda de obligatoriedad de CBU, se adjunta el opcional correspondiente declarando tu cuenta bancaria asociada.
 
+### 🤝 Monotributo Social y Regímenes Especiales
+Para el Web Service de Facturación Electrónica (WSFE), la AFIP exige que todo contribuyente bajo el régimen de Monotributo (sea estándar, social o promovido) se declare bajo la Condición de IVA de **Responsable Monotributo (Código 6)**. El Código de IVA 13 (Monotributista Social) suele ser rechazado en producción.
+
+Por esta razón, el SDK detecta automáticamente si el contribuyente tiene activos los impuestos de recaudación de monotributo (impuestos 20, 21, 22 o 24) en su perfil y mapea de forma segura su propiedad `vatCondition` al Código 6, previniendo errores de autorización de AFIP ("Computador no autorizado") de forma automática.
+
 ---
 
 ### Manejo de errores

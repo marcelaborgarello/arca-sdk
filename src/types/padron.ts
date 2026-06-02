@@ -73,6 +73,8 @@ export interface Taxpayer {
     isSocialMonotax: boolean;
     /** ¿Es exento de IVA? */
     isVATExempt: boolean;
+    /** Condición frente al IVA autocalculada (lista para WSFE/CAEA) */
+    vatCondition?: import('./wsfe').VatCondition;
 }
 
 /**
