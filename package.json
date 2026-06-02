@@ -1,6 +1,6 @@
 {
   "name": "arca-sdk",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "SDK moderna y tipada para la API Web Service Facturación Electrónica (WSFE) de ARCA / AFIP. Soporta Facturas A/B/C, Notas de Crédito, Notas de Débito, tickets y consulta de Padrón A13, con generación de QR oficial.",
   "type": "module",
   "main": "./dist/index.cjs",
