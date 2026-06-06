@@ -12,7 +12,7 @@ export const WSAA_ENDPOINTS: Record<Environment, string> = {
  * URLs del servicio WSFE por ambiente
  */
 export const WSFE_ENDPOINTS: Record<Environment, string> = {
-    homologacion: 'https://wswhomo.arca.gob.ar/wsfev1/service.asmx',
+    homologacion: 'https://wswhomo.afip.gov.ar/wsfev1/service.asmx',
     produccion: 'https://servicios1.arca.gob.ar/wsfev1/service.asmx',
 };
 
