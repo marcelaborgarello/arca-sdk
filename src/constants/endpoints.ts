@@ -4,7 +4,7 @@ import type { Environment } from '../types/common';
  * URLs de los servicios ARCA por ambiente
  */
 export const WSAA_ENDPOINTS: Record<Environment, string> = {
-    homologacion: 'https://wsaahomo.arca.gob.ar/ws/services/LoginCms',
+    homologacion: 'https://wsaahomo.afip.gov.ar/ws/services/LoginCms',
     produccion: 'https://wsaa.arca.gob.ar/ws/services/LoginCms',
 };
 
