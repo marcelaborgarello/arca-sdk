@@ -265,7 +265,7 @@ describe('WsfeService', () => {
     });
   });
 
-  describe('buyer identification validation (RG 5824/2026)', () => {
+  describe('buyer identification validation (RG 5866/2026)', () => {
     it('should throw an ArcaValidationError when total is >= 10,000,000 and buyer is FINAL_CONSUMER/unidentified', async () => {
       const wsfe = new WsfeService(BASE_CONFIG);
       

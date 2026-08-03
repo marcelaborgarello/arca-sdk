@@ -4,6 +4,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.3.5] — 2026-08-03
+
+### 🌐 Adecuación Normativa ARCA (RG 5866/2026)
+
+- **Actualización de Referencia Normativa**: Se actualizó la referencia legal en las validaciones de `WsfeService`, unit tests y documentación de la antigua RG 5824/2026 a la **RG 5866/2026** (vigente desde el 01/07/2026), la cual abrogó y unificó el régimen de facturación electrónica de ARCA manteniendo el tope de $10.000.000 para la identificación de compradores a Consumidor Final.
+
+---
+
 ## [1.2.1] — 2026-05-29
 
 ### 🌐 Normativas ARCA 2026 & Actualizaciones de Infraestructura

@@ -782,7 +782,7 @@ export class WsfeService {
             buyer.docNumber === '';
 
         if (total >= 10000000 && isFinalConsumer) {
-            const errorMessage = 'Para importes mayores o iguales a $10.000.000 es obligatorio identificar al comprador (RG 5824/2026).';
+            const errorMessage = 'Para importes mayores o iguales a $10.000.000 es obligatorio identificar al comprador (RG 5866/2026).';
             if (process.env.NODE_ENV !== 'production') {
                 console.warn(`[arca-sdk WARNING] ${errorMessage}`);
             }

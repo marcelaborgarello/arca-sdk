@@ -289,8 +289,8 @@ const url = generateQRUrl(caeResponse, '20123456789', 1500.00);
 
 `arca-sdk` está completamente adaptada a las últimas directivas de la **Agencia de Recaudación y Control Aduanero (ARCA)**:
 
-#### 1. Identificación del Comprador (RG 5824/2026)
-* A partir de 2026, el monto límite para compras de **Consumidores Finales** sin identificar se elevó a **$10.000.000**.
+#### 1. Identificación del Comprador (RG 5866/2026)
+* A partir de 2026, bajo la **RG 5866/2026** (que abrogó y unificó la RG 5824/2026), el monto límite para compras de **Consumidores Finales** sin identificar se estableció en **$10.000.000**.
 * Si el importe acumulado del comprobante es **igual o mayor a $10.000.000**, es **obligatorio** identificar al comprador mediante su DNI, CUIT, CUIL o CDI en el objeto `buyer`.
 * Si el cliente solicita el comprobante para deducir el gasto en el Impuesto a las Ganancias, es obligatorio identificarlo con su CUIT sin importar el monto.
 
