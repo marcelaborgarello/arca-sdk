@@ -120,11 +120,18 @@ npm view arca-sdk version   # confirmá que subió
 | `E403 ... cannot publish over previously published version` | Esa versión ya existe. npm no permite republicar: subí la versión en `package.json`. |
 | `npm warn ... "repository.url" was normalized` | Cosmético. No es la causa de ningún fallo de publish. Se silencia con `npm pkg fix`. |
 
-## 5. Deuda conocida del paquete
+## 5. Contenido del paquete
 
-- **Falta el archivo `LICENSE`.** `package.json` declara MIT y el README tiene el badge,
-  pero el archivo no existe: el badge da 404 en GitHub y el paquete se publica sin el
-  texto de la licencia.
-- **`README.pdf` se publica** (~557 kB, más de la mitad del peso del tarball). El campo
-  `files` no lo filtra porque npm fuerza la inclusión de todo lo que matchee `README*`.
-  Se resuelve renombrándolo a `docs/manual.pdf`.
+El tarball debe tener 10 archivos y pesar ~122 kB: `dist/`, `README.md`, `CHANGELOG.md`,
+`LICENSE` y `package.json`. Verificalo siempre con `npm publish --dry-run`.
+
+Dos cosas que ya se corrigieron y conviene no volver a romper:
+
+- **No dejes un PDF que empiece con `README` en la raíz.** npm fuerza la inclusión de
+  todo lo que matchee `README*`, sin importar el campo `files` ni el `.npmignore`. El
+  manual en PDF vive en `docs/manual.pdf` justamente por eso; si regenerás el PDF con
+  `md-to-pdf`, mandá la salida ahí y no a `README.pdf` (pesaba 557 kB, más de la mitad
+  del paquete).
+- **`LICENSE` tiene que existir en la raíz.** `package.json` declara MIT y el README
+  tiene el badge apuntando al archivo. Sin él, el badge da 404 en GitHub y el paquete se
+  publica sin el texto de la licencia, lo que deja ambigua la concesión de derechos.
