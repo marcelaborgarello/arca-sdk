@@ -3,6 +3,26 @@
 Checklist para publicar `arca-sdk` en npm. Está escrito porque los errores que tira
 npm son engañosos y cuestan más tiempo del que deberían.
 
+## TL;DR — el comando que funciona
+
+```bash
+npm publish --//registry.npmjs.org/:_authToken=TU_TOKEN
+```
+
+Con un **granular access token** que tenga **Read and write** sobre `arca-sdk` y el
+**bypass de 2FA habilitado**. Sin `--otp`, sin editar el `.npmrc`, sin `npm login`.
+
+Así el token es descartable: publicás y lo revocás, sin dejar credenciales guardadas.
+Para no dejarlo en el historial del shell:
+
+```bash
+read -s NPM_TOKEN          # pegás el token y Enter; no se ve nada, es normal
+npm publish --//registry.npmjs.org/:_authToken=$NPM_TOKEN
+```
+
+Si eso da 403, el toggle del token está invertido: tiene que ser la opción que
+**permite saltear** el 2FA, no la que lo exige. Todo lo demás está abajo.
+
 ## 1. Antes de commitear
 
 ```bash
