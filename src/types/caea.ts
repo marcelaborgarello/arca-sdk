@@ -1,4 +1,4 @@
-import type { WsfeConfig, InvoiceType, BillingConcept, Buyer, InvoiceOptional, AssociatedInvoice, InvoiceItem } from './wsfe';
+import type { WsfeConfig, InvoiceType, BillingConcept, Buyer, InvoiceOptional, AssociatedInvoice, InvoiceItem, ArcaDateInput } from './wsfe';
 
 /**
  * Configuration for CaeaService (identical to WsfeConfig)
@@ -50,8 +50,27 @@ export interface CaeaInvoice {
     concept: BillingConcept;
     /** Invoice number (correlative) */
     invoiceNumber: number;
-    /** Date of the invoice (default: today) */
-    date?: Date;
+    /**
+     * Fecha del comprobante (default: hoy).
+     *
+     * Acepta `'YYYY-MM-DD'` / `'YYYYMMDD'` (fecha literal) o un `Date`
+     * (instante, se convierte al día calendario argentino).
+     */
+    date?: ArcaDateInput;
+    /**
+     * Fecha **y hora** exactas en que el comprobante se generó localmente durante
+     * la contingencia. Se envía como `CbteFchHsGen` (String 14, `yyyymmddhhmmss`,
+     * hora argentina UTC-3).
+     *
+     * Obligatorio desde el 01/08/2026 (RG 5782 — Manual del Desarrollador RG 4291 v4.6):
+     * todos los puntos de venta CAEA pasan a considerarse de Contingencia.
+     *
+     * A diferencia de `date`, un `Date` acá se interpreta siempre como instante:
+     * la hora es justamente el dato que ARCA valida. **Informalo siempre con la hora
+     * real de emisión.** Si se omite, se usa la fecha de `date` con hora `000000`,
+     * que cumple el formato pero no aporta la hora verdadera.
+     */
+    generatedAt?: ArcaDateInput;
     /** Buyer information */
     buyer?: Buyer;
     /** Items included in the invoice */

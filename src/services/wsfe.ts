@@ -12,6 +12,7 @@ import type {
     PointOfSale,
     InvoiceOptional,
     ServiceDates,
+    ArcaDateInput,
 } from '../types/wsfe';
 import {
     InvoiceType,
@@ -24,6 +25,7 @@ import {
     calculateTotal,
     round,
 } from '../utils/calculations';
+import { formatArcaDateOnly } from '../utils/formatArcaDate';
 import { parseXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
@@ -859,7 +861,7 @@ export class WsfeService {
         pointOfSale: number;
         invoiceNumber: number;
         concept: BillingConcept;
-        date: Date;
+        date: ArcaDateInput;
         buyer?: IssueInvoiceRequest['buyer'];
         associatedInvoices?: AssociatedInvoice[];
         net: number;
@@ -869,7 +871,7 @@ export class WsfeService {
         optionals?: InvoiceOptional[];
         serviceDates?: ServiceDates;
     }): string {
-        const dateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
+        const dateStr = formatArcaDateOnly(params.date);
 
         let vatXml = '';
         if (params.vatData && params.vatData.length > 0) {
@@ -895,7 +897,7 @@ export class WsfeService {
           <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
           <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
           ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
-          ${asoc.date ? `<ar:CbteFch>${asoc.date.toISOString().split('T')[0].replace(/-/g, '')}</ar:CbteFch>` : ''}
+          ${asoc.date ? `<ar:CbteFch>${formatArcaDateOnly(asoc.date)}</ar:CbteFch>` : ''}
         </ar:CbteAsoc>`;
             });
             asocXml += '\n      </ar:CbtesAsoc>';
@@ -922,10 +924,10 @@ export class WsfeService {
         // Fechas de servicio (Obligatorio si concept es 2 (Servicios) o 3 (Productos y Servicios))
         let fechasServicioXml = '';
         if (params.concept === BillingConcept.SERVICES || params.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
-            const defaultDateStr = params.date.toISOString().split('T')[0].replace(/-/g, '');
-            const startDateStr = params.serviceDates?.startDate ? params.serviceDates.startDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
-            const endDateStr = params.serviceDates?.endDate ? params.serviceDates.endDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
-            const dueDateStr = params.serviceDates?.dueDate ? params.serviceDates.dueDate.toISOString().split('T')[0].replace(/-/g, '') : defaultDateStr;
+            const defaultDateStr = formatArcaDateOnly(params.date);
+            const startDateStr = params.serviceDates?.startDate ? formatArcaDateOnly(params.serviceDates.startDate) : defaultDateStr;
+            const endDateStr = params.serviceDates?.endDate ? formatArcaDateOnly(params.serviceDates.endDate) : defaultDateStr;
+            const dueDateStr = params.serviceDates?.dueDate ? formatArcaDateOnly(params.serviceDates.dueDate) : defaultDateStr;
 
             fechasServicioXml = `
             <ar:FchServDesde>${startDateStr}</ar:FchServDesde>

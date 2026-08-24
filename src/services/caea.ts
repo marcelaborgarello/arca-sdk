@@ -19,6 +19,7 @@ import {
     calculateTotal,
     round,
 } from '../utils/calculations';
+import { formatArcaDateOnly, formatArcaTimestamp } from '../utils/formatArcaDate';
 import { parseXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { getArcaHint } from '../constants/errors';
@@ -216,7 +217,19 @@ export class CaeaService {
         let detXml = '';
         params.invoices.forEach(inv => {
             const date = inv.date || new Date();
-            const dateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+            const dateStr = formatArcaDateOnly(date);
+
+            // RG 5782 / Manual del Desarrollador v4.6 (vigente 01/08/2026):
+            // todos los puntos de venta CAEA pasan a ser de Contingencia, por lo que
+            // CbteFchHsGen es de integración obligatoria en la rendición informativa.
+            //
+            // Sin generatedAt no hay forma de conocer la hora real de emisión, así que
+            // se cae a la fecha ya resuelta del comprobante con hora 000000. Se deriva
+            // de dateStr —y no de `date`— para garantizar que la parte de fecha de
+            // CbteFchHsGen coincida siempre con CbteFch: si discrepan, ARCA rechaza.
+            const generatedAtStr = inv.generatedAt
+                ? formatArcaTimestamp(inv.generatedAt)
+                : `${dateStr}000000`;
 
             let total = 0;
             let net = 0;
@@ -282,7 +295,7 @@ export class CaeaService {
             // Fechas de servicio (Obligatorio si concept es 2 (Servicios) o 3 (Productos y Servicios))
             let fechasServicioXml = '';
             if (inv.concept === BillingConcept.SERVICES || inv.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
-                const defaultDateStr = date.toISOString().split('T')[0].replace(/-/g, '');
+                const defaultDateStr = formatArcaDateOnly(date);
                 fechasServicioXml = `
             <ar:FchServDesde>${defaultDateStr}</ar:FchServDesde>
             <ar:FchServHasta>${defaultDateStr}</ar:FchServHasta>
@@ -299,7 +312,7 @@ export class CaeaService {
               <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
               <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
               ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
-              ${asoc.date ? `<ar:CbteFch>${asoc.date.toISOString().split('T')[0].replace(/-/g, '')}</ar:CbteFch>` : ''}
+              ${asoc.date ? `<ar:CbteFch>${formatArcaDateOnly(asoc.date)}</ar:CbteFch>` : ''}
             </ar:CbteAsoc>`;
                 });
                 asocXml += '\n          </ar:CbtesAsoc>';
@@ -334,7 +347,8 @@ export class CaeaService {
           <ar:ImpTrib>0.00</ar:ImpTrib>
           <ar:MonId>PES</ar:MonId>
           <ar:MonCotiz>1</ar:MonCotiz>
-          <ar:CAEA>${params.caea}</ar:CAEA>${fechasServicioXml}
+          <ar:CAEA>${params.caea}</ar:CAEA>
+          <ar:CbteFchHsGen>${generatedAtStr}</ar:CbteFchHsGen>${fechasServicioXml}
           ${asocXml}
           ${vatXml}
           ${optXml}

@@ -200,6 +200,160 @@ describe('CaeaService', () => {
       expect(capturedXml).toContain('<ar:ImpTotal>1210.00</ar:ImpTotal>');
     });
 
+    // RG 5782 — Manual del Desarrollador RG 4291 v4.6 (vigente 01/08/2026)
+    it('should always send CbteFchHsGen (String 14, yyyymmddhhmmss) in the detail', async () => {
+      let capturedXml = '';
+      (callArcaApi as any).mockImplementationOnce((url: string, options: any) => {
+        capturedXml = options.body;
+        return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+      });
+
+      const caeaService = new CaeaService(BASE_CONFIG);
+
+      await caeaService.reportCAEAPeriod({
+        caea: '25157992335329',
+        invoices: [{
+          invoiceType: InvoiceType.FACTURA_A,
+          concept: BillingConcept.PRODUCTS,
+          invoiceNumber: 150,
+          // 2026-08-24 22:35:07 hora argentina, expresada en UTC
+          date: new Date('2026-08-25T01:35:07Z'),
+          generatedAt: new Date('2026-08-25T01:35:07Z'),
+          items: [{ description: 'Test Item', quantity: 2, unitPrice: 500, vatRate: 21 }],
+          buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        }],
+      });
+
+      expect(capturedXml).toContain('<ar:CbteFchHsGen>20260824223507</ar:CbteFchHsGen>');
+
+      // El campo va inmediatamente después de CAEA, según el esquema del WSDL
+      // (FECAEADetRequest extiende FEDetRequest y agrega CAEA + CbteFchHsGen).
+      expect(capturedXml).toMatch(/<ar:CAEA>25157992335329<\/ar:CAEA>\s*<ar:CbteFchHsGen>/);
+
+      const hsGen = capturedXml.match(/<ar:CbteFchHsGen>(\d+)<\/ar:CbteFchHsGen>/)?.[1];
+      expect(hsGen).toHaveLength(14);
+    });
+
+    it('should keep CbteFch and CbteFchHsGen on the same Argentine day near midnight', async () => {
+      let capturedXml = '';
+      (callArcaApi as any).mockImplementationOnce((url: string, options: any) => {
+        capturedXml = options.body;
+        return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+      });
+
+      const caeaService = new CaeaService(BASE_CONFIG);
+
+      // 23:30 del 24/08 en Argentina => 02:30 UTC del 25/08.
+      // Antes, CbteFch salía como 20260825 (UTC) y contradecía a CbteFchHsGen.
+      await caeaService.reportCAEAPeriod({
+        caea: '25157992335329',
+        invoices: [{
+          invoiceType: InvoiceType.FACTURA_A,
+          concept: BillingConcept.PRODUCTS,
+          invoiceNumber: 151,
+          date: new Date('2026-08-25T02:30:00Z'),
+          generatedAt: new Date('2026-08-25T02:30:00Z'),
+          items: [{ description: 'Test Item', quantity: 1, unitPrice: 100, vatRate: 21 }],
+          buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        }],
+      });
+
+      expect(capturedXml).toContain('<ar:CbteFch>20260824</ar:CbteFch>');
+      expect(capturedXml).toContain('<ar:CbteFchHsGen>20260824233000</ar:CbteFchHsGen>');
+    });
+
+    // Regresión: un string de fecha (o un Date a medianoche UTC) representa un día
+    // calendario y debe usarse literal, sin desplazarse a UTC-3.
+    it.each([
+      ['string YYYY-MM-DD', '2026-08-24'],
+      ['string YYYYMMDD', '20260824'],
+      ['Date a medianoche UTC', new Date('2026-08-24')],
+    ])('should treat a calendar date literally (%s)', async (_label, date) => {
+      let capturedXml = '';
+      (callArcaApi as any).mockImplementationOnce((url: string, options: any) => {
+        capturedXml = options.body;
+        return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+      });
+
+      const caeaService = new CaeaService(BASE_CONFIG);
+
+      await caeaService.reportCAEAPeriod({
+        caea: '25157992335329',
+        invoices: [{
+          invoiceType: InvoiceType.FACTURA_A,
+          concept: BillingConcept.PRODUCTS,
+          invoiceNumber: 153,
+          date: date as any,
+          items: [{ description: 'Test Item', quantity: 1, unitPrice: 100, vatRate: 21 }],
+          buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        }],
+      });
+
+      expect(capturedXml).toContain('<ar:CbteFch>20260824</ar:CbteFch>');
+    });
+
+    it('should fall back to the invoice date at 000000 when generatedAt is omitted', async () => {
+      let capturedXml = '';
+      (callArcaApi as any).mockImplementationOnce((url: string, options: any) => {
+        capturedXml = options.body;
+        return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+      });
+
+      const caeaService = new CaeaService(BASE_CONFIG);
+
+      await caeaService.reportCAEAPeriod({
+        caea: '25157992335329',
+        invoices: [{
+          invoiceType: InvoiceType.FACTURA_A,
+          concept: BillingConcept.PRODUCTS,
+          invoiceNumber: 152,
+          date: new Date('2026-08-24T15:00:00Z'),
+          items: [{ description: 'Test Item', quantity: 1, unitPrice: 100, vatRate: 21 }],
+          buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        }],
+      });
+
+      // Sin generatedAt no se puede inventar la hora: se usa 000000.
+      // Lo que sí debe cumplirse siempre es que la fecha coincida con CbteFch.
+      expect(capturedXml).toContain('<ar:CbteFch>20260824</ar:CbteFch>');
+      expect(capturedXml).toContain('<ar:CbteFchHsGen>20260824000000</ar:CbteFchHsGen>');
+    });
+
+    it('should always keep the date portion of CbteFchHsGen in sync with CbteFch', async () => {
+      const cases = [
+        { date: '2026-08-24', generatedAt: undefined },
+        { date: new Date('2026-08-25T02:30:00Z'), generatedAt: new Date('2026-08-25T02:30:00Z') },
+        { date: new Date('2026-08-24'), generatedAt: undefined },
+      ];
+
+      for (const c of cases) {
+        let capturedXml = '';
+        (callArcaApi as any).mockImplementationOnce((url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+        });
+
+        const caeaService = new CaeaService(BASE_CONFIG);
+        await caeaService.reportCAEAPeriod({
+          caea: '25157992335329',
+          invoices: [{
+            invoiceType: InvoiceType.FACTURA_A,
+            concept: BillingConcept.PRODUCTS,
+            invoiceNumber: 154,
+            date: c.date as any,
+            generatedAt: c.generatedAt as any,
+            items: [{ description: 'Test Item', quantity: 1, unitPrice: 100, vatRate: 21 }],
+            buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+          }],
+        });
+
+        const cbteFch = capturedXml.match(/<ar:CbteFch>(\d{8})<\/ar:CbteFch>/)?.[1];
+        const hsGen = capturedXml.match(/<ar:CbteFchHsGen>(\d{14})<\/ar:CbteFchHsGen>/)?.[1];
+
+        expect(hsGen?.slice(0, 8)).toBe(cbteFch);
+      }
+    });
+
     it('should throw ArcaValidationError when invoices is empty', async () => {
       const caeaService = new CaeaService(BASE_CONFIG);
       await expect(caeaService.reportCAEAPeriod({

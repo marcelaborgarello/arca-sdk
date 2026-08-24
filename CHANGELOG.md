@@ -4,6 +4,30 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.4.0] — 2026-08-24
+
+### 🌐 CAEA como Contingencia — `CbteFchHsGen` obligatorio (RG 5782)
+
+- **Campo `CbteFchHsGen`**: Se incorporó el envío del campo `<ar:CbteFchHsGen>` en el detalle de `FECAEARegInformativo` (`CaeaService.reportCAEAPeriod()`). A partir de la **versión 4.6 del Manual del Desarrollador RG 4291** (vigente desde el **01/08/2026**, en cumplimiento de la **RG 5782**), todos los puntos de venta CAEA pasaron a considerarse de Contingencia y este campo es de integración obligatoria. Su ausencia puede provocar el rechazo de la rendición informativa.
+- **Nueva propiedad `generatedAt`**: La interfaz `CaeaInvoice` acepta ahora `generatedAt?: Date` para informar la fecha y hora real de generación local del comprobante durante la contingencia. Si se omite, se utiliza `date` como valor por defecto.
+
+### 🐛 Normalización de fechas a horario argentino (UTC-3)
+
+- **Bugfix de zona horaria**: Las fechas construidas a partir de un instante (ej. `new Date()`) se calculan ahora en horario de Argentina (UTC-3) en lugar de UTC. Anteriormente se usaba `Date.toISOString()`, lo que provocaba que los comprobantes emitidos entre las **21:00 y las 00:00 hora argentina** se informaran con la **fecha del día siguiente**. Afecta a `CbteFch`, `FchServDesde`, `FchServHasta`, `FchVtoPago` y a la fecha de los comprobantes asociados (`CbtesAsoc`), tanto en `WsfeService` como en `CaeaService`.
+
+### ✨ `ArcaDateInput`: fechas-calendario explícitas
+
+- **Los campos de fecha aceptan ahora `Date | string`**. Un `Date` de JavaScript es un *instante*, mientras que `CbteFch` es una *fecha-calendario*; con un `Date` pelado las dos cosas son indistinguibles. Ahora se puede expresar la intención sin ambigüedad:
+  - `'2026-08-24'` o `'20260824'` → fecha literal, sin conversión de zona horaria (**forma recomendada**).
+  - `new Date()` → instante, se convierte al día calendario argentino.
+- **Compatibilidad**: el cambio es aditivo, no requiere migrar código. Un `Date` que caiga exactamente en medianoche UTC —como `new Date('2026-08-24')`, la forma habitual de construir "un día" en JS— se sigue interpretando como fecha-calendario literal, de modo que quien ya pasaba fechas así obtiene el mismo resultado que antes.
+- **Validación**: los strings con formato desconocido (`'24/08/2026'`) o fechas inexistentes (`'2026-02-30'`), y los `Date` inválidos, ahora lanzan `RangeError` en lugar de generar silenciosamente un comprobante con fecha incorrecta.
+- **Nuevos helpers** exportados en `src/utils/formatArcaDate.ts`: `formatArcaDateOnly()` (`yyyymmdd`, String 8) y `formatArcaTimestamp()` (`yyyymmddhhmmss`, String 14), que unifican el criterio de zona horaria que hasta ahora solo aplicaba el TRA del WSAA.
+
+> **Nota sobre `CbteFchHsGen`**: a diferencia de `date`, un `Date` en `generatedAt` se interpreta **siempre** como instante, porque ahí la hora es el dato que ARCA valida. Si se omite `generatedAt`, el SDK usa la fecha ya resuelta del comprobante con hora `000000`, garantizando que la parte de fecha coincida con `CbteFch`.
+
+---
+
 ## [1.3.5] — 2026-08-03
 
 ### 🌐 Adecuación Normativa ARCA (RG 5866/2026)

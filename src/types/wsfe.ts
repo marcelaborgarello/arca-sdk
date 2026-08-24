@@ -1,5 +1,8 @@
 import type { ArcaConfig } from './common';
 import type { LoginTicket } from './wsaa';
+import type { ArcaDateInput } from '../utils/formatArcaDate';
+
+export type { ArcaDateInput };
 
 /**
  * Configuración para WsfeService
@@ -121,7 +124,7 @@ export interface AssociatedInvoice {
     /** CUIT emisor (requerido a veces en MiPyME, opcional para resto) */
     cuit?: string;
     /** Fecha de emisión del comprobante original */
-    date?: Date;
+    date?: ArcaDateInput;
 }
 
 /**
@@ -138,9 +141,9 @@ export interface InvoiceOptional {
  * Fechas de servicio (Obligatorio si concept es 2 o 3)
  */
 export interface ServiceDates {
-    startDate: Date;
-    endDate: Date;
-    dueDate: Date;
+    startDate: ArcaDateInput;
+    endDate: ArcaDateInput;
+    dueDate: ArcaDateInput;
 }
 
 /**
@@ -169,8 +172,13 @@ export interface IssueInvoiceRequest {
     }[];
     /** Indica si los precios unitarios YA incluyen el IVA. Defecto: false */
     includesVAT?: boolean;
-    /** Fecha del comprobante (default: hoy) */
-    date?: Date;
+    /**
+     * Fecha del comprobante (default: hoy).
+     *
+     * Acepta `'YYYY-MM-DD'` / `'YYYYMMDD'` (fecha literal) o un `Date`
+     * (instante, se convierte al día calendario argentino). Ver {@link ArcaDateInput}.
+     */
+    date?: ArcaDateInput;
     /** Campos opcionales adjuntos (ej: Condición IVA receptor ID 1010) */
     optionals?: InvoiceOptional[];
 }
