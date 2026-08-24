@@ -116,6 +116,9 @@ Funciona hoy; si aparecen rechazos raros en CAEA, mirar ahí primero.
 - **Comentarios y docs en español** (rioplatense); identificadores y API en inglés.
 - Los tests referencian la normativa que cubren
   (ej. `// RG 5782 — Manual del Desarrollador RG 4291 v4.6`).
+- **Publicar en npm**: ver `RELEASING.md`. Tiene el checklist y la traducción de los
+  errores de npm, que son engañosos (un `E404` en el publish es casi siempre un problema
+  de credenciales, no un paquete inexistente).
 
 ## Al tocar código
 
