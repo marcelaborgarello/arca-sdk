@@ -50,6 +50,22 @@ export function checkArcaServerIdentity(
 }
 
 /**
+ * String de ciphers OpenSSL para el `https.Agent` bajo Node, o `undefined` bajo Bun.
+ *
+ * `SECLEVEL=0` es sintaxis de OpenSSL para forzar el nivel de seguridad más permisivo
+ * y evitar "dh key too small" contra los certificados de ARCA. Bun define
+ * `process.versions.node` por compatibilidad (o sea, un chequeo de "es Node" no alcanza
+ * para excluirlo), pero su TLS es BoringSSL, no OpenSSL: no entiende esta sintaxis de
+ * cipher list y, en vez de ignorarla, falla el socket de raíz (`FailedToOpenSocket`)
+ * antes de intentar la conexión. Bun tampoco tiene el problema de origen (no rechaza el
+ * DH pequeño de ARCA), así que alcanza con omitirla ahí.
+ */
+export function getArcaOpenSslCiphers(): string | undefined {
+    const isBun = typeof process !== 'undefined' && !!process.versions && !!process.versions.bun;
+    return isBun ? undefined : 'DEFAULT:!DH@SECLEVEL=0';
+}
+
+/**
  * Realiza una llamada a la API de ARCA (WSAA o WSFE)
  * Maneja la compatibilidad SSL con los servidores de AFIP (DH key size)
  * y añade robustez (timeouts, mejores errores).
@@ -66,10 +82,7 @@ export async function callArcaApi(
             const parsedUrl = new URL(url);
 
             const agent = new https.Agent({
-                // SECLEVEL=0 es el nivel más permisivo de OpenSSL.
-                // !DH desactiva Diffie-Hellman para forzar RSA o ECDHE si están disponibles,
-                // evitando el problema de "dh key too small" de raíz.
-                ciphers: 'DEFAULT:!DH@SECLEVEL=0',
+                ciphers: getArcaOpenSslCiphers(),
                 // AFIP todavía tiene endpoints que podrían requerir TLS 1.0/1.1
                 minVersion: 'TLSv1',
                 // @ts-ignore - Propiedad específica para mitigar "dh key too small" en Node 18+

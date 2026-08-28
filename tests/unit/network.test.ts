@@ -1,6 +1,6 @@
-import { describe, it, expect, vi, beforeEach, Mock } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach, Mock } from 'vitest';
 import tls from 'tls';
-import { checkArcaServerIdentity } from '../../src/utils/network';
+import { checkArcaServerIdentity, getArcaOpenSslCiphers } from '../../src/utils/network';
 
 // Mockear el módulo 'tls' para controlar tls.checkServerIdentity
 vi.mock('tls', () => {
@@ -74,5 +74,36 @@ describe('checkArcaServerIdentity', () => {
         expect(tls.checkServerIdentity).toHaveBeenCalledTimes(2);
         expect(tls.checkServerIdentity).toHaveBeenNthCalledWith(1, 'servicios1.arca.gob.ar', mockCert);
         expect(tls.checkServerIdentity).toHaveBeenNthCalledWith(2, 'servicios1.afip.gov.ar', mockCert);
+    });
+});
+
+describe('getArcaOpenSslCiphers', () => {
+    const originalVersions = process.versions;
+
+    afterEach(() => {
+        Object.defineProperty(process, 'versions', { value: originalVersions, configurable: true });
+    });
+
+    // Bun define process.versions.node por compatibilidad, así que hay que
+    // distinguirlo explícitamente: BoringSSL (el TLS de Bun) no entiende la
+    // sintaxis de cipher list de OpenSSL y falla el socket de raíz si se la
+    // pasamos (FailedToOpenSocket contra wsaahomo.afip.gov.ar, confirmado
+    // empíricamente 2026-08-28).
+    it('should return undefined when running under Bun', () => {
+        Object.defineProperty(process, 'versions', {
+            value: { ...originalVersions, node: '24.3.0', bun: '1.3.14' },
+            configurable: true,
+        });
+
+        expect(getArcaOpenSslCiphers()).toBeUndefined();
+    });
+
+    it('should return the OpenSSL ciphers string when running under plain Node', () => {
+        Object.defineProperty(process, 'versions', {
+            value: { ...originalVersions, node: '20.11.0', bun: undefined },
+            configurable: true,
+        });
+
+        expect(getArcaOpenSslCiphers()).toBe('DEFAULT:!DH@SECLEVEL=0');
     });
 });

@@ -4,6 +4,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [1.4.2] — 2026-08-28
+
+### 🐛 WSAA/WSFE no conectaban bajo Bun
+
+- **Bugfix crítico**: `src/utils/network.ts` construye un `https.Agent` con un string de ciphers en sintaxis OpenSSL (`'DEFAULT:!DH@SECLEVEL=0'`) para evitar el error "dh key too small" contra los certificados de ARCA. La detección de runtime (`process.versions.node`) no alcanza para excluir a Bun: Bun define esa propiedad por compatibilidad, pero su TLS es BoringSSL, no OpenSSL. BoringSSL no entiende esa sintaxis de cipher list y, en vez de ignorarla, hacía fallar el socket de raíz (`FailedToOpenSocket`) antes de intentar la conexión — `wsaa.login()` y cualquier llamada a WSFE fallaban siempre bajo Bun. Se agrega detección explícita de Bun (`process.versions.bun`) para omitir ese string ahí; el resto del `https.Agent` (incluyendo el `checkServerIdentity` custom para el mismatch de certificado entre `*.arca.gob.ar` y `*.afip.gov.ar`) se mantiene igual y se verificó que sigue funcionando bajo Bun. Verificado contra ARCA homologación y producción (`FEDummy`) con Bun 1.3.14.
+
 ## [1.4.1] — 2026-08-28
 
 ### ⚠️ Deprecación de `issueSimpleReceipt()` e `issueReceipt()`
