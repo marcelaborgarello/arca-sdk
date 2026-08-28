@@ -4,7 +4,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [Unreleased]
+## [1.4.1] — 2026-08-28
+
+### ⚠️ Deprecación de `issueSimpleReceipt()` e `issueReceipt()`
+
+- **`issueSimpleReceipt()` e `issueReceipt()` quedan deprecados** (`@deprecated` + warning en runtime). Ambos emiten Tique C (`CbteTipo=83`), un comprobante regido por la **RG 3561/2013** (Controladores Fiscales) — una resolución distinta de la RG 4291/wsfev1 que sigue el resto del SDK. Se confirmó empíricamente contra ARCA homologación que `FECAESolicitar` con `CbteTipo=83` se rechaza con error **11001** ("no es un tipo de comprobante valido") desde un punto de venta Web Services estándar, el único tipo de punto de venta que un consumidor del SDK puede tener. Reemplazo recomendado: `issueInvoiceC()`. Ver `CLAUDE.md`, sección "Tique (81/82/83) vs. Factura", para el detalle normativo. Cambio no rompe la firma pública; los métodos siguen funcionando para quien tenga un punto de venta realmente homologado como Controlador Fiscal.
+- **README**: se sacó `issueSimpleReceipt()` del Quick Start (reemplazado por `issueInvoiceC()`) y se agregó una advertencia en la tabla de "Tipos de comprobantes".
 
 ### 🐛 WSAA no autenticaba bajo Node.js ESM
 

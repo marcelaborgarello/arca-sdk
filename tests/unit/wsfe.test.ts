@@ -110,6 +110,18 @@ describe('WsfeService', () => {
       expect(result.qrUrl).toContain('arca.gob.ar/fe/qr');
       expect(callArcaApi).toHaveBeenCalledTimes(2);
     });
+
+    // Deprecado: CbteTipo=83 lo rechaza ARCA (error 11001) desde un PtoVta
+    // Web Services estándar. Ver CLAUDE.md, "Tique (81/82/83) vs. Factura".
+    it('should warn that the method is deprecated', async () => {
+      mockCalls(83);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await wsfe.issueSimpleReceipt({ total: 1500 });
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('issueSimpleReceipt() está deprecado'));
+      warnSpy.mockRestore();
+    });
   });
 
   describe('issueReceipt', () => {
@@ -125,6 +137,18 @@ describe('WsfeService', () => {
       expect(result.cae).toBeDefined();
       expect(result.items).toEqual(items);
       expect(result.items?.length).toBe(2);
+    });
+
+    // Deprecado: CbteTipo=83 lo rechaza ARCA (error 11001) desde un PtoVta
+    // Web Services estándar. Ver CLAUDE.md, "Tique (81/82/83) vs. Factura".
+    it('should warn that the method is deprecated', async () => {
+      mockCalls(83);
+      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await wsfe.issueReceipt({ items: [{ description: 'Café', quantity: 1, unitPrice: 500 }] });
+
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('issueReceipt() está deprecado'));
+      warnSpy.mockRestore();
     });
   });
 

@@ -43,8 +43,8 @@ import { getArcaHint } from '../constants/errors';
  *   pointOfSale: 4,
  * });
  *
- * // Ticket C rápido
- * const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
+ * // Factura C rápida (consumidor final)
+ * const cae = await wsfe.issueInvoiceC({ items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }] });
  * console.log('CAE:', cae.cae);
  * console.log('QR:', cae.qrUrl);
  *
@@ -143,7 +143,13 @@ export class WsfeService {
 
     /**
      * Emite un Ticket C simple (solo monto total, sin detalle de items).
-     * Ideal para registros mínimos, como una app móvil de punto de venta.
+     *
+     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
+     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
+     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
+     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
+     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
+     * Fiscal) usá {@link issueInvoiceC}.
      */
     async issueSimpleReceipt(params: {
         total: number;
@@ -152,6 +158,14 @@ export class WsfeService {
         optionals?: InvoiceOptional[];
         serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+                '[arca-sdk WARNING] issueSimpleReceipt() está deprecado: emite Tique C ' +
+                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
+                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
+                'Services estándar. Usá issueInvoiceC() para el caso general.'
+            );
+        }
         return this.issueDocument({
             type: InvoiceType.TICKET_C,
             concept: params.concept || BillingConcept.PRODUCTS,
@@ -169,6 +183,13 @@ export class WsfeService {
     /**
      * Emite un Ticket C con detalle de items.
      * Los items se guardan en la respuesta pero no se envían a ARCA.
+     *
+     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
+     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
+     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
+     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
+     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
+     * Fiscal) usá {@link issueInvoiceC}.
      */
     async issueReceipt(params: {
         items: InvoiceItem[];
@@ -177,6 +198,14 @@ export class WsfeService {
         optionals?: InvoiceOptional[];
         serviceDates?: ServiceDates;
     }): Promise<CAEResponse> {
+        if (process.env.NODE_ENV !== 'production') {
+            console.warn(
+                '[arca-sdk WARNING] issueReceipt() está deprecado: emite Tique C ' +
+                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
+                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
+                'Services estándar. Usá issueInvoiceC() para el caso general.'
+            );
+        }
         const total = round(calculateTotal(params.items));
 
         const cae = await this.issueDocument({

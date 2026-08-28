@@ -99,8 +99,10 @@ const wsfe = new WsfeService({
   pointOfSale: 4,
 });
 
-// 3. Emitir Ticket C — una línea
-const result = await wsfe.issueSimpleReceipt({ total: 1500 });
+// 3. Emitir Factura C — una línea
+const result = await wsfe.issueInvoiceC({
+  items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+});
 
 console.log('CAE:', result.cae);              // '75157992335329'
 console.log('Vto:', result.caeExpiry);        // '20260302'
@@ -125,14 +127,23 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 | Método | Comprobante | Cuándo usarlo |
 |--------|-------------|---------------|
-| `issueSimpleReceipt()` | Ticket C | Monto total, sin detalle. Ideal para POS simple |
-| `issueReceipt()` | Ticket C + items | Con detalle de productos guardado localmente |
+| `issueSimpleReceipt()` ⚠️ | Ticket C | **Deprecado.** Ver nota abajo |
+| `issueReceipt()` ⚠️ | Ticket C + items | **Deprecado.** Ver nota abajo |
 | `issueInvoiceC()` | Factura C | Monotributistas a consumidor final / Empresas |
 | `issueInvoiceB()` | Factura B | Responsable Inscripto a consumidor final / Monotributo |
 | `issueInvoiceA()` | Factura A | Responsable Inscripto a Responsable Inscripto |
 | `issueCreditNoteA/B/C()` | Nota de Crédito | Anulación/Devolución (Requiere asociar la factura original) |
 | `issueDebitNoteA/B/C()` | Nota de Débito | Cobro extra/Penalidad (Requiere asociar la factura original) |
 | `issueReceiptA/B/C()` | Recibo | Comprobante de pago (misma emisión que una factura) |
+
+> [!WARNING]
+> **`issueSimpleReceipt()` e `issueReceipt()` están deprecados.** El comprobante
+> "Tique" (81/82/83) está regido por la RG 3561/2013 (Controladores Fiscales), una
+> resolución distinta de la RG 4291/wsfev1 que sigue el resto del SDK. `FECAESolicitar`
+> con `CbteTipo=83` se rechaza con error ARCA **11001** desde un punto de venta Web
+> Services estándar — el único tipo de punto de venta que un consumidor de este SDK
+> puede tener. Para el caso general (consumidor final, sin Controlador Fiscal
+> homologado) usá `issueInvoiceC()`.
 
 ### ✅ Consultas disponibles
 
@@ -147,7 +158,11 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 ## Ejemplos
 
-### Ticket C con detalle de items
+### Ticket C con detalle de items ⚠️ (deprecado)
+
+> Ver la advertencia en "Tipos de comprobantes" más arriba — `issueReceipt()`
+> emite Tique C, que ARCA rechaza desde un punto de venta Web Services estándar. Este
+> ejemplo queda documentado solo para quien tenga un Controlador Fiscal homologado.
 
 ```typescript
 const result = await wsfe.issueReceipt({
@@ -276,7 +291,9 @@ const ticket = await wsaa.login();
 import { generateQRUrl } from 'arca-sdk';
 
 // 1. Ya viene integrado en todos los métodos de emisión:
-const result = await wsfe.issueSimpleReceipt({ total: 1500 });
+const result = await wsfe.issueInvoiceC({
+  items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+});
 console.log(result.qrUrl); // listo para embeber en un generador de QR
 
 // 2. O generalo a mano si ya tenés la respuesta:
@@ -329,7 +346,9 @@ Todos los errores son instancias tipadas de `ArcaError`, con un campo `hint` que
 import { ArcaError, ArcaAuthError, ArcaValidationError, ArcaNetworkError } from 'arca-sdk';
 
 try {
-  const result = await wsfe.issueSimpleReceipt({ total: 1500 });
+  const result = await wsfe.issueInvoiceC({
+    items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+  });
 } catch (error) {
   if (error instanceof ArcaAuthError) {
     // Token expirado, certificado inválido, etc.
