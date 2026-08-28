@@ -142,13 +142,11 @@ Deuda conocida: dentro de `FECAEADetRequest` el orden actual está desviado del 
 (`CondicionIVAReceptorId` va pegado a `DocNro`, las `FchServ*` después de `MonCotiz`).
 Funciona hoy; si aparecen rechazos raros en CAEA, mirar ahí primero.
 
-**TODO sin investigar**: bajo **Bun** (no Node), la llamada HTTPS a
-`wsaahomo.afip.gov.ar` falla con `FailedToOpenSocket` — un error de socket distinto
-al de Node. Sospecha sin confirmar: interop del `https.Agent` custom en
-`src/utils/network.ts` (workaround de TLS/DH) bajo el shim de Bun. No bloquea nada
-hoy (Node funciona bien), pero como el proyecto usa Bun como runtime principal
-(`bun.lock`, CI corre con `bun test`), conviene investigarlo antes de que alguien
-lo pise en producción bajo Bun real.
+**Resuelto (v1.4.2)**: bajo Bun, el `https.Agent` de `src/utils/network.ts` fallaba con
+`FailedToOpenSocket` porque `process.versions.node` también existe bajo Bun (por
+compatibilidad) y el string de ciphers en sintaxis OpenSSL (`'DEFAULT:!DH@SECLEVEL=0'`)
+no lo entiende BoringSSL, el TLS de Bun. Se agregó detección explícita de
+`process.versions.bun` para omitirlo ahí. Ver `getArcaOpenSslCiphers()` en ese archivo.
 
 ## Convenciones
 
