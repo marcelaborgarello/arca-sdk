@@ -1,4 +1,8 @@
-import * as forge from 'node-forge';
+// Import por defecto, no `import * as forge`: node-forge es CJS y no expone
+// named exports estáticamente detectables, así que bajo Node ESM nativo
+// `import * as forge` resuelve a un namespace vacío (solo `.default`) y
+// `forge.pki` queda undefined. El default import sí resuelve a module.exports.
+import forge from 'node-forge';
 import { ArcaAuthError } from '../types/common';
 
 /**

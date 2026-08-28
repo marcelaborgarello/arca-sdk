@@ -4,6 +4,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [Unreleased]
+
+### 🐛 WSAA no autenticaba bajo Node.js ESM
+
+- **Bugfix crítico**: `src/utils/crypto.ts` importaba `node-forge` con `import * as forge from 'node-forge'`. Bajo Node.js ESM nativo (el runtime que usa este mismo proyecto, `"type": "module"`), esa forma de import resuelve a un namespace vacío para paquetes CJS como `node-forge` — `forge.pki` quedaba `undefined` y `wsaa.login()` fallaba siempre con `ArcaAuthError: Error al firmar TRA con certificado`. Cambiado a `import forge from 'node-forge'` (default import), que sí resuelve a `module.exports` de forma confiable. Verificado contra `dist/index.js` con Node.js real y contra ARCA homologación. No afectaba a consumidores CJS (`require('arca-sdk')`), donde el bundle de tsup ya copiaba las propiedades en runtime.
+
+---
+
 ## [1.4.0] — 2026-08-24
 
 ### 🌐 CAEA como Contingencia — `CbteFchHsGen` obligatorio (RG 5782)
