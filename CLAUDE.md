@@ -62,6 +62,43 @@ Ya contemplado (no reportar como novedad):
 Pendiente / a futuro: manual v4.7 (01/09/2026, Seguros de Caución, códigos 10273-10281);
 tipo de documento receptor `31 - FCI CNV` (v4.5) todavía no está en el enum `TaxIdType`.
 
+### Tique (81/82/83) vs. Factura: dos regímenes distintos, no dos formatos de lo mismo
+
+`InvoiceType.TICKET_A/B/C` (81/82/83) no son "una Factura con otro nombre" —
+son la clase de comprobante "Tique", regida por la **RG 3561/2013
+(Controladores Fiscales)**, una resolución aparte de la RG 4291/wsfev1 que
+sigue el resto del SDK. El puente entre ambos regímenes es la **RG 4290/2018**:
+sus Arts. 6-7 dan a los sujetos alcanzados por RG 3561 la opción "y/o" entre
+Controlador Fiscal y comprobantes electrónicos — pero la tabla de tipos de
+comprobante del Art. 3° de esa misma RG (texto vigente, incorpora
+modificaciones hasta RG 5764/2025) sigue marcando los códigos 081-120 con
+"(*) Solo emitidos con Controladores Fiscales". Esa opción "y/o" es para
+Factura/NC/ND, no para Tique.
+
+**Confirmado empíricamente contra ARCA homologación (2026-08-28)**:
+`FECAESolicitar` con `CbteTipo=83` se rechaza con error ARCA **11001**
+("no es un tipo de comprobante valido. Ver metodo FEParamGetTiposCbte") desde
+un punto de venta Web Services estándar — el único tipo de punto de venta que
+un consumidor del SDK puede tener. La misma llamada con `CbteTipo=11`
+(Factura C) se acepta sin problema. O sea: `issueSimpleReceipt()` e
+`issueReceipt()` (`src/services/wsfe.ts`), que hardcodean `TICKET_C`, no
+funcionan contra ARCA real para prácticamente nadie que use el SDK. No es un
+problema de elegibilidad por actividad económica (la duda original) — el tipo
+de comprobante en sí está fuera del alcance de un punto de venta que no sea
+Controlador Fiscal.
+
+Existe un régimen distinto y posterior para tique 100% electrónico sin
+hardware — **RG 5198/2022** ("Facturador", régimen especial de emisión
+electrónica de comprobantes originales) — pero usa otros códigos (109
+"Tique C", 114 "Tique Nota de Crédito C"), no 81/82/83, y no se investigó si
+es alcanzable vía un webservice de integración general o solo vía la app
+propia de ARCA.
+
+**Pendiente de decidir** (deliberadamente no resuelto todavía): qué hacer con
+`issueSimpleReceipt()` / `issueReceipt()` — deprecarlos, cambiarlos para
+emitir Factura C por defecto, o solo documentar la limitación de forma más
+visible. Es un cambio de API pública: no se resuelve sin discutirlo primero.
+
 ## Fechas: instante vs. fecha-calendario
 
 La trampa más grande del proyecto, y la causa de un bug real.
