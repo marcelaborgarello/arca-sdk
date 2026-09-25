@@ -333,7 +333,7 @@ export class CaeaService {
             let fechasServicioXml = '';
             if (inv.concept === BillingConcept.SERVICES || inv.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
                 // Se respeta `serviceDates` si viene; si no, se cae a la fecha del
-                // comprobante para las tres. Hasta v1.5.0 el campo no existía en
+                // comprobante para las tres. Hasta v2.0.0 el campo no existía en
                 // CaeaInvoice y siempre se usaba la fecha del comprobante, lo que
                 // informaba mal el período de cualquier servicio rendido por CAEA.
                 const defaultDateStr = formatArcaDateOnly(date);

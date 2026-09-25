@@ -85,26 +85,26 @@ export interface CaeaInvoice {
      * Fechas de servicio. Obligatorias si `concept` es 2 (Servicios) o 3 (Productos
      * y Servicios).
      *
-     * Disponible desde v1.5.0. Antes el campo no existía y las tres fechas se
+     * Disponible desde v2.0.0. Antes el campo no existía y las tres fechas se
      * emitían con la fecha del comprobante, lo que informaba mal cualquier
      * comprobante de servicios rendido por CAEA.
      */
     serviceDates?: ServiceDates;
     /**
      * Otros tributos: percepciones, impuestos internos, tasas. Suman a `ImpTrib`
-     * y al importe total. No incluir acá el IVA. Disponible desde v1.5.0.
+     * y al importe total. No incluir acá el IVA. Disponible desde v2.0.0.
      */
     taxes?: InvoiceTax[];
-    /** Moneda del comprobante (`MonId`). Default: `'PES'`. Disponible desde v1.5.0. */
+    /** Moneda del comprobante (`MonId`). Default: `'PES'`. Disponible desde v2.0.0. */
     currency?: string;
     /**
      * Cotización respecto del peso (`MonCotiz`). Default: `1`.
-     * Traela de `FEParamGetCotizacion`. Disponible desde v1.5.0.
+     * Traela de `FEParamGetCotizacion`. Disponible desde v2.0.0.
      */
     exchangeRate?: number;
     /**
      * Cancelación en la misma moneda extranjera (`CanMisMonExt`).
-     * Sólo con `currency` distinta de `'PES'`. Disponible desde v1.5.0.
+     * Sólo con `currency` distinta de `'PES'`. Disponible desde v2.0.0.
      */
     payInSameForeignCurrency?: boolean;
 }

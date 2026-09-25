@@ -59,7 +59,7 @@ export enum TaxIdType {
      * documento es numérico de **hasta 4 dígitos** — informar más rechaza con el
      * código 10271.
      *
-     * Disponible desde v1.5.0.
+     * Disponible desde v2.0.0.
      */
     FCI_CNV = 31,
 
@@ -132,11 +132,22 @@ export enum VatCondition {
     PROVEEDOR_DEL_EXTERIOR = 8,
     CLIENTE_DEL_EXTERIOR = 9,
     IVA_LIBERADO_LEY_19640 = 10,
-    /** Monotributista Social. Disponible desde v1.5.0. */
+    /**
+     * Monotributista Social.
+     *
+     * @remarks Figura en el catálogo del manual, pero **en producción suele
+     * rechazarse**: ARCA espera que todo monotributista —estándar, social o
+     * promovido— se declare como {@link VatCondition.RESPONSABLE_MONOTRIBUTO} (6).
+     * Por eso `PadronService` mapea a 6 y no a 13 aunque detecte los impuestos de
+     * monotributo social. Está disponible acá para quien lo necesite y sepa que su
+     * caso lo admite, pero **probalo contra homologación antes de usarlo**.
+     *
+     * Disponible desde v2.0.0.
+     */
     MONOTRIBUTISTA_SOCIAL = 13,
-    /** IVA No Alcanzado. Disponible desde v1.5.0. */
+    /** IVA No Alcanzado. Disponible desde v2.0.0. */
     IVA_NO_ALCANZADO = 15,
-    /** Monotributo Trabajador Independiente Promovido. Disponible desde v1.5.0. */
+    /** Monotributo Trabajador Independiente Promovido. Disponible desde v2.0.0. */
     MONOTRIBUTO_TRABAJADOR_INDEPENDIENTE_PROMOVIDO = 16,
 
     /**
@@ -218,7 +229,7 @@ export interface InvoiceOptional {
  * No Categorizado (CUIT 23000000000) con `ImpTrib` > 0 — código 10283, incorporado
  * por el Manual v4.7 (vigente 01/09/2026).
  *
- * Disponible desde v1.5.0.
+ * Disponible desde v2.0.0.
  */
 export interface InvoiceTax {
     /** Código del tributo según `FEParamGetTiposTributos` (ej. 13). */
@@ -245,7 +256,7 @@ export interface ServiceDates {
 /**
  * Opciones comunes a todos los métodos de emisión de `WsfeService`.
  *
- * Disponible desde v1.5.0. Hasta entonces cada método declaraba estos campos inline
+ * Disponible desde v2.0.0. Hasta entonces cada método declaraba estos campos inline
  * y tipaba `date` como `Date`, lo que impedía pasar la fecha-calendario literal
  * (`'2026-08-24'`) que es la forma recomendada — ver {@link ArcaDateInput}.
  */
@@ -310,7 +321,7 @@ export interface IssueInvoiceRequest {
     optionals?: InvoiceOptional[];
     /**
      * Otros tributos (percepciones, impuestos internos, tasas). Suman a `ImpTrib`
-     * y al importe total. No incluir acá el IVA. Disponible desde v1.5.0.
+     * y al importe total. No incluir acá el IVA. Disponible desde v2.0.0.
      */
     taxes?: InvoiceTax[];
     /**
@@ -319,7 +330,7 @@ export interface IssueInvoiceRequest {
      * Los códigos los da `FEParamGetTiposMonedas` (`'DOL'` para dólar estadounidense,
      * `'060'` para euro). Si no es `'PES'` hay que informar `exchangeRate`.
      *
-     * Disponible desde v1.5.0.
+     * Disponible desde v2.0.0.
      */
     currency?: string;
     /**
@@ -330,7 +341,7 @@ export interface IssueInvoiceRequest {
      * *exactamente* con la cotización del día hábil anterior, y rechaza con el
      * código 10038 si no.
      *
-     * Disponible desde v1.5.0.
+     * Disponible desde v2.0.0.
      */
     exchangeRate?: number;
     /**
@@ -340,7 +351,7 @@ export interface IssueInvoiceRequest {
      * Sólo aplica con `currency` distinta de `'PES'`: con moneda nacional el campo no
      * debe informarse (código 822 en CAEA / validación equivalente en CAE).
      *
-     * Disponible desde v1.5.0.
+     * Disponible desde v2.0.0.
      */
     payInSameForeignCurrency?: boolean;
 }
