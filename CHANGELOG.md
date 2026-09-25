@@ -4,11 +4,15 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [No publicado] — propuesto como 2.0.0
+## [2.0.0] — 2026-09-25
 
 > Hay **un cambio incompatible**: un rechazo de ARCA ahora lanza una excepción en vez
 > de devolverse como resultado normal. Ver "💥 Cambio incompatible". El resto es
 > aditivo o corrección de bugs.
+>
+> **Lo más urgente de esta versión** no es una feature: `CondicionIVAReceptorId` es
+> obligatorio en producción desde el **01/12/2026** y **homologación ya lo rechaza hoy**.
+> Si emitís sin `buyer.vatCondition`, ARCA no autoriza el comprobante.
 
 ### 💥 Cambio incompatible: un rechazo de ARCA ahora lanza `ArcaRejectionError`
 
