@@ -4,6 +4,30 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [No publicado]
+
+### 🐛 El XML del request no respetaba el `sequence` del XSD
+
+- **Bugfix**: el esquema de ARCA es un `sequence`, no un `all`, y los dos constructores de XML emitían elementos fuera de orden. Venía funcionando por tolerancia del parser de ARCA, pero el **01/12/2026** `CondicionIVAReceptorId` pasa a ser obligatorio (**manual v4.8**, RG 5616) y deja de ser un campo que casi nadie envía para viajar en todos los requests — en la posición equivocada. Corregido antes de esa fecha:
+  - **`FECAEDetRequest`** (`WsfeService`, manual v4.7/v4.8 pág. 26): `CondicionIVAReceptorId` estaba pegado a `DocNro` en lugar de ir después de `MonCotiz`; `ImpTrib` e `ImpIVA` estaban invertidos (el XSD define `ImpOpEx, ImpTrib, ImpIVA`); y `FchServDesde`/`FchServHasta`/`FchVtoPago` iban después de `MonId`/`MonCotiz` en vez de antes.
+  - **`FECAEADetRequest`** (`CaeaService`, pág. 131-132): `CondicionIVAReceptorId` estaba pegado a `DocNro`, y `CAEA`/`CbteFchHsGen` no quedaban al final del detalle como exige el XSD.
+  - Al comparar ambos: el orden de los importes **difiere legítimamente** entre uno y otro. `FECAEDetRequest` define `ImpOpEx, ImpTrib, ImpIVA`; `FECAEADetRequest` define `ImpOpEx, ImpIVA, ImpTrib`. No es una errata del manual.
+- **No hay cambios en la API pública**: ninguna firma cambia y el comportamiento observable es el mismo, salvo que el XML que llega a ARCA ahora valida contra el esquema publicado.
+
+### 🐛 Los valores de texto no se escapaban al armar el SOAP
+
+- **Bugfix**: el request se construye con template strings y ningún valor se escapaba. Un `&`, `<` o `>` en un campo de texto generaba XML inválido y ARCA rechazaba el request completo. El caso más fácil de disparar era un `Opcional` con razón social o domicilio (`'Belgrano 123 & Cía'`). No se había manifestado porque los campos de uso habitual (CUIT, importes) son numéricos. Se agrega `escapeXml()` en `src/utils/xml.ts`, aplicado en `WsfeService`, `CaeaService` y `TaxpayerService`.
+
+### ✅ Tests del XML que se envía
+
+- La suite mockeaba `callArcaApi` y sólo verificaba la respuesta parseada, con lo cual un request mal formado pasaba desapercibido: los 98 tests existentes seguían en verde con el comprobante reordenado por completo. Se agrega `tests/unit/request-xml.test.ts`, que afirma el orden del `sequence` en ambos constructores y el escapado de los valores de texto.
+
+### 📖 Normativa verificada contra el manual oficial
+
+- **Manual v4.7 (01/09/2026)** — ya vigente, **todavía no implementado**: comprobantes de Seguros de Caución (códigos 10273 a **10282**) y validaciones de comprobantes clase B con receptor **Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA). El código 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` (RG 2126/2006) en el array `Tributos`, que el SDK aún no construye.
+- **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio; los códigos 10245 (CAE) y 825 (CAEA), que hoy sólo observan, quedan en desuso y el rechazo pasa a ser 10246 / 826. Se confirma el **01/12**, no el 01/09 que indican varias fuentes secundarias.
+- **`VatCondition` mezcla dos catálogos distintos**: en el de `CondicionIVAReceptorId` —el que devuelve `FEParamGetCondicionIvaReceptor`— los valores **2, 3 y 11 no existen** (se rechazan con 10242) y **faltan 13** (Monotributista Social), **15** (IVA No Alcanzado) y **16** (Monotributo Trabajador Independiente Promovido). Documentado en `CLAUDE.md`; la corrección del enum es un cambio de API pública y queda pendiente.
+
 ## [1.4.2] — 2026-08-28
 
 ### 🐛 WSAA/WSFE no conectaban bajo Bun
