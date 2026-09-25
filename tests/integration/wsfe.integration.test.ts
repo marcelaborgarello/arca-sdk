@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
+import { VAT_RATE_CODES, VALID_VAT_CONDITION_IDS } from '../../src/types/wsfe';
 import { WsaaService } from '../../src/auth/wsaa';
 import { WsfeService } from '../../src/services/wsfe';
 import { InvoiceType, BillingConcept, TaxIdType, VatCondition } from '../../src/types/wsfe';
@@ -144,6 +145,62 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
             expect(error.observations.join(' ')).toMatch(/Condicion Frente al IVA/i);
             expect(error.hint).toBeDefined();
         }
+    });
+
+    // Los catálogos son la fuente autoritativa; los enums del SDK son una copia local
+    // que se desactualiza. Estos tests comparan una contra otra: si ARCA agrega un
+    // valor, se ponen en rojo y avisan que hay que actualizar el enum.
+    describe('catálogos de referencia', () => {
+        it('devuelve las alícuotas de IVA y el SDK las tiene todas', async () => {
+            const rates = await makeService().getVatRates();
+
+            expect(rates.length).toBeGreaterThanOrEqual(6);
+
+            // El 5% (id 8) y el 2.5% (id 9) están vigentes desde el 20/10/2014 y el SDK
+            // los rechazaba como inválidos hasta la v2.1.0.
+            const ids = rates.map(r => r.id);
+            expect(ids).toContain('8');
+            expect(ids).toContain('9');
+
+            // Toda alícuota que ARCA informa tiene que estar en el mapa local.
+            const codigosLocales = Object.values(VAT_RATE_CODES).map(String);
+            for (const rate of rates) {
+                expect(
+                    codigosLocales,
+                    `ARCA informa la alícuota ${rate.id} (${rate.description}) y VAT_RATE_CODES no la tiene`
+                ).toContain(rate.id);
+            }
+        });
+
+        it('devuelve el tributo 13 que exige el código 10283', async () => {
+            const taxes = await makeService().getTaxTypes();
+
+            const percepcionNoCategorizado = taxes.find(t => t.id === '13');
+            expect(percepcionNoCategorizado).toBeDefined();
+            expect(percepcionNoCategorizado!.description).toMatch(/no Categorizado/i);
+        });
+
+        it('devuelve las condiciones de IVA y coinciden con VALID_VAT_CONDITION_IDS', async () => {
+            const conditions = await makeService().getVatConditions();
+
+            expect(conditions.length).toBeGreaterThan(0);
+
+            for (const cond of conditions) {
+                expect(
+                    VALID_VAT_CONDITION_IDS.map(String),
+                    `ARCA admite la condición ${cond.id} (${cond.description}) y el SDK no la lista`
+                ).toContain(cond.id);
+            }
+        });
+
+        it('no lista los Tique entre los tipos de comprobante habilitados', async () => {
+            const types = await makeService().getInvoiceTypes();
+            const ids = types.map(t => t.id);
+
+            // Esta es la consulta que habría evitado el episodio del 11001.
+            expect(ids).toContain(String(InvoiceType.FACTURA_C));
+            expect(ids).not.toContain(String(InvoiceType.TICKET_C));
+        });
     });
 
     // Confirmado el 2026-08-28: el Tique (RG 3561/2013, Controladores Fiscales) no se

@@ -173,6 +173,36 @@ export enum VatCondition {
 }
 
 /**
+ * Alícuotas de IVA vigentes, mapeadas al código que espera ARCA en `<AlicIva><Id>`.
+ *
+ * Copia local del catálogo que devuelve `FEParamGetTiposIva`, para poder validar sin
+ * una llamada de red. **La autoridad es el método**, no este objeto: consultalo con
+ * `wsfe.getVatRates()` si sospechás que ARCA agregó una.
+ *
+ * | Id | Alícuota | Vigente desde |
+ * |----|----------|---------------|
+ * | 3  | 0%       | 20/02/2009    |
+ * | 4  | 10.5%    | 20/02/2009    |
+ * | 5  | 21%      | 20/02/2009    |
+ * | 6  | 27%      | 20/02/2009    |
+ * | 8  | 5%       | 20/10/2014    |
+ * | 9  | 2.5%     | 20/10/2014    |
+ *
+ * @remarks Hasta la v2.1.0 faltaban el 5% y el 2.5%, y el SDK las rechazaba como
+ * inválidas pese a que ARCA las acepta desde 2014.
+ *
+ * Disponible desde v2.1.0.
+ */
+export const VAT_RATE_CODES: Readonly<Record<number, number>> = {
+    0: 3,
+    2.5: 9,
+    5: 8,
+    10.5: 4,
+    21: 5,
+    27: 6,
+};
+
+/**
  * Códigos que ARCA acepta en `CondicionIVAReceptorId`.
  * Se usa para avisar temprano, antes de gastar un request que ARCA va a rechazar
  * con el código 10242.
@@ -434,6 +464,58 @@ export interface PointOfSale {
     isBlocked: boolean;
     /** Fecha de bloqueo (si aplica) */
     blockedSince?: string;
+}
+
+/**
+ * Entrada de un catálogo de referencia de ARCA (`FEParamGet*`).
+ *
+ * Los catálogos son la fuente autoritativa: los enums de este SDK son una copia local
+ * para tener autocompletado y chequeo en compilación, pero se desactualizan cuando ARCA
+ * agrega un valor. Si una validación local rechaza algo que creés válido, consultá el
+ * catálogo vivo antes de asumir que el equivocado sos vos.
+ *
+ * Disponible desde v2.1.0.
+ */
+export interface CatalogEntry {
+    /** Código que espera ARCA en el comprobante. */
+    id: string;
+    /** Descripción oficial. */
+    description: string;
+    /** Vigente desde (`yyyymmdd`), si ARCA la informa. */
+    validFrom?: string;
+    /** Vigente hasta (`yyyymmdd`). Ausente o `NULL` significa sin fecha de baja. */
+    validTo?: string;
+}
+
+/**
+ * Entrada del catálogo de condición de IVA del receptor
+ * (`FEParamGetCondicionIvaReceptor`).
+ *
+ * Disponible desde v2.1.0.
+ */
+export interface VatConditionEntry extends CatalogEntry {
+    /**
+     * Clases de comprobante en las que ARCA admite esta condición (ej. `'A/ALEY/C'`).
+     *
+     * **Puede variar según el emisor**: el servicio devuelve las combinaciones válidas
+     * para el CUIT autenticado, y no coinciden necesariamente con la tabla del manual.
+     * Por eso esta información no está hardcodeada en el SDK.
+     */
+    invoiceClass?: string;
+}
+
+/**
+ * Cotización de una moneda (`FEParamGetCotizacion`).
+ *
+ * Disponible desde v2.1.0.
+ */
+export interface CurrencyRate {
+    /** Código de moneda (ej. `'DOL'`). */
+    currency: string;
+    /** Cotización respecto del peso. */
+    rate: number;
+    /** Fecha de la cotización (`yyyymmdd`). */
+    date: string;
 }
 
 /**

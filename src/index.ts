@@ -47,6 +47,9 @@ export type {
     PointOfSale,
     ServiceStatus,
     ArcaDateInput,
+    CatalogEntry,
+    VatConditionEntry,
+    CurrencyRate,
 } from './types/wsfe';
 
 // Tipos CAEA
@@ -66,6 +69,7 @@ export {
     TaxIdType,
     VatCondition,
     VALID_VAT_CONDITION_IDS,
+    VAT_RATE_CODES,
 } from './types/wsfe';
 
 // Errores

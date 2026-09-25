@@ -4,6 +4,28 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [2.1.0] — 2026-09-25
+
+### 🐛 El SDK rechazaba dos alícuotas de IVA que ARCA acepta desde 2014
+
+- **Bugfix**: `getVATCode()` sólo conocía `0`, `10.5`, `21` y `27`, y lanzaba `ArcaValidationError` para cualquier otra. ARCA acepta seis alícuotas: faltaban el **5%** (id 8) y el **2.5%** (id 9), vigentes desde el **20/10/2014**. Quien facturara con esas alícuotas no podía usar el SDK, y el mensaje de error le decía que el valor inválido era el suyo. El mapa se movió a la constante exportada `VAT_RATE_CODES`.
+
+### ✨ Catálogos de referencia: `FEParamGet*`
+
+Los enums de este SDK son una copia local del catálogo de ARCA: dan autocompletado y chequeo en compilación, pero **se desactualizan en silencio** — el bug de las alícuotas es prueba de eso, y estuvo doce años. Ahora se puede consultar la fuente autoritativa:
+
+| Método | Servicio | Para qué |
+|---|---|---|
+| `getInvoiceTypes()` | `FEParamGetTiposCbte` | La lista real de comprobantes emitibles. Es la consulta que habría evitado el episodio del error 11001 con los Tique. |
+| `getVatRates()` | `FEParamGetTiposIva` | Alícuotas vigentes |
+| `getTaxTypes()` | `FEParamGetTiposTributos` | Tributos para `taxes`, incluido el 13 que exige el código 10283 |
+| `getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Condiciones de IVA admitidas **para el emisor autenticado** |
+| `getExchangeRate()` | `FEParamGetCotizacion` | Cotización oficial — usala en vez de fijar `exchangeRate` a mano |
+| `getDocumentTypes()`, `getCurrencies()`, `getOptionalTypes()`, `getConceptTypes()`, `getActivities()` | varios | Resto de los catálogos |
+
+- **`getVatConditions()` informa la clase de comprobante** (`invoiceClass`) y **la lista depende del emisor**: ARCA devuelve las combinaciones válidas para ese CUIT, que no coinciden necesariamente con la tabla del manual. Por eso esa información no está hardcodeada.
+- La suite de integración compara los catálogos vivos contra los enums locales: si ARCA agrega un valor, los tests se ponen en rojo en vez de que el SDK lo rechace en silencio.
+
 ## [2.0.0] — 2026-09-25
 
 > Hay **un cambio incompatible**: un rechazo de ARCA ahora lanza una excepción en vez

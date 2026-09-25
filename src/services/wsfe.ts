@@ -15,12 +15,16 @@ import type {
     ArcaDateInput,
     InvoiceTax,
     IssueOptions,
+    CatalogEntry,
+    VatConditionEntry,
+    CurrencyRate,
 } from '../types/wsfe';
 import {
     InvoiceType,
     BillingConcept,
     TaxIdType,
     VALID_VAT_CONDITION_IDS,
+    VAT_RATE_CODES,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -533,8 +537,206 @@ export class WsfeService {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    // Catálogos de referencia (FEParamGet*)
+    //
+    // Son la fuente autoritativa. Los enums del SDK son una copia local que da
+    // autocompletado y chequeo en compilación, pero se desactualiza: hasta la v2.1.0
+    // el SDK rechazaba las alícuotas de 5% y 2.5% como inválidas, vigentes en ARCA
+    // desde 2014. Ante la duda, preguntale al servicio.
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /**
+     * Tipos de comprobante habilitados (`FEParamGetTiposCbte`).
+     *
+     * Es la lista autoritativa: si un tipo no está acá, `FECAESolicitar` lo rechaza con
+     * el código 11001. Es lo que hay que mirar antes de asumir que un comprobante se
+     * puede emitir por este web service — los Tique (81/82/83), por ejemplo, no están.
+     */
+    async getInvoiceTypes(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposCbte', 'CbteTipo');
+    }
+
+    /**
+     * Alícuotas de IVA vigentes (`FEParamGetTiposIva`).
+     *
+     * El `Id` es lo que viaja en `<AlicIva><Id>`; la descripción es el porcentaje.
+     */
+    async getVatRates(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposIva', 'IvaTipo');
+    }
+
+    /**
+     * Tipos de tributo para el array `taxes` (`FEParamGetTiposTributos`).
+     *
+     * Incluye el **13 – Percepción de IVA a no Categorizado**, que el código 10283
+     * (manual v4.7) exige en comprobantes clase B con receptor No Categorizado.
+     */
+    async getTaxTypes(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposTributos', 'TributoTipo');
+    }
+
+    /**
+     * Tipos de documento del receptor (`FEParamGetTiposDoc`).
+     */
+    async getDocumentTypes(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposDoc', 'DocTipo');
+    }
+
+    /**
+     * Monedas admitidas (`FEParamGetTiposMonedas`).
+     */
+    async getCurrencies(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposMonedas', 'Moneda');
+    }
+
+    /**
+     * Tipos de dato opcional (`FEParamGetTiposOpcional`).
+     *
+     * Son los identificadores que van en `optionals` — por ejemplo las leyendas de
+     * Factura A de la RG 5762/2025.
+     */
+    async getOptionalTypes(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposOpcional', 'OpcionalTipo');
+    }
+
+    /**
+     * Conceptos de facturación (`FEParamGetTiposConcepto`).
+     */
+    async getConceptTypes(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetTiposConcepto', 'ConceptoTipo');
+    }
+
+    /**
+     * Condiciones de IVA del receptor admitidas (`FEParamGetCondicionIvaReceptor`).
+     *
+     * **La lista depende del emisor autenticado**: ARCA devuelve las combinaciones
+     * válidas para ese CUIT, y las clases de comprobante que informa no coinciden
+     * necesariamente con la tabla del manual. Por eso el SDK no las hardcodea.
+     */
+    async getVatConditions(): Promise<VatConditionEntry[]> {
+        const raw = await this.callParamMethod('FEParamGetCondicionIvaReceptor');
+        const list = this.toArray(raw?.CondicionIvaReceptor);
+
+        return list.map((e: Record<string, unknown>) => ({
+            id: String(e.Id),
+            description: String(e.Desc),
+            invoiceClass: e.Cmp_Clase !== undefined ? String(e.Cmp_Clase) : undefined,
+        }));
+    }
+
+    /**
+     * Cotización oficial de una moneda (`FEParamGetCotizacion`).
+     *
+     * **Usala en vez de fijar `exchangeRate` a mano.** Si el comprobante se cancela en
+     * la misma moneda extranjera, ARCA exige que la cotización coincida *exactamente*
+     * con la del día hábil anterior, y rechaza con el código 10038 si no.
+     *
+     * @param currency Código de moneda (ej. `'DOL'`). Ver {@link getCurrencies}.
+     * @param date Fecha de la cotización a consultar. Opcional (agregada en el manual
+     *   v4.0); si se omite, ARCA devuelve la vigente.
+     */
+    async getExchangeRate(currency: string, date?: ArcaDateInput): Promise<CurrencyRate> {
+        const extra = `<ar:MonId>${escapeXml(currency)}</ar:MonId>` +
+            (date ? `\n      <ar:FchCotiz>${formatArcaDateOnly(date)}</ar:FchCotiz>` : '');
+
+        const raw = await this.callParamMethod('FEParamGetCotizacion', extra);
+
+        return {
+            currency,
+            rate: Number(raw?.MonCotiz),
+            date: String(raw?.FchCotiz),
+        };
+    }
+
+    /**
+     * Actividades vigentes del emisor (`FEParamGetActividades`).
+     */
+    async getActivities(): Promise<CatalogEntry[]> {
+        return this.getCatalog('FEParamGetActividades', 'ActividadTipo');
+    }
+
+    // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     // Métodos internos
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+    /** Normaliza a array: ARCA devuelve un objeto pelado cuando hay un solo elemento. */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private toArray(value: any): any[] {
+        if (value === undefined || value === null) return [];
+        return Array.isArray(value) ? value : [value];
+    }
+
+    /**
+     * Ejecuta un método `FEParamGet*` y devuelve su `ResultGet`.
+     *
+     * Todos comparten la misma forma: `Auth` y, a lo sumo, un par de campos extra.
+     */
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    private async callParamMethod(method: string, extraFields = ''): Promise<any> {
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:ar="http://ar.gov.afip.dif.FEV1/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <ar:${method}>
+      <ar:Auth>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
+      </ar:Auth>${extraFields ? `\n      ${extraFields}` : ''}
+    </ar:${method}>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const response = await callArcaApi(getWsfeEndpoint(this.config.environment), {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': `http://ar.gov.afip.dif.FEV1/${method}`,
+            },
+            body: soapRequest,
+            timeout: this.config.timeout,
+        });
+
+        if (!response.ok) {
+            throw new ArcaError(`Error HTTP al consultar ${method}: ${response.status}`, 'HTTP_ERROR');
+        }
+
+        const responseXml = await response.text();
+        const data = parseXml(responseXml)?.Envelope?.Body?.[`${method}Response`]?.[`${method}Result`];
+
+        if (!data) {
+            throw new ArcaError(`Respuesta ${method} inválida`, 'PARSE_ERROR', { xml: responseXml });
+        }
+
+        if (data.Errors) {
+            const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
+            const code = error?.Code || 'UNKNOWN';
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+                getArcaHint(code)
+            );
+        }
+
+        return data.ResultGet;
+    }
+
+    /** Mapea un catálogo con la forma habitual `{ Id, Desc, FchDesde, FchHasta }`. */
+    private async getCatalog(method: string, itemKey: string): Promise<CatalogEntry[]> {
+        const raw = await this.callParamMethod(method);
+
+        return this.toArray(raw?.[itemKey]).map((e: Record<string, unknown>) => ({
+            id: String(e.Id),
+            description: String(e.Desc),
+            validFrom: e.FchDesde !== undefined ? String(e.FchDesde) : undefined,
+            // ARCA manda el string 'NULL' cuando no hay fecha de baja.
+            validTo: e.FchHasta !== undefined && String(e.FchHasta) !== 'NULL'
+                ? String(e.FchHasta)
+                : undefined,
+        }));
+    }
 
     /**
      * Helper para emitir comprobantes tipo A/B que requieren IVA
@@ -869,23 +1071,26 @@ export class WsfeService {
     }
 
     /**
-     * Mapea alícuota % al código interno de ARCA
+     * Mapea alícuota % al código interno de ARCA.
+     *
+     * El catálogo autoritativo lo devuelve {@link WsfeService.getVatRates}
+     * (`FEParamGetTiposIva`); este mapa es una copia local para poder validar sin una
+     * llamada de red. Si ARCA agrega una alícuota, acá hay que sumarla — y el síntoma
+     * de haberlo olvidado es que el SDK rechaza como inválida una alícuota que ARCA
+     * acepta.
+     *
+     * @remarks Pasó exactamente eso: hasta la v2.1.0 faltaban el **5%** y el **2.5%**,
+     * vigentes desde el 20/10/2014.
      */
     private getVATCode(percentage: number): number {
-        const map: Record<number, number> = {
-            0: 3,
-            10.5: 4,
-            21: 5,
-            27: 6,
-        };
-
-        const code = map[percentage];
+        const code = VAT_RATE_CODES[percentage];
         if (code === undefined) {
             throw new ArcaValidationError(
                 `Alícuota IVA inválida: ${percentage}%`,
                 {
-                    validRates: [0, 10.5, 21, 27],
-                    hint: 'Usá una de las alícuotas oficiales de Argentina'
+                    validRates: Object.keys(VAT_RATE_CODES).map(Number),
+                    hint: 'Alícuotas vigentes: 0, 2.5, 5, 10.5, 21 y 27. Si ARCA agregó una ' +
+                        'nueva, consultala con wsfe.getVatRates() y abrí un issue.',
                 }
             );
         }
