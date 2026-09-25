@@ -17,6 +17,10 @@ certs/
 .env.local
 .env*.local
 
+# Cache de Ticket de Acceso de WSAA (contiene token y sign firmados)
+.ta-cache.json
+.ta-cache*.json
+
 # Logs y performance
 coverage/
 *.log

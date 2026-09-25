@@ -28,5 +28,9 @@ jobs:
       - name: Build
         run: bun run build
 
+      # `bun run test` (vitest run), no `bun test`: son runners distintos y bajo el
+      # runner nativo de Bun los `vi.mock` se filtran entre archivos, con lo cual la
+      # suite es menos confiable de lo que parece. vitest aísla por archivo.
+      # Los tests de integración quedan fuera: pegan contra ARCA homologación.
       - name: Run Tests
-        run: bun test
+        run: bun run test
