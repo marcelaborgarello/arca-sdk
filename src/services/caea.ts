@@ -287,7 +287,9 @@ export class CaeaService {
                 throw new ArcaValidationError(`El monto total del comprobante número ${inv.invoiceNumber} debe ser mayor a 0.`);
             }
 
-            // RG 5616: Si hay condición de IVA del receptor (ej. 5 Consumidor Final, 2 Monotributo)
+            // RG 5616: condición de IVA del receptor (ej. 5 Consumidor Final, 6 Responsable
+            // Monotributo). El catálogo válido lo da FEParamGetCondicionIvaReceptor y NO es
+            // correlativo: 2, 3 y 11 no existen ahí (rechazo 826/823).
             const condicionIVAReceptorXml = inv.buyer?.vatCondition !== undefined
                 ? `\n            <ar:CondicionIVAReceptorId>${inv.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
                 : '';

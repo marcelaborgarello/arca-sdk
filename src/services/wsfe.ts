@@ -945,7 +945,9 @@ export class WsfeService {
             optXml += '\n      </ar:Opcionales>';
         }
 
-        // RG 5616: Si hay condición de IVA del receptor (ej. 5 Consumidor Final, 2 Monotributo)
+        // RG 5616: condición de IVA del receptor (ej. 5 Consumidor Final, 6 Responsable
+        // Monotributo). El catálogo válido lo da FEParamGetCondicionIvaReceptor y NO es
+        // correlativo: 2, 3 y 11 no existen ahí (rechazo 10242).
         const condicionIVAReceptorXml = params.buyer?.vatCondition !== undefined
             ? `\n            <ar:CondicionIVAReceptorId>${params.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
             : '';

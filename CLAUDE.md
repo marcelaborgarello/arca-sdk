@@ -46,6 +46,13 @@ versiona aparte de las resoluciones generales. El historial de cambios del PDF e
 fuente autoritativa para cambios técnicos: los medios y las consultoras suelen errarle
 a las fechas de vigencia.
 
+> **ARCA publica el manual en dos URLs, y no siempre tienen la misma versión.**
+> Al 25/09/2026, `/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf`
+> servía la **v4.7** y `/fe/ayuda/documentos/wsfev1-RG-4291.pdf` la **v4.8**, mientras
+> la página índice (`/fe/ayuda/webservice.asp`) anunciaba "V. 4.7". Bajá las dos y
+> comparná la portada, que trae número de versión y fecha de revisión. Quedarse con la
+> primera que aparece en el buscador es cómo se pierde un cambio de vigencia.
+
 Ya contemplado (no reportar como novedad):
 
 - **RG 5866/2026** (01/07/2026): unificó y abrogó el régimen de factura electrónica.
@@ -59,8 +66,32 @@ Ya contemplado (no reportar como novedad):
 - Migración de endpoints `*.afip.gob.ar` → `*.arca.gob.ar` y QR en
   `https://www.arca.gob.ar/fe/qr/?p=...`.
 
-Pendiente / a futuro: manual v4.7 (01/09/2026, Seguros de Caución, códigos 10273-10281);
-tipo de documento receptor `31 - FCI CNV` (v4.5) todavía no está en el enum `TaxIdType`.
+**Vigente y todavía NO implementado** (verificado contra el PDF el 25/09/2026):
+
+- **Manual v4.7 (01/09/2026)**: comprobantes de **Seguros de Caución** — códigos de
+  validación 10273 a **10282** (son diez, no nueve), más la modificación del 10054.
+  En la misma versión entran las validaciones de **comprobantes clase B con receptor
+  Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA; modifica 10067 y 1425).
+  El 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado`
+  (RG 2126/2006) en el array `Tributos` — que el SDK **no construye**: `ImpTrib` está
+  fijo en `0.00` en los dos builders.
+- **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio y los
+  códigos 10245 (CAE) y 825 (CAEA) — los que hoy sólo *observan* — quedan en desuso.
+  A partir de esa fecha el rechazo es 10246 / 826.
+- Tipo de documento receptor `31 - FCI CNV` (v4.5, 02/07/2026) todavía no está en el
+  enum `TaxIdType`. Con `DocTipo=31` el número de documento es numérico de hasta
+  4 dígitos (código 10271).
+
+### `VatCondition` no es el catálogo de `CondicionIVAReceptorId`
+
+Son **dos tablas distintas** y el SDK hoy usa un solo enum para las dos. El catálogo
+que valida ARCA en ese campo —el que devuelve `FEParamGetCondicionIvaReceptor`— es:
+1, 4, 5, 6, 7, 8, 9, 10, **13** (Monotributista Social), **15** (IVA No Alcanzado) y
+**16** (Monotributo Trabajador Independiente Promovido).
+
+No es correlativo: **2, 3 y 11 no existen ahí**. Mandarlos da rechazo 10242. Y cada
+código aplica sólo a ciertas clases de comprobante (10243 rechaza la combinación
+inválida; ej. Consumidor Final no va en Factura A).
 
 ### Tique (81/82/83) vs. Factura: dos regímenes distintos, no dos formatos de lo mismo
 
@@ -94,10 +125,14 @@ electrónica de comprobantes originales) — pero usa otros códigos (109
 es alcanzable vía un webservice de integración general o solo vía la app
 propia de ARCA.
 
-**Pendiente de decidir** (deliberadamente no resuelto todavía): qué hacer con
-`issueSimpleReceipt()` / `issueReceipt()` — deprecarlos, cambiarlos para
-emitir Factura C por defecto, o solo documentar la limitación de forma más
-visible. Es un cambio de API pública: no se resuelve sin discutirlo primero.
+**Resuelto a medias (v1.4.1)**: `issueSimpleReceipt()` e `issueReceipt()` quedaron
+marcados `@deprecated` y emiten un warning en runtime fuera de producción. Siguen
+funcionando igual que antes — la deprecación avisa, no cambia el comportamiento.
+
+Lo que **no** está decidido es el destino final: eliminarlos en el próximo major o
+cambiarlos para que emitan Factura C. Hacerlos emitir un comprobante distinto del que
+dice el nombre es peor que borrarlos, pero borrarlos rompe a terceros. Es un cambio
+de API pública: no se resuelve sin discutirlo primero.
 
 ## Fechas: instante vs. fecha-calendario
 
@@ -138,9 +173,29 @@ El XML SOAP se arma con template strings, no con un serializador. **El orden de 
 elementos importa**: el esquema es un `sequence` y `FECAEADetRequest` extiende
 `FEDetRequest` agregando `CAEA` y `CbteFchHsGen` al final, en ese orden.
 
-Deuda conocida: dentro de `FECAEADetRequest` el orden actual está desviado del XSD
-(`CondicionIVAReceptorId` va pegado a `DocNro`, las `FchServ*` después de `MonCotiz`).
-Funciona hoy; si aparecen rechazos raros en CAEA, mirar ahí primero.
+La contracara de armar XML a mano: **hoy ningún valor se escapa**. Un `&`, `<` o `>`
+en un campo de texto genera XML inválido — el más fácil de disparar es un `Opcional`
+con razón social o domicilio (`'Belgrano 123 & Cía'`). Los campos numéricos (CUIT,
+importes) no corren riesgo, por eso no explotó todavía. Si tocás un builder, no
+agregues interpolaciones de texto libre sin escapar.
+
+**Deuda conocida — el orden está desviado del XSD en los dos builders**, no sólo en
+CAEA (verificado contra el manual el 25/09/2026):
+
+- `buildCAERequest()` (`src/services/wsfe.ts`): `CondicionIVAReceptorId` va pegado a
+  `DocNro` en vez de después de `MonCotiz`; `ImpTrib` e `ImpIVA` están invertidos; y
+  las `FchServ*` van después de `MonId/MonCotiz` en vez de antes.
+- `FECAEADetRequest` (`src/services/caea.ts`): `CondicionIVAReceptorId` pegado a
+  `DocNro`, las `FchServ*` después de `CbteFchHsGen`, y `CAEA`/`CbteFchHsGen` **no
+  están al final** (el XSD los pone después de `PeriodoAsoc`).
+
+Funciona hoy, así que ARCA está siendo tolerante. El riesgo real llega el **01/12/2026**:
+ese día `CondicionIVAReceptorId` se vuelve obligatorio y pasa de ser un campo que casi
+nadie manda a ir en todos los requests, en la posición equivocada.
+
+**Trampa al unificar los dos builders**: el orden de los importes es legítimamente
+distinto entre uno y otro. `FECAEDetRequest` define `ImpOpEx, ImpTrib, ImpIVA`;
+`FECAEADetRequest` define `ImpOpEx, ImpIVA, ImpTrib`. No es una errata del PDF.
 
 **Resuelto (v1.4.2)**: bajo Bun, el `https.Agent` de `src/utils/network.ts` fallaba con
 `FailedToOpenSocket` porque `process.versions.node` también existe bajo Bun (por
