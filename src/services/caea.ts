@@ -20,7 +20,7 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly, formatArcaTimestamp } from '../utils/formatArcaDate';
-import { parseXml } from '../utils/xml';
+import { parseXml, escapeXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { getArcaHint } from '../constants/errors';
 
@@ -69,9 +69,9 @@ export class CaeaService {
   <soapenv:Body>
     <ar:FECAEASolicitar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:Periodo>${params.period}</ar:Periodo>
       <ar:Orden>${params.order}</ar:Orden>
@@ -136,9 +136,9 @@ export class CaeaService {
   <soapenv:Body>
     <ar:FECAEAConsultar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:Caea>${caea}</ar:Caea>
     </ar:FECAEAConsultar>
@@ -291,7 +291,7 @@ export class CaeaService {
             // Monotributo). El catálogo válido lo da FEParamGetCondicionIvaReceptor y NO es
             // correlativo: 2, 3 y 11 no existen ahí (rechazo 826/823).
             const condicionIVAReceptorXml = inv.buyer?.vatCondition !== undefined
-                ? `\n            <ar:CondicionIVAReceptorId>${inv.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
+                ? `\n          <ar:CondicionIVAReceptorId>${inv.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
                 : '';
 
             // Fechas de servicio (Obligatorio si concept es 2 (Servicios) o 3 (Productos y Servicios))
@@ -299,9 +299,9 @@ export class CaeaService {
             if (inv.concept === BillingConcept.SERVICES || inv.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
                 const defaultDateStr = formatArcaDateOnly(date);
                 fechasServicioXml = `
-            <ar:FchServDesde>${defaultDateStr}</ar:FchServDesde>
-            <ar:FchServHasta>${defaultDateStr}</ar:FchServHasta>
-            <ar:FchVtoPago>${defaultDateStr}</ar:FchVtoPago>`;
+          <ar:FchServDesde>${defaultDateStr}</ar:FchServDesde>
+          <ar:FchServHasta>${defaultDateStr}</ar:FchServHasta>
+          <ar:FchVtoPago>${defaultDateStr}</ar:FchVtoPago>`;
             }
 
             let asocXml = '';
@@ -313,7 +313,7 @@ export class CaeaService {
               <ar:Tipo>${asoc.type}</ar:Tipo>
               <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
               <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
-              ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
+              ${asoc.cuit ? `<ar:Cuit>${escapeXml(asoc.cuit)}</ar:Cuit>` : ''}
               ${asoc.date ? `<ar:CbteFch>${formatArcaDateOnly(asoc.date)}</ar:CbteFch>` : ''}
             </ar:CbteAsoc>`;
                 });
@@ -326,18 +326,23 @@ export class CaeaService {
                 inv.optionals.forEach(opt => {
                     optXml += `
             <ar:Opcional>
-              <ar:Id>${opt.id}</ar:Id>
-              <ar:Valor>${opt.value}</ar:Valor>
+              <ar:Id>${escapeXml(opt.id)}</ar:Id>
+              <ar:Valor>${escapeXml(opt.value)}</ar:Valor>
             </ar:Opcional>`;
                 });
                 optXml += '\n          </ar:Opcionales>';
             }
 
+            // Orden del `sequence` de FECAEADetRequest (manual v4.7/v4.8, pág. 131-132).
+            // Ojo: acá los importes van ImpOpEx, ImpIVA, ImpTrib — al revés que en
+            // FECAEDetRequest, que define ImpOpEx, ImpTrib, ImpIVA. No es una errata del
+            // PDF: el manual los declara distinto. CAEA y CbteFchHsGen van al final,
+            // después de PeriodoAsoc.
             detXml += `
         <ar:FECAEADetRequest>
           <ar:Concepto>${inv.concept}</ar:Concepto>
           <ar:DocTipo>${inv.buyer?.docType || 99}</ar:DocTipo>
-          <ar:DocNro>${inv.buyer?.docNumber || 0}</ar:DocNro>${condicionIVAReceptorXml}
+          <ar:DocNro>${escapeXml(inv.buyer?.docNumber) || 0}</ar:DocNro>
           <ar:CbteDesde>${inv.invoiceNumber}</ar:CbteDesde>
           <ar:CbteHasta>${inv.invoiceNumber}</ar:CbteHasta>
           <ar:CbteFch>${dateStr}</ar:CbteFch>
@@ -346,14 +351,14 @@ export class CaeaService {
           <ar:ImpNeto>${net.toFixed(2)}</ar:ImpNeto>
           <ar:ImpOpEx>0.00</ar:ImpOpEx>
           <ar:ImpIVA>${vat.toFixed(2)}</ar:ImpIVA>
-          <ar:ImpTrib>0.00</ar:ImpTrib>
+          <ar:ImpTrib>0.00</ar:ImpTrib>${fechasServicioXml}
           <ar:MonId>PES</ar:MonId>
-          <ar:MonCotiz>1</ar:MonCotiz>
-          <ar:CAEA>${params.caea}</ar:CAEA>
-          <ar:CbteFchHsGen>${generatedAtStr}</ar:CbteFchHsGen>${fechasServicioXml}
+          <ar:MonCotiz>1</ar:MonCotiz>${condicionIVAReceptorXml}
           ${asocXml}
           ${vatXml}
           ${optXml}
+          <ar:CAEA>${escapeXml(params.caea)}</ar:CAEA>
+          <ar:CbteFchHsGen>${generatedAtStr}</ar:CbteFchHsGen>
         </ar:FECAEADetRequest>`;
         });
 
@@ -364,9 +369,9 @@ export class CaeaService {
   <soapenv:Body>
     <ar:FECAEARegInformativo>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:FeCAEARegInfReq>
         <ar:FeCabReq>
@@ -448,9 +453,9 @@ export class CaeaService {
   <soapenv:Body>
     <ar:FECAEASinMovimientoInformar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
       <ar:Caea>${params.caea}</ar:Caea>
@@ -504,9 +509,9 @@ export class CaeaService {
   <soapenv:Body>
     <ar:FECAEASinMovimientoConsultar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
       <ar:Caea>${caea}</ar:Caea>

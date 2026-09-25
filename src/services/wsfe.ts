@@ -26,7 +26,7 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly } from '../utils/formatArcaDate';
-import { parseXml } from '../utils/xml';
+import { parseXml, escapeXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
 import { getArcaHint } from '../constants/errors';
@@ -440,9 +440,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECompConsultar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:FeCompConsReq>
         <ar:CbteTipo>${type}</ar:CbteTipo>
@@ -525,9 +525,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FEParamGetPtosVenta>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
     </ar:FEParamGetPtosVenta>
   </soapenv:Body>
@@ -925,7 +925,7 @@ export class WsfeService {
           <ar:Tipo>${asoc.type}</ar:Tipo>
           <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
           <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
-          ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
+          ${asoc.cuit ? `<ar:Cuit>${escapeXml(asoc.cuit)}</ar:Cuit>` : ''}
           ${asoc.date ? `<ar:CbteFch>${formatArcaDateOnly(asoc.date)}</ar:CbteFch>` : ''}
         </ar:CbteAsoc>`;
             });
@@ -938,8 +938,8 @@ export class WsfeService {
             params.optionals.forEach(opt => {
                 optXml += `
         <ar:Opcional>
-          <ar:Id>${opt.id}</ar:Id>
-          <ar:Valor>${opt.value}</ar:Valor>
+          <ar:Id>${escapeXml(opt.id)}</ar:Id>
+          <ar:Valor>${escapeXml(opt.value)}</ar:Valor>
         </ar:Opcional>`;
             });
             optXml += '\n      </ar:Opcionales>';
@@ -948,6 +948,10 @@ export class WsfeService {
         // RG 5616: condición de IVA del receptor (ej. 5 Consumidor Final, 6 Responsable
         // Monotributo). El catálogo válido lo da FEParamGetCondicionIvaReceptor y NO es
         // correlativo: 2, 3 y 11 no existen ahí (rechazo 10242).
+        //
+        // Va acá y no junto a DocNro: en el `sequence` del XSD el elemento cae después
+        // de MonCotiz/CanMisMonExt y antes de CbtesAsoc. Pasa a ser obligatorio el
+        // 01/12/2026 (manual v4.8), con lo cual la posición deja de ser un detalle.
         const condicionIVAReceptorXml = params.buyer?.vatCondition !== undefined
             ? `\n            <ar:CondicionIVAReceptorId>${params.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
             : '';
@@ -973,9 +977,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECAESolicitar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:FeCAEReq>
         <ar:FeCabReq>
@@ -987,7 +991,7 @@ export class WsfeService {
           <ar:FECAEDetRequest>
             <ar:Concepto>${params.concept}</ar:Concepto>
             <ar:DocTipo>${params.buyer?.docType || 99}</ar:DocTipo>
-            <ar:DocNro>${params.buyer?.docNumber || 0}</ar:DocNro>${condicionIVAReceptorXml}
+            <ar:DocNro>${escapeXml(params.buyer?.docNumber) || 0}</ar:DocNro>
             <ar:CbteDesde>${params.invoiceNumber}</ar:CbteDesde>
             <ar:CbteHasta>${params.invoiceNumber}</ar:CbteHasta>
             <ar:CbteFch>${dateStr}</ar:CbteFch>
@@ -995,10 +999,10 @@ export class WsfeService {
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>${params.net.toFixed(2)}</ar:ImpNeto>
             <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>
             <ar:ImpTrib>0.00</ar:ImpTrib>
+            <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>${fechasServicioXml}
             <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>${fechasServicioXml}
+            <ar:MonCotiz>1</ar:MonCotiz>${condicionIVAReceptorXml}
             ${asocXml}
             ${vatXml}
             ${optXml}
@@ -1018,9 +1022,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECompUltimoAutorizado>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
       <ar:CbteTipo>${type}</ar:CbteTipo>

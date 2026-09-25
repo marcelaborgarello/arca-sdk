@@ -103,8 +103,33 @@ export function parseWsaaResponse(xml: string): LoginTicket {
 }
 
 /**
+ * Escapa un valor para interpolarlo en el XML SOAP.
+ *
+ * El request se arma con template strings, no con un serializador, así que el
+ * escapado es responsabilidad de quien construye el XML. Sin esto, cualquier `&`
+ * o `<` en un campo de texto genera XML inválido y ARCA rechaza el request entero.
+ * El caso más fácil de disparar es un `Opcional` con razón social o domicilio
+ * (`'Belgrano 123 & Cía'`).
+ *
+ * Se escapan los cinco caracteres del estándar XML para que la función sirva tanto
+ * en contenido de elemento como en atributos.
+ *
+ * @param value - Valor a escapar. `undefined` y `null` dan string vacío.
+ */
+export function escapeXml(value: string | number | undefined | null): string {
+    if (value === undefined || value === null) return '';
+
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+}
+
+/**
  * Parsea un XML genérico de ARCA
- * 
+ *
  * @param xml - XML de respuesta
  * @returns Objeto parseado
  */
