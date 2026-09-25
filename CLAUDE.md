@@ -49,12 +49,22 @@ versiona aparte de las resoluciones generales. El historial de cambios del PDF e
 fuente autoritativa para cambios técnicos: los medios y las consultoras suelen errarle
 a las fechas de vigencia.
 
-> **ARCA publica el manual en dos URLs, y no siempre tienen la misma versión.**
-> Al 25/09/2026, `/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf`
-> servía la **v4.7** y `/fe/ayuda/documentos/wsfev1-RG-4291.pdf` la **v4.8**, mientras
-> la página índice (`/fe/ayuda/webservice.asp`) anunciaba "V. 4.7". Bajá las dos y
-> comparná la portada, que trae número de versión y fecha de revisión. Quedarse con la
-> primera que aparece en el buscador es cómo se pierde un cambio de vigencia.
+**Manual vigente (v4.8)**:
+<https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf>
+
+> **ARCA publica el manual en varias URLs, y no siempre tienen la misma versión.**
+> Al 25/09/2026:
+>
+> | URL | Versión |
+> |---|---|
+> | `arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf` | **v4.8** ← usar esta |
+> | `afip.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf` | v4.8 (mismo archivo, dominio viejo) |
+> | `arca.gob.ar/ws/documentacion/manuales/manual-desarrollador-ARCA-COMPG.pdf` | v4.7 |
+>
+> Encima, la página índice (`/fe/ayuda/webservice.asp`) anunciaba "V. 4.7" cuando la
+> v4.8 ya estaba publicada. Bajá las dos y compará la portada, que trae número de
+> versión y fecha de revisión. Quedarse con la primera que aparece en el buscador es
+> cómo se pierde un cambio de vigencia.
 
 Ya contemplado (no reportar como novedad):
 
@@ -114,6 +124,26 @@ comprobante del Art. 3° de esa misma RG (texto vigente, incorpora
 modificaciones hasta RG 5764/2025) sigue marcando los códigos 081-120 con
 "(*) Solo emitidos con Controladores Fiscales". Esa opción "y/o" es para
 Factura/NC/ND, no para Tique.
+
+> **Revisado contra la RG 5893/2026** (BO 31/08/2026, vigencia 01/11/2026), que
+> **reescribió los Arts. 6° y 7° de la RG 4290** y derogó el Cap. B del Título II.
+> La conclusión no cambia:
+>
+> - La opción sigue existiendo — el Art. 7° nuevo dice textual que los sujetos
+>   *"podrán optar por una de las DOS (2) modalidades […] o ambas en forma conjunta"*.
+> - **El Art. 3° no fue tocado**, y es el que sostiene el argumento: la tabla que marca
+>   los códigos 081-120 como exclusivos de Controlador Fiscal.
+>
+> Lo que sí cambió es *a quiénes* alcanza (ahora nombra explícitamente a responsables
+> inscriptos, exentos, no alcanzados en IVA y monotributistas) y agrega tres casos que
+> **no pueden optar** y deben emitir sólo electrónico: MiPyMEs con Factura de Crédito
+> Electrónica, los no alcanzados por IVA, y los del Anexo II de la RG 4291.
+>
+> La misma RG incorpora un párrafo al Art. 11 de la RG 4291: a los monotributistas sin
+> punto de venta, ARCA les habilita uno automático — pero asociado a **"Comprobantes en
+> línea"**, no a Web Services. Un punto de venta así **no sirve para este SDK**
+> (daría error 10048); hace falta dar de alta uno de tipo Web Services.
+> *Esto último es una inferencia a partir del texto, no está afirmado en la RG.*
 
 **Confirmado empíricamente contra ARCA homologación (2026-08-28)**:
 `FECAESolicitar` con `CbteTipo=83` se rechaza con error ARCA **11001**

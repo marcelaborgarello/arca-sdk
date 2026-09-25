@@ -323,7 +323,7 @@ await wsfe.issueInvoiceC({
 });
 ```
 
-* **En producción es obligatorio desde el 01/12/2026** (Manual del Desarrollador v4.8).
+* **En producción es obligatorio desde el 01/12/2026** ([Manual del Desarrollador RG 4291](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf), v4.8).
   Hasta entonces el comprobante sale con una observación; después, se rechaza.
 * **En homologación ya se rechaza hoy** (verificado el 25/09/2026): la respuesta vuelve
   con `Resultado = 'R'` y la observación del código **10246**. Si estás probando ahí y
@@ -399,9 +399,12 @@ await wsfe.issueInvoiceA({
 > rechaza con el código 10038 si no.
 
 ### 🤝 Monotributo Social y Regímenes Especiales
-Para el Web Service de Facturación Electrónica (WSFE), la AFIP exige que todo contribuyente bajo el régimen de Monotributo (sea estándar, social o promovido) se declare bajo la Condición de IVA de **Responsable Monotributo (Código 6)**. El Código de IVA 13 (Monotributista Social) suele ser rechazado en producción.
 
-Por esta razón, el SDK detecta automáticamente si el contribuyente tiene activos los impuestos de recaudación de monotributo (impuestos 20, 21, 22 o 24) en su perfil y mapea de forma segura su propiedad `vatCondition` al Código 6, previniendo errores de autorización de AFIP ("Computador no autorizado") de forma automática.
+El SDK detecta automáticamente si el contribuyente tiene activos los impuestos de recaudación de monotributo (20, 21, 22 o 24) en su perfil y mapea su propiedad `vatCondition` a **Responsable Monotributo (código 6)** — estándar, social o promovido, todos al 6. Es el valor que ARCA acepta con certeza, y evita errores de autorización.
+
+Sobre el código **13 (Monotributista Social)**: figura como válido en la tabla "Condición Frente al IVA del receptor" del [Manual del Desarrollador RG 4291](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) (última página) y lo devuelve el método `FEParamGetCondicionIvaReceptor`. Está disponible en el enum `VatCondition`, pero **no verificamos su comportamiento en producción**: si tu caso lo requiere, probalo contra homologación antes de usarlo.
+
+> Podés consultar el catálogo vigente para tu CUIT con `wsfe.getVatConditions()`, que devuelve los códigos admitidos y en qué clases de comprobante aplican.
 
 ---
 
