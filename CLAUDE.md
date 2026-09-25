@@ -28,16 +28,19 @@ Runtime y package manager: **Bun** (hay `bun.lock`).
 
 ```bash
 bun install
-bun run lint     # tsc --noEmit
-bun test         # vitest run
-bun run build    # tsup (ESM + CJS + .d.ts)
+bun run lint             # tsc --noEmit
+bun run test             # vitest run — tests unitarios
+bun run test:integration # vitest run contra ARCA homologación (opt-in, ver abajo)
+bun run build            # tsup (ESM + CJS + .d.ts)
 ```
 
 El CI (`.github/workflows/ci.yml`) corre lint → build → test en cada PR contra `main`.
 Un PR no se acepta con el check en rojo.
 
-> **Ojo**: `bun test` usa el runner nativo de Bun, que no es exactamente `vitest run`
-> (el script `test` de `package.json`). Si algo pasa local y falla en CI, empezá por ahí.
+> **Es `bun run test`, no `bun test`.** El segundo usa el runner nativo de Bun, donde
+> los `vi.mock` se filtran entre archivos: la suite queda menos aislada de lo que
+> parece. El runner oficial del proyecto es **vitest**, y el CI usa `bun run test`
+> desde 2026-09-25 justamente para que local y CI corran lo mismo.
 
 ## Normativa ARCA
 
@@ -76,8 +79,14 @@ Ya contemplado (no reportar como novedad):
   (RG 2126/2006) en el array `Tributos` — que el SDK **no construye**: `ImpTrib` está
   fijo en `0.00` en los dos builders.
 - **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio y los
-  códigos 10245 (CAE) y 825 (CAEA) — los que hoy sólo *observan* — quedan en desuso.
+  códigos 10245 (CAE) y 825 (CAEA) — los que sólo *observan* — quedan en desuso.
   A partir de esa fecha el rechazo es 10246 / 826.
+
+  > **Homologación ya lo rechaza** (verificado el 25/09/2026). Un `FECAESolicitar`
+  > sin `CondicionIVAReceptorId` vuelve con `Resultado = 'R'`, CAE vacío y la
+  > observación del **10246**, no la del 10245. O sea: la fecha del 01/12/2026 es la
+  > de *producción*; homologación se adelantó para que se pueda probar. Emitir sin
+  > ese campo ya es imposible ahí, y el SDK lo informa siempre que pueda.
 - Tipo de documento receptor `31 - FCI CNV` (v4.5, 02/07/2026) todavía no está en el
   enum `TaxIdType`. Con `DocTipo=31` el número de documento es numérico de hasta
   4 dígitos (código 10271).
@@ -218,10 +227,53 @@ no lo entiende BoringSSL, el TLS de Bun. Se agregó detección explícita de
   errores de npm, que son engañosos (un `E404` en el publish es casi siempre un problema
   de credenciales, no un paquete inexistente).
 
+## Rechazo ≠ error
+
+ARCA distingue dos cosas que es fácil confundir:
+
+- **`Errors`** en la respuesta: la llamada no se pudo procesar (auth, parámetros).
+- **`Resultado = 'R'`**: la llamada se procesó bien y ARCA **no autorizó**. No hay CAE
+  y el comprobante no existe; el motivo viene en `Observaciones`.
+
+Lo segundo llega como `ArcaRejectionError`, con las observaciones en `.observations`.
+Hasta la v1.x se devolvía un `CAEResponse` con `result: 'R'` y `cae: ''`, así que quien
+no mirara `result` creía haber facturado — pérdida silenciosa de datos. **No volver a
+ese comportamiento**: si un rechazo no puede distinguirse de un éxito sin inspeccionar
+un campo, alguien lo va a ignorar.
+
+Ojo con las *observaciones sin rechazo*: un comprobante puede salir `'A'` **con**
+observaciones. Eso no es un error y no debe lanzar; viaja en `observations`.
+
+## Tests de integración
+
+`tests/integration/` pega contra ARCA homologación de verdad. Es lo único que puede
+ponerse rojo por un rechazo de ARCA — el resto de la suite mockea `callArcaApi` y sólo
+prueba que el SDK hace lo que creemos, no que ARCA lo acepte.
+
+Es opt-in por variables de entorno y no corre en CI. Ver `tests/integration/README.md`.
+
+Dos cosas que muerden:
+
+- **ARCA no emite un TA nuevo mientras el anterior siga vigente** (12 h). Sin persistir
+  el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"* y queda
+  bloqueada hasta que expire. Por eso los tests usan un `TokenStorage` en archivo, que
+  es además lo que necesita cualquier consumidor en producción.
+- La numeración es correlativa y real: no correr dos suites en paralelo contra el mismo
+  punto de venta.
+
+**Regla de diseño**: ningún tipo de comprobante entra al enum público ni recibe helper
+dedicado sin una corrida verde ahí. La lista autoritativa la da `FEParamGetTiposCbte`.
+
 ## Al tocar código
 
-- Correr `bun run lint` y `bun test` siempre. Agregar tests de regresión con los casos
+- Correr `bun run lint` y `bun run test` siempre. Ojo: es `bun run test` (vitest run),
+  **no** `bun test` — son runners distintos y bajo el nativo de Bun los `vi.mock` se
+  filtran entre archivos. El CI usa `bun run test`.
+- Agregar tests de regresión con los casos
   borde de zona horaria: medianoche, 21:00-00:00 ART, fecha-calendario vs. instante.
+- Si tocás un builder de XML, agregá la aserción de orden en
+  `tests/unit/request-xml.test.ts`. El helper `expectSequence()` ya está: el resto de
+  la suite no puede ver un `sequence` roto.
 - No modificar la normativa implementada sin verificar contra el PDF oficial del manual.
   Las fuentes secundarias se equivocan seguido.
 

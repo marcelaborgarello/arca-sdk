@@ -4,7 +4,18 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [No publicado]
+## [No publicado] — propuesto como 2.0.0
+
+> Hay **un cambio incompatible**: un rechazo de ARCA ahora lanza una excepción en vez
+> de devolverse como resultado normal. Ver "💥 Cambio incompatible". El resto es
+> aditivo o corrección de bugs.
+
+### 💥 Cambio incompatible: un rechazo de ARCA ahora lanza `ArcaRejectionError`
+
+- Cuando ARCA procesa la solicitud y **no autoriza** el comprobante (`Resultado = 'R'`), el SDK lanzaba… nada: devolvía un `CAEResponse` con `result: 'R'` y `cae: ''`. Quien no inspeccionara `result` creía haber facturado un comprobante que **no existe**. Ahora se lanza `ArcaRejectionError`, con los motivos en `.observations` y un `.hint` accionable cuando el motivo es reconocible.
+- Alcanza a `WsfeService` (emisión) y a `CaeaService.reportCAEAPeriod()` (rendición informativa — donde el silencio es peor todavía, porque la rendición tiene plazo fatal).
+- **Migración**: si ya chequeabas `result === 'R'`, ese código deja de alcanzarse y podés borrarlo; envolvé la llamada en `try/catch` de `ArcaRejectionError`. Si no lo chequeabas, no tenías que hacer nada… y ese es exactamente el problema que esto corrige.
+- Un comprobante **aprobado con observaciones** sigue devolviéndose normalmente, con las observaciones en `observations`. Observación no es rechazo.
 
 ### 🐛 El XML del request no respetaba el `sequence` del XSD
 
@@ -22,11 +33,48 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 - La suite mockeaba `callArcaApi` y sólo verificaba la respuesta parseada, con lo cual un request mal formado pasaba desapercibido: los 98 tests existentes seguían en verde con el comprobante reordenado por completo. Se agrega `tests/unit/request-xml.test.ts`, que afirma el orden del `sequence` en ambos constructores y el escapado de los valores de texto.
 
+### ✨ Otros tributos (`Tributos`) — percepciones, impuestos internos, tasas
+
+- **Nuevo campo `taxes`** en los métodos de emisión y en `CaeaInvoice`. Hasta ahora el array `<Tributos>` del XSD no se construía nunca e `ImpTrib` estaba fijo en `0.00`: no había forma de informar una percepción de IIBB, un impuesto interno ni una tasa municipal. Los importes suman a `ImpTrib` y al total del comprobante.
+- Desbloquea el código **10283** del Manual v4.7, que exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` (RG 2126/2006) en comprobantes clase B con receptor No Categorizado.
+
+### ✨ Moneda extranjera: `MonId`, `MonCotiz` y `CanMisMonExt`
+
+- **Nuevos campos `currency`, `exchangeRate` y `payInSameForeignCurrency`**. Antes `MonId` estaba fijo en `'PES'` y `MonCotiz` en `1`: no se podía facturar en moneda extranjera. `CanMisMonExt` (campo incorporado por el Manual v4.0 / RG 5616, "cancelación en la misma moneda extranjera") no existía en el SDK; sólo se emite con moneda distinta de `'PES'`, como exige ARCA.
+- Se valida localmente que con moneda extranjera la cotización sea mayor a cero (evita un request que ARCA rechazaría con el código 10039). La coincidencia exacta con la cotización oficial (código 10038) sólo la puede verificar ARCA: traela de `FEParamGetCotizacion`.
+
+### ✨ Catálogo de `CondicionIVAReceptorId` completo y validado
+
+- **Nuevos miembros de `VatCondition`**: `MONOTRIBUTISTA_SOCIAL` (13), `IVA_NO_ALCANZADO` (15) y `MONOTRIBUTO_TRABAJADOR_INDEPENDIENTE_PROMOVIDO` (16). Faltaban: sin el 13 no se podía facturar a un Monotributista Social.
+- **Deprecados** `IVA_RESPONSABLE_NO_INSCRIPTO` (2), `IVA_NO_RESPONSABLE` (3) e `IVA_RESPONSABLE_INSCRIPTO_AGENTE_PERCEPCION` (11): **no pertenecen** al catálogo de `CondicionIVAReceptorId` y ARCA los rechaza con el código 10242. Vienen del catálogo general de condición de IVA, que es otra tabla. Siguen exportados para no romper compilación; se eliminan en la próxima major.
+- Se valida el valor **antes** de salir a la red, con un mensaje que explica el catálogo en vez del error genérico de ARCA. Se exporta `VALID_VAT_CONDITION_IDS` para quien quiera validar por su cuenta.
+
+### ✨ `TaxIdType.FCI_CNV` (31)
+
+- Tipo de documento **31 – Fondo Común de Inversiones CNV**, incorporado por el Manual v4.5 (vigente 02/07/2026) para entidades financieras (RG 5866). El número de documento es numérico de hasta 4 dígitos (código 10271).
+
+### 🐛 CAEA ignoraba las fechas de servicio
+
+- **Bugfix**: `CaeaInvoice` no tenía campo `serviceDates` y la rendición informativa emitía `FchServDesde`, `FchServHasta` y `FchVtoPago` con la fecha del comprobante para las tres. Cualquier comprobante de servicios rendido por CAEA informaba mal el período. Se agrega el campo y se respeta; si se omite, se mantiene el comportamiento anterior como default.
+
+### ✨ Tipos de emisión unificados en `IssueOptions`
+
+- Los métodos de emisión declaraban sus parámetros inline y tipaban `date` como `Date`, de modo que **no se podía pasar la fecha-calendario literal** (`'2026-08-24'`) que la documentación recomienda, pese a que el SDK la soporta desde la v1.4.0. Ahora todos comparten `IssueOptions`, donde `date` es `ArcaDateInput`. Es un ensanchamiento de tipo: no rompe código existente.
+
+### 🔐 Hint para el TA vigente de WSAA
+
+- ARCA **no emite un ticket de acceso nuevo mientras el anterior siga vigente** (12 h). Sin persistir el ticket, cualquier proceso que haga `login()` de nuevo se come el fault *"El CEE ya posee un TA valido para el acceso al WSN solicitado"* y queda bloqueado hasta que expire. El error ahora llega con un `hint` que explica la causa y apunta a `storage` (`TokenStorage`). `ArcaAuthError` acepta un `hint` opcional (aditivo).
+
+### ✅ Suite de integración contra ARCA homologación
+
+- **Nueva `tests/integration/`**, opt-in por variables de entorno y fuera del CI. Es lo único que puede ponerse en rojo por un rechazo de ARCA: el resto de la suite mockea la red. Incluye un `TokenStorage` en archivo que resuelve el problema del TA vigente. Ver `tests/integration/README.md`.
+- **El CI pasa a correr `bun run test` (vitest) en vez de `bun test`**: son runners distintos y bajo el nativo de Bun los `vi.mock` se filtran entre archivos, con lo cual la suite era menos confiable de lo que aparentaba.
+
 ### 📖 Normativa verificada contra el manual oficial
 
 - **Manual v4.7 (01/09/2026)** — ya vigente, **todavía no implementado**: comprobantes de Seguros de Caución (códigos 10273 a **10282**) y validaciones de comprobantes clase B con receptor **Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA). El código 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` (RG 2126/2006) en el array `Tributos`, que el SDK aún no construye.
 - **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio; los códigos 10245 (CAE) y 825 (CAEA), que hoy sólo observan, quedan en desuso y el rechazo pasa a ser 10246 / 826. Se confirma el **01/12**, no el 01/09 que indican varias fuentes secundarias.
-- **`VatCondition` mezcla dos catálogos distintos**: en el de `CondicionIVAReceptorId` —el que devuelve `FEParamGetCondicionIvaReceptor`— los valores **2, 3 y 11 no existen** (se rechazan con 10242) y **faltan 13** (Monotributista Social), **15** (IVA No Alcanzado) y **16** (Monotributo Trabajador Independiente Promovido). Documentado en `CLAUDE.md`; la corrección del enum es un cambio de API pública y queda pendiente.
+- **Homologación ya rechaza los comprobantes sin `CondicionIVAReceptorId`** (verificado contra ARCA el 25/09/2026): la respuesta vuelve con `Resultado = 'R'`, CAE vacío y la observación del código **10246** ("es obligatorio"), no la del 10245 ("resultará obligatorio"). La fecha del 01/12/2026 es la de **producción**; homologación se adelantó para que se pueda probar. Informá siempre `buyer.vatCondition`.
 
 ## [1.4.2] — 2026-08-28
 
