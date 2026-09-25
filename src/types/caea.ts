@@ -1,4 +1,4 @@
-import type { WsfeConfig, InvoiceType, BillingConcept, Buyer, InvoiceOptional, AssociatedInvoice, InvoiceItem, ArcaDateInput } from './wsfe';
+import type { WsfeConfig, InvoiceType, BillingConcept, Buyer, InvoiceOptional, AssociatedInvoice, InvoiceItem, ArcaDateInput, ServiceDates, InvoiceTax } from './wsfe';
 
 /**
  * Configuration for CaeaService (identical to WsfeConfig)
@@ -81,6 +81,32 @@ export interface CaeaInvoice {
     optionals?: InvoiceOptional[];
     /** Prices already include VAT (default: false) */
     includesVAT?: boolean;
+    /**
+     * Fechas de servicio. Obligatorias si `concept` es 2 (Servicios) o 3 (Productos
+     * y Servicios).
+     *
+     * Disponible desde v2.0.0. Antes el campo no existía y las tres fechas se
+     * emitían con la fecha del comprobante, lo que informaba mal cualquier
+     * comprobante de servicios rendido por CAEA.
+     */
+    serviceDates?: ServiceDates;
+    /**
+     * Otros tributos: percepciones, impuestos internos, tasas. Suman a `ImpTrib`
+     * y al importe total. No incluir acá el IVA. Disponible desde v2.0.0.
+     */
+    taxes?: InvoiceTax[];
+    /** Moneda del comprobante (`MonId`). Default: `'PES'`. Disponible desde v2.0.0. */
+    currency?: string;
+    /**
+     * Cotización respecto del peso (`MonCotiz`). Default: `1`.
+     * Traela de `FEParamGetCotizacion`. Disponible desde v2.0.0.
+     */
+    exchangeRate?: number;
+    /**
+     * Cancelación en la misma moneda extranjera (`CanMisMonExt`).
+     * Sólo con `currency` distinta de `'PES'`. Disponible desde v2.0.0.
+     */
+    payInSameForeignCurrency?: boolean;
 }
 
 /**

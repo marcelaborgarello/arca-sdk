@@ -306,6 +306,35 @@ const url = generateQRUrl(caeResponse, '20123456789', 1500.00);
 
 `arca-sdk` está completamente adaptada a las últimas directivas de la **Agencia de Recaudación y Control Aduanero (ARCA)**:
 
+#### 0. Condición frente al IVA del receptor (RG 5616) — **obligatorio**
+
+Es el requisito más urgente. Informá siempre `buyer.vatCondition`:
+
+```typescript
+import { VatCondition, TaxIdType } from 'arca-sdk';
+
+await wsfe.issueInvoiceC({
+  items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL, // ← sin esto, ARCA rechaza
+  },
+});
+```
+
+* **En producción es obligatorio desde el 01/12/2026** (Manual del Desarrollador v4.8).
+  Hasta entonces el comprobante sale con una observación; después, se rechaza.
+* **En homologación ya se rechaza hoy** (verificado el 25/09/2026): la respuesta vuelve
+  con `Resultado = 'R'` y la observación del código **10246**. Si estás probando ahí y
+  te rechaza, es esto.
+* El catálogo **no es correlativo**: los códigos 2, 3 y 11 **no existen** y ARCA los
+  rechaza con el código 10242. Están deprecados en el enum y se eliminan en la próxima
+  major. Los válidos son 1, 4, 5, 6, 7, 8, 9, 10, 13, 15 y 16 — exportados en
+  `VALID_VAT_CONDITION_IDS`.
+* Cada código aplica sólo a ciertas clases de comprobante: Consumidor Final (5) va en
+  B y C, Responsable Inscripto (1) va en A. La combinación inválida da 10243.
+
 #### 1. Identificación del Comprador (RG 5866/2026)
 * A partir de 2026, bajo la **RG 5866/2026** (que abrogó y unificó la RG 5824/2026), el monto límite para compras de **Consumidores Finales** sin identificar se estableció en **$10.000.000**.
 * Si el importe acumulado del comprobante es **igual o mayor a $10.000.000**, es **obligatorio** identificar al comprador mediante su DNI, CUIT, CUIL o CDI en el objeto `buyer`.
@@ -331,6 +360,44 @@ Con la eliminación total de la Factura Clase "M", ARCA instruyó el uso de Fact
 * **Pago en CBU Informada:**
   De igual modo, si te corresponde emitir con la leyenda de obligatoriedad de CBU, se adjunta el opcional correspondiente declarando tu cuenta bancaria asociada.
 
+#### 3. Otros tributos: percepciones, impuestos internos, tasas
+
+Los tributos que **no son IVA** viajan en su propio array y suman a `ImpTrib` y al total:
+
+```typescript
+await wsfe.issueInvoiceB({
+  items: [{ description: 'Producto', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+  buyer: { docType: TaxIdType.CUIT, docNumber: '20111111112', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+  taxes: [{
+    id: 2,                    // 2 = Provinciales (FEParamGetTiposTributos)
+    description: 'Percepción IIBB',
+    taxBase: 1000,
+    rate: 3,
+    amount: 30,
+  }],
+});
+```
+
+Es también la forma de cumplir el código **10283** del Manual v4.7 (vigente 01/09/2026),
+que exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` en
+comprobantes clase B cuyo receptor sea No Categorizado.
+
+#### 4. Moneda extranjera
+
+```typescript
+await wsfe.issueInvoiceA({
+  items: [{ description: 'Servicio', quantity: 1, unitPrice: 100, vatRate: 21 }],
+  buyer: { docType: TaxIdType.CUIT, docNumber: '20111111112', vatCondition: VatCondition.IVA_RESPONSABLE_INSCRIPTO },
+  currency: 'DOL',                  // FEParamGetTiposMonedas
+  exchangeRate: 1450.50,
+  payInSameForeignCurrency: true,   // CanMisMonExt (RG 5616)
+});
+```
+
+> **Traé la cotización de ARCA, no la fijes a mano.** Si el pago es en la misma moneda
+> extranjera, ARCA exige que coincida **exactamente** con la del día hábil anterior y
+> rechaza con el código 10038 si no.
+
 ### 🤝 Monotributo Social y Regímenes Especiales
 Para el Web Service de Facturación Electrónica (WSFE), la AFIP exige que todo contribuyente bajo el régimen de Monotributo (sea estándar, social o promovido) se declare bajo la Condición de IVA de **Responsable Monotributo (Código 6)**. El Código de IVA 13 (Monotributista Social) suele ser rechazado en producción.
 
@@ -343,14 +410,23 @@ Por esta razón, el SDK detecta automáticamente si el contribuyente tiene activ
 Todos los errores son instancias tipadas de `ArcaError`, con un campo `hint` que te dice qué hacer:
 
 ```typescript
-import { ArcaError, ArcaAuthError, ArcaValidationError, ArcaNetworkError } from 'arca-sdk';
+import {
+  ArcaError, ArcaAuthError, ArcaValidationError,
+  ArcaNetworkError, ArcaRejectionError,
+} from 'arca-sdk';
 
 try {
   const result = await wsfe.issueInvoiceC({
     items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
   });
 } catch (error) {
-  if (error instanceof ArcaAuthError) {
+  if (error instanceof ArcaRejectionError) {
+    // ARCA procesó la solicitud y NO autorizó el comprobante.
+    // No hay CAE: el comprobante no existe.
+    console.error('Rechazado:', error.message);
+    console.error('Motivos:', error.observations);
+    console.log('Hint:', error.hint);
+  } else if (error instanceof ArcaAuthError) {
     // Token expirado, certificado inválido, etc.
     console.error('Auth error:', error.message);
     console.log('Hint:', error.hint); // → "El certificado puede haber expirado..."
@@ -367,6 +443,22 @@ try {
   }
 }
 ```
+
+#### Rechazo ≠ error
+
+ARCA distingue dos cosas que conviene no confundir:
+
+| Situación | Qué significa | Cómo llega |
+|---|---|---|
+| `Errors` en la respuesta | La llamada no se pudo procesar (auth, parámetros mal) | `ArcaError` |
+| `Resultado = 'R'` | Se procesó bien y ARCA **no autorizó** el comprobante | `ArcaRejectionError` |
+| `Resultado = 'A'` con observaciones | **Autorizado**, con advertencias | Se devuelve normal, en `observations` |
+
+> **Cambio en la v2.0.0**: hasta la v1.x un rechazo se devolvía como un `CAEResponse`
+> con `result: 'R'` y `cae: ''` en vez de lanzar. Quien no inspeccionara `result`
+> creía haber facturado un comprobante que no existe. Si tu código ya chequeaba
+> `result === 'R'`, esa rama deja de alcanzarse y podés reemplazarla por un
+> `catch (ArcaRejectionError)`.
 
 ### 🚚 Acerca de los Remitos
 > **¡Atención!** Este SDK implementa nativamente el servicio `WSFE` (Facturación Electrónica). Si tu negocio necesita emitir **Remitos Electrónicos Oficiales** para el traslado físico de mercaderías (Remitos Cárnicos, Azucareros, Harineros, etc.), tené en cuenta que la AFIP exige usar un webservice totalmente distinto llamado `WSREM` o similares. Estos servicios aún no están cubiertos por esta versión del SDK.
@@ -394,24 +486,33 @@ try {
 // Servicios
 import { WsaaService, WsfeService, PadronService } from 'arca-sdk';
 
-// Enums
-import { InvoiceType, BillingConcept, TaxIdType } from 'arca-sdk';
+// Enums y constantes
+import {
+  InvoiceType, BillingConcept, TaxIdType, VatCondition,
+  VALID_VAT_CONDITION_IDS,
+} from 'arca-sdk';
 
 // Tipos de configuración
-import type { WsaaConfig, WsfeConfig, TaxpayerServiceConfig } from 'arca-sdk';
+import type { WsaaConfig, WsfeConfig, CaeaConfig, TaxpayerServiceConfig } from 'arca-sdk';
 
 // Tipos de respuesta
 import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus, InvoiceOptional } from 'arca-sdk';
 import type { TaxpayerResponse, Taxpayer, Address, Activity, TaxRecord } from 'arca-sdk';
 
-// Items de factura
-import type { InvoiceItem, Buyer, IssueInvoiceRequest } from 'arca-sdk';
+// Items de factura y opciones de emisión
+import type {
+  InvoiceItem, InvoiceTax, Buyer, IssueInvoiceRequest, IssueOptions,
+  AssociatedInvoice, ServiceDates, ArcaDateInput,
+} from 'arca-sdk';
 
 // Storage
 import type { TokenStorage, LoginTicket } from 'arca-sdk';
 
 // Errores
-import { ArcaError, ArcaAuthError, ArcaValidationError, ArcaNetworkError } from 'arca-sdk';
+import {
+  ArcaError, ArcaAuthError, ArcaValidationError,
+  ArcaNetworkError, ArcaRejectionError,
+} from 'arca-sdk';
 
 // QR
 import { generateQRUrl } from 'arca-sdk';
@@ -427,8 +528,8 @@ git clone https://github.com/marcelaborgarello/arca-sdk
 cd arca-sdk
 bun install
 
-# Tests
-bun test
+# Tests unitarios
+bun run test
 
 # Verificar tipos
 bun run lint
@@ -436,6 +537,25 @@ bun run lint
 # Build (CJS + ESM + .d.ts)
 bun run build
 ```
+
+> Es `bun run test` (vitest), **no** `bun test`. Son runners distintos: bajo el runner
+> nativo de Bun los `vi.mock` se filtran entre archivos y la suite queda menos aislada.
+
+### Tests de integración (opcional)
+
+Corren contra **ARCA homologación** de verdad. Son opt-in: sin credenciales, se
+saltean. Necesitás un certificado de homologación y el punto de venta dado de alta
+como Webservices.
+
+```bash
+export ARCA_TEST_CUIT=20123456789
+export ARCA_TEST_CERT=./certs/cert.pem   # ruta al PEM, no su contenido
+export ARCA_TEST_KEY=./certs/key.pem
+
+bun run test:integration
+```
+
+Detalle completo en [`tests/integration/README.md`](tests/integration/README.md).
 
 ### Tests disponibles
 
@@ -446,11 +566,19 @@ bun run build
 | XML | `xml.test.ts` | Construcción de TRA, parsing WSAA, validación de CUIT |
 | Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA |
 | WSFE | `wsfe.test.ts` | issueSimpleReceipt, issueReceipt, issueInvoiceB, checkStatus |
+| CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, `CbteFchHsGen` |
+| XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD, escapado, Tributos, moneda, rechazos |
+
+> `request-xml.test.ts` mira el XML que **sale**. El resto de la suite mockea la red y
+> sólo verifica la respuesta parseada, con lo cual un request mal formado pasa
+> desapercibido. Si tocás un constructor de XML, agregá la aserción de orden ahí.
 
 ---
 
 ## Roadmap
 
+- [ ] `FEParamGetCotizacion` para traer la cotización oficial de ARCA
+- [ ] Comprobantes de Seguros de Caución (Manual v4.7, códigos 10273-10282)
 - [ ] Soporte WSMTXCA (Factura de Crédito Electrónica MiPyME)
 - [ ] Soporte WSCT (Turismo)
 - [ ] Método `consultar()` para servicios adicionales del Padrón

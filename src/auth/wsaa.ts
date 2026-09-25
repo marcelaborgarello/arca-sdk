@@ -5,6 +5,7 @@ import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
 import { validateCertificate, validatePrivateKey, signCMS } from '../utils/crypto';
 import { TicketManager } from './ticket';
 import { callArcaApi } from '../utils/network';
+import { getArcaHint } from '../constants/errors';
 import { XMLParser } from 'fast-xml-parser';
 
 /**
@@ -155,6 +156,7 @@ export class WsaaService {
 
         if (!response.ok) {
             let errorMessage = `Error HTTP al comunicarse con WSAA: ${response.status} ${response.statusText}`;
+            let faultString = '';
             try {
                 const parser = new XMLParser({
                     ignoreAttributes: false,
@@ -163,15 +165,24 @@ export class WsaaService {
                 const result = parser.parse(responseText);
                 const fault = result.Envelope?.Body?.Fault;
                 if (fault && fault.faultstring) {
-                    errorMessage = `Error AFIP WSAA: ${fault.faultstring}`;
+                    faultString = String(fault.faultstring);
+                    errorMessage = `Error AFIP WSAA: ${faultString}`;
                 }
             } catch (e) {
                 // Ignorar error de parseo si no es XML válido
             }
-            
+
+            // ARCA no emite un TA nuevo mientras el anterior siga vigente (12 h). Sin
+            // persistencia, cada proceso nuevo vuelve a pedir uno y queda bloqueado.
+            // El faultstring no trae código, así que se detecta por texto.
+            const hint = /ya posee un TA valido/i.test(faultString)
+                ? getArcaHint('ALREADY_HAS_TA')
+                : undefined;
+
             throw new ArcaAuthError(
                 errorMessage,
-                { status: response.status, statusText: response.statusText, body: responseText }
+                { status: response.status, statusText: response.statusText, body: responseText },
+                hint
             );
         }
 

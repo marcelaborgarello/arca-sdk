@@ -27,8 +27,20 @@ Si eso da 403, el toggle del token está invertido: tiene que ser la opción que
 
 ```bash
 bun run lint     # tsc --noEmit
-bun test         # OJO: bun test, que es lo que corre el CI, no `vitest run`
+bun run test     # OJO: `bun run test` (vitest), NO `bun test`
 bun run build
+```
+
+> Desde 2026-09-25 el runner oficial es **vitest**, y el CI corre `bun run test`. El
+> runner nativo de Bun (`bun test`) no aísla los `vi.mock` entre archivos, así que la
+> suite pasaba en verde con cosas rotas. `prepublishOnly` también usa `bun run test`.
+
+Si el cambio toca el XML que se le manda a ARCA, corré además la suite de integración
+contra homologación — es la única que puede ponerse en rojo por un rechazo real:
+
+```bash
+export ARCA_TEST_CUIT=...  ARCA_TEST_CERT=./certs/cert.pem  ARCA_TEST_KEY=./certs/key.pem
+bun run test:integration
 ```
 
 Actualizar `CHANGELOG.md` (en español, agrupado por tipo de cambio, citando la RG o la
@@ -107,11 +119,8 @@ npm config get userconfig   # confirmá que sea el .npmrc que editaste
 
 > Un token con permiso de publish sobre `arca-sdk` permite subir una versión maliciosa
 > de un paquete que instalan terceros. Si se filtra —en un chat, un log, una captura—
-> revocalo de inmediato y generá otro.
-
-> Un token con permiso de publish sobre `arca-sdk` permite subir una versión maliciosa
-> de un paquete que instalan terceros. Si se filtra —en un chat, un log, una captura—
-> revocalo de inmediato y generá otro.
+> revocalo de inmediato y generá otro. Por lo mismo: no se lo pases a un asistente ni
+> lo pegues en una conversación. Corré vos el `npm publish`.
 
 ## 3. Publicar
 
@@ -125,7 +134,7 @@ Con el token de bypass no hace falta `--otp`.
 Después:
 
 ```bash
-git tag -a v1.4.0 -m "v1.4.0"
+git tag -a v2.0.0 -m "v2.0.0"   # usá la versión que acabás de publicar
 git push origin main --follow-tags
 npm view arca-sdk version   # confirmá que subió
 ```
@@ -142,8 +151,10 @@ npm view arca-sdk version   # confirmá que subió
 
 ## 5. Contenido del paquete
 
-El tarball debe tener 10 archivos y pesar ~122 kB: `dist/`, `README.md`, `CHANGELOG.md`,
-`LICENSE` y `package.json`. Verificalo siempre con `npm publish --dry-run`.
+El tarball debe tener 10 archivos: `dist/`, `README.md`, `CHANGELOG.md`, `LICENSE` y
+`package.json`. Verificalo siempre con `npm publish --dry-run`. En la v2.0.0 pesaba
+~160 kB (eran ~122 kB en la v1.4.x; la diferencia es README y CHANGELOG, que crecieron).
+Lo que importa es que sigan siendo **10 archivos**: si aparecen más, se coló algo.
 
 Dos cosas que ya se corrigieron y conviene no volver a romper:
 

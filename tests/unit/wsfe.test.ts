@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WsfeService } from '../../src/services/wsfe';
 import { callArcaApi } from '../../src/utils/network';
-import { InvoiceType, BillingConcept, TaxIdType } from '../../src/types/wsfe';
+import { InvoiceType, BillingConcept, TaxIdType, VatCondition } from '../../src/types/wsfe';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -273,7 +273,10 @@ describe('WsfeService', () => {
         buyer: {
           docType: TaxIdType.CUIT,
           docNumber: '20111111112',
-          vatCondition: 2 // Monotributo
+          // Consumidor Final: es la condición que el catálogo admite para clase C.
+          // (Antes decía 2 "Monotributo" — el 2 no existe en el catálogo y Monotributo
+          // es 6, que además sólo aplica a clase A.)
+          vatCondition: VatCondition.CONSUMIDOR_FINAL,
         },
         serviceDates: {
           startDate: new Date('2026-03-01T10:00:00Z'),
@@ -282,7 +285,7 @@ describe('WsfeService', () => {
         }
       });
 
-      expect(capturedXml).toContain('<ar:CondicionIVAReceptorId>2</ar:CondicionIVAReceptorId>');
+      expect(capturedXml).toContain('<ar:CondicionIVAReceptorId>5</ar:CondicionIVAReceptorId>');
       expect(capturedXml).toContain('<ar:FchServDesde>20260301</ar:FchServDesde>');
       expect(capturedXml).toContain('<ar:FchServHasta>20260331</ar:FchServHasta>');
       expect(capturedXml).toContain('<ar:FchVtoPago>20260410</ar:FchVtoPago>');

@@ -1,5 +1,5 @@
 import { getWsfeEndpoint } from '../constants/endpoints';
-import { ArcaError, ArcaValidationError } from '../types/common';
+import { ArcaError, ArcaValidationError, ArcaRejectionError } from '../types/common';
 import type {
     WsfeConfig,
     IssueInvoiceRequest,
@@ -13,11 +13,14 @@ import type {
     InvoiceOptional,
     ServiceDates,
     ArcaDateInput,
+    InvoiceTax,
+    IssueOptions,
 } from '../types/wsfe';
 import {
     InvoiceType,
     BillingConcept,
     TaxIdType,
+    VALID_VAT_CONDITION_IDS,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -26,7 +29,7 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly } from '../utils/formatArcaDate';
-import { parseXml } from '../utils/xml';
+import { parseXml, escapeXml } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
 import { getArcaHint } from '../constants/errors';
@@ -231,12 +234,8 @@ export class WsfeService {
     async issueInvoiceA(params: {
         items: InvoiceItem[];
         buyer: Buyer;
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.FACTURA_A, params);
     }
 
@@ -247,12 +246,8 @@ export class WsfeService {
     async issueInvoiceB(params: {
         items: InvoiceItem[];
         buyer: Buyer;
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.FACTURA_B, params);
     }
 
@@ -261,12 +256,8 @@ export class WsfeService {
      */
     async issueInvoiceC(params: {
         items: InvoiceItem[];
-        concept?: BillingConcept;
-        date?: Date;
         buyer?: Buyer;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.FACTURA_C, params);
     }
 
@@ -280,12 +271,8 @@ export class WsfeService {
     async issueReceiptA(params: {
         items: InvoiceItem[];
         buyer: Buyer;
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.RECIBO_A, params);
     }
 
@@ -295,12 +282,8 @@ export class WsfeService {
     async issueReceiptB(params: {
         items: InvoiceItem[];
         buyer: Buyer;
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.RECIBO_B, params);
     }
 
@@ -309,12 +292,8 @@ export class WsfeService {
      */
     async issueReceiptC(params: {
         items: InvoiceItem[];
-        concept?: BillingConcept;
-        date?: Date;
         buyer?: Buyer;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.RECIBO_C, params);
     }
 
@@ -330,11 +309,8 @@ export class WsfeService {
         items: InvoiceItem[];
         buyer: Buyer;
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.NOTA_CREDITO_A, params);
     }
 
@@ -346,11 +322,8 @@ export class WsfeService {
         items: InvoiceItem[];
         buyer: Buyer;
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.NOTA_CREDITO_B, params);
     }
 
@@ -361,12 +334,8 @@ export class WsfeService {
     async issueCreditNoteC(params: {
         items: InvoiceItem[];
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         buyer?: Buyer;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_CREDITO_C, params);
     }
 
@@ -382,11 +351,8 @@ export class WsfeService {
         items: InvoiceItem[];
         buyer: Buyer;
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.NOTA_DEBITO_A, params);
     }
 
@@ -398,11 +364,8 @@ export class WsfeService {
         items: InvoiceItem[];
         buyer: Buyer;
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         includesVAT?: boolean;
-        optionals?: InvoiceOptional[];
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithVAT(InvoiceType.NOTA_DEBITO_B, params);
     }
 
@@ -413,12 +376,8 @@ export class WsfeService {
     async issueDebitNoteC(params: {
         items: InvoiceItem[];
         associatedInvoices: AssociatedInvoice[];
-        concept?: BillingConcept;
-        date?: Date;
         buyer?: Buyer;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
+    } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.NOTA_DEBITO_C, params);
     }
 
@@ -440,9 +399,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECompConsultar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:FeCompConsReq>
         <ar:CbteTipo>${type}</ar:CbteTipo>
@@ -525,9 +484,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FEParamGetPtosVenta>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
     </ar:FEParamGetPtosVenta>
   </soapenv:Body>
@@ -586,12 +545,8 @@ export class WsfeService {
             items: InvoiceItem[];
             buyer: Buyer;
             associatedInvoices?: AssociatedInvoice[];
-            concept?: BillingConcept;
-            date?: Date;
             includesVAT?: boolean;
-            optionals?: InvoiceOptional[];
-            serviceDates?: ServiceDates;
-        }
+        } & IssueOptions
     ): Promise<CAEResponse> {
         this.validateItemsWithVAT(params.items);
         this.validateAssociatedInvoices(type, params.associatedInvoices);
@@ -600,16 +555,11 @@ export class WsfeService {
         const vatData = this.calculateVATByRate(params.items, includesVAT);
 
         return this.issueDocument({
+            ...params,
             type,
             concept: params.concept || BillingConcept.PRODUCTS,
-            items: params.items,
-            buyer: params.buyer,
-            associatedInvoices: params.associatedInvoices,
-            date: params.date,
             vatData,
             includesVAT,
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
         });
     }
 
@@ -621,29 +571,21 @@ export class WsfeService {
         params: {
             items: InvoiceItem[];
             associatedInvoices?: AssociatedInvoice[];
-            concept?: BillingConcept;
-            date?: Date;
             buyer?: Buyer;
-            optionals?: InvoiceOptional[];
-            serviceDates?: ServiceDates;
-        }
+        } & IssueOptions
     ): Promise<CAEResponse> {
         this.validateAssociatedInvoices(type, params.associatedInvoices);
         const total = round(calculateTotal(params.items));
 
         return this.issueDocument({
+            ...params,
             type,
             concept: params.concept || BillingConcept.PRODUCTS,
             total,
-            date: params.date,
             buyer: params.buyer || {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
             },
-            items: params.items,
-            associatedInvoices: params.associatedInvoices,
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
         });
     }
 
@@ -681,12 +623,24 @@ export class WsfeService {
             total = round(calculateTotal(request.items, includesVAT));
         }
 
+        // Otros tributos: van aparte del IVA y suman al total (ImpTotal = ImpNeto +
+        // ImpTotConc + ImpOpEx + ImpTrib + ImpIVA).
+        const taxTotal = round(
+            (request.taxes ?? []).reduce((acc, tax) => acc + tax.amount, 0)
+        );
+        total = round(total + taxTotal);
+
         if (total <= 0) {
             throw new ArcaValidationError('El monto total debe ser mayor a 0');
         }
 
+        const currency = request.currency ?? 'PES';
+        const exchangeRate = request.exchangeRate ?? 1;
+        this.validateCurrency(currency, exchangeRate);
+
         // 2. Pre-flight validations
         this.validateBuyer(request.buyer, total);
+        this.validateVatCondition(request.buyer);
 
         // 3. Get next invoice number
         const invoiceNumber = await this.getNextInvoiceNumber(request.type);
@@ -704,7 +658,12 @@ export class WsfeService {
             net,
             vat,
             total,
+            taxTotal,
+            currency,
+            exchangeRate,
+            payInSameForeignCurrency: request.payInSameForeignCurrency,
             vatData: request.vatData,
+            taxes: request.taxes,
             optionals: request.optionals,
         });
 
@@ -804,6 +763,55 @@ export class WsfeService {
     }
 
     /**
+     * Valida la coherencia entre moneda y cotización.
+     *
+     * Con moneda extranjera ARCA exige una cotización mayor a cero (código 10039) y
+     * que coincida con la registrada en sus bases (10038). Lo segundo no se puede
+     * verificar localmente; lo primero sí, y evita un request perdido.
+     */
+    private validateCurrency(currency: string, exchangeRate: number): void {
+        if (currency !== 'PES' && (!exchangeRate || exchangeRate <= 0)) {
+            throw new ArcaValidationError(
+                `Con moneda ${currency} hay que informar una cotización mayor a cero.`,
+                {
+                    currency,
+                    exchangeRate,
+                    hint: 'Traé la cotización oficial con FEParamGetCotizacion. Si el pago es en la ' +
+                        'misma moneda extranjera, ARCA exige que coincida exactamente con la del ' +
+                        'día hábil anterior (código 10038).',
+                }
+            );
+        }
+    }
+
+    /**
+     * Valida que la condición de IVA del receptor exista en el catálogo de ARCA.
+     *
+     * El catálogo de `CondicionIVAReceptorId` no es correlativo: los códigos 2, 3 y 11
+     * no pertenecen a él y ARCA los rechaza con el código 10242. Avisar acá ahorra un
+     * request y da un mensaje entendible en vez del error genérico de ARCA.
+     *
+     * No se valida la combinación con la clase de comprobante (código 10243): eso
+     * depende de la clase y del régimen del emisor, y ARCA es la autoridad.
+     */
+    private validateVatCondition(buyer: Buyer | undefined): void {
+        if (buyer?.vatCondition === undefined) return;
+
+        if (!VALID_VAT_CONDITION_IDS.includes(buyer.vatCondition)) {
+            throw new ArcaValidationError(
+                `Condición de IVA del receptor inválida: ${buyer.vatCondition}. ` +
+                `ARCA la rechaza con el código 10242.`,
+                {
+                    received: buyer.vatCondition,
+                    validValues: VALID_VAT_CONDITION_IDS,
+                    hint: 'El catálogo de CondicionIVAReceptorId no es correlativo: los ' +
+                        'códigos 2, 3 y 11 no existen. Consultalo con FEParamGetCondicionIvaReceptor.',
+                }
+            );
+        }
+    }
+
+    /**
      * Valida obligatoriamente al comprador cuando el monto es mayor o igual a $10.000.000 para consumidor final
      */
     private validateBuyer(buyer: Buyer | undefined, total: number): void {
@@ -896,11 +904,22 @@ export class WsfeService {
         net: number;
         vat: number;
         total: number;
+        taxTotal: number;
+        currency: string;
+        exchangeRate: number;
+        payInSameForeignCurrency?: boolean;
         vatData?: IssueInvoiceRequest['vatData'];
+        taxes?: InvoiceTax[];
         optionals?: InvoiceOptional[];
         serviceDates?: ServiceDates;
     }): string {
         const dateStr = formatArcaDateOnly(params.date);
+
+        // CanMisMonExt sólo viaja con moneda extranjera: con PES el campo no debe
+        // informarse, o informarse con 'N'. Va entre MonCotiz y CondicionIVAReceptorId.
+        const canMisMonExtXml = params.currency !== 'PES' && params.payInSameForeignCurrency !== undefined
+            ? `\n            <ar:CanMisMonExt>${params.payInSameForeignCurrency ? 'S' : 'N'}</ar:CanMisMonExt>`
+            : '';
 
         let vatXml = '';
         if (params.vatData && params.vatData.length > 0) {
@@ -925,11 +944,28 @@ export class WsfeService {
           <ar:Tipo>${asoc.type}</ar:Tipo>
           <ar:PtoVta>${asoc.pointOfSale}</ar:PtoVta>
           <ar:Nro>${asoc.invoiceNumber}</ar:Nro>
-          ${asoc.cuit ? `<ar:Cuit>${asoc.cuit}</ar:Cuit>` : ''}
+          ${asoc.cuit ? `<ar:Cuit>${escapeXml(asoc.cuit)}</ar:Cuit>` : ''}
           ${asoc.date ? `<ar:CbteFch>${formatArcaDateOnly(asoc.date)}</ar:CbteFch>` : ''}
         </ar:CbteAsoc>`;
             });
             asocXml += '\n      </ar:CbtesAsoc>';
+        }
+
+        // <Tributos> va entre <CbtesAsoc> e <Iva> en el sequence del XSD.
+        let tribXml = '';
+        if (params.taxes && params.taxes.length > 0) {
+            tribXml = '<ar:Tributos>';
+            params.taxes.forEach(tax => {
+                tribXml += `
+        <ar:Tributo>
+          <ar:Id>${tax.id}</ar:Id>${tax.description ? `
+          <ar:Desc>${escapeXml(tax.description)}</ar:Desc>` : ''}
+          <ar:BaseImp>${tax.taxBase.toFixed(2)}</ar:BaseImp>
+          <ar:Alic>${tax.rate.toFixed(2)}</ar:Alic>
+          <ar:Importe>${tax.amount.toFixed(2)}</ar:Importe>
+        </ar:Tributo>`;
+            });
+            tribXml += '\n      </ar:Tributos>';
         }
 
         let optXml = '';
@@ -938,14 +974,20 @@ export class WsfeService {
             params.optionals.forEach(opt => {
                 optXml += `
         <ar:Opcional>
-          <ar:Id>${opt.id}</ar:Id>
-          <ar:Valor>${opt.value}</ar:Valor>
+          <ar:Id>${escapeXml(opt.id)}</ar:Id>
+          <ar:Valor>${escapeXml(opt.value)}</ar:Valor>
         </ar:Opcional>`;
             });
             optXml += '\n      </ar:Opcionales>';
         }
 
-        // RG 5616: Si hay condición de IVA del receptor (ej. 5 Consumidor Final, 2 Monotributo)
+        // RG 5616: condición de IVA del receptor (ej. 5 Consumidor Final, 6 Responsable
+        // Monotributo). El catálogo válido lo da FEParamGetCondicionIvaReceptor y NO es
+        // correlativo: 2, 3 y 11 no existen ahí (rechazo 10242).
+        //
+        // Va acá y no junto a DocNro: en el `sequence` del XSD el elemento cae después
+        // de MonCotiz/CanMisMonExt y antes de CbtesAsoc. Pasa a ser obligatorio el
+        // 01/12/2026 (manual v4.8), con lo cual la posición deja de ser un detalle.
         const condicionIVAReceptorXml = params.buyer?.vatCondition !== undefined
             ? `\n            <ar:CondicionIVAReceptorId>${params.buyer.vatCondition}</ar:CondicionIVAReceptorId>`
             : '';
@@ -971,9 +1013,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECAESolicitar>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:FeCAEReq>
         <ar:FeCabReq>
@@ -985,7 +1027,7 @@ export class WsfeService {
           <ar:FECAEDetRequest>
             <ar:Concepto>${params.concept}</ar:Concepto>
             <ar:DocTipo>${params.buyer?.docType || 99}</ar:DocTipo>
-            <ar:DocNro>${params.buyer?.docNumber || 0}</ar:DocNro>${condicionIVAReceptorXml}
+            <ar:DocNro>${escapeXml(params.buyer?.docNumber) || 0}</ar:DocNro>
             <ar:CbteDesde>${params.invoiceNumber}</ar:CbteDesde>
             <ar:CbteHasta>${params.invoiceNumber}</ar:CbteHasta>
             <ar:CbteFch>${dateStr}</ar:CbteFch>
@@ -993,11 +1035,12 @@ export class WsfeService {
             <ar:ImpTotConc>0.00</ar:ImpTotConc>
             <ar:ImpNeto>${params.net.toFixed(2)}</ar:ImpNeto>
             <ar:ImpOpEx>0.00</ar:ImpOpEx>
-            <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>
-            <ar:ImpTrib>0.00</ar:ImpTrib>
-            <ar:MonId>PES</ar:MonId>
-            <ar:MonCotiz>1</ar:MonCotiz>${fechasServicioXml}
+            <ar:ImpTrib>${params.taxTotal.toFixed(2)}</ar:ImpTrib>
+            <ar:ImpIVA>${params.vat.toFixed(2)}</ar:ImpIVA>${fechasServicioXml}
+            <ar:MonId>${escapeXml(params.currency)}</ar:MonId>
+            <ar:MonCotiz>${params.exchangeRate}</ar:MonCotiz>${canMisMonExtXml}${condicionIVAReceptorXml}
             ${asocXml}
+            ${tribXml}
             ${vatXml}
             ${optXml}
           </ar:FECAEDetRequest>
@@ -1016,9 +1059,9 @@ export class WsfeService {
   <soapenv:Body>
     <ar:FECompUltimoAutorizado>
       <ar:Auth>
-        <ar:Token>${this.config.ticket.token}</ar:Token>
-        <ar:Sign>${this.config.ticket.sign}</ar:Sign>
-        <ar:Cuit>${this.config.cuit}</ar:Cuit>
+        <ar:Token>${escapeXml(this.config.ticket.token)}</ar:Token>
+        <ar:Sign>${escapeXml(this.config.ticket.sign)}</ar:Sign>
+        <ar:Cuit>${escapeXml(this.config.cuit)}</ar:Cuit>
       </ar:Auth>
       <ar:PtoVta>${this.config.pointOfSale}</ar:PtoVta>
       <ar:CbteTipo>${type}</ar:CbteTipo>
@@ -1063,6 +1106,24 @@ export class WsfeService {
             obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
         }
 
+        // ARCA procesó la solicitud y no autorizó el comprobante: no hay CAE y el
+        // comprobante no existe. Devolverlo como si fuera un resultado válido hace que
+        // quien no mire `result` crea que facturó — es pérdida silenciosa de datos.
+        if (det.Resultado === 'R') {
+            const motivo = observations[0] ?? 'ARCA no informó el motivo.';
+            throw new ArcaRejectionError(
+                `ARCA rechazó el comprobante: ${motivo}`,
+                observations,
+                {
+                    invoiceType: Number(cab.CbteTipo),
+                    pointOfSale: Number(cab.PtoVta),
+                    invoiceNumber: Number(det.CbteDesde),
+                    result: det.Resultado,
+                },
+                this.hintForObservations(observations)
+            );
+        }
+
         return {
             invoiceType: Number(cab.CbteTipo),
             pointOfSale: Number(cab.PtoVta),
@@ -1073,5 +1134,23 @@ export class WsfeService {
             result: det.Resultado,
             observations: observations.length > 0 ? observations : undefined,
         };
+    }
+
+    /**
+     * Busca un hint para el motivo de rechazo.
+     *
+     * Las observaciones llegan con su código en `Obs.Code`, pero el parseo actual sólo
+     * conserva el mensaje, así que se reconocen por texto los casos más frecuentes.
+     */
+    private hintForObservations(observations: string[]): string | undefined {
+        const texto = observations.join(' ');
+
+        if (/Condicion Frente al IVA del receptor es obligatorio/i.test(texto)) {
+            return getArcaHint(10246);
+        }
+        if (/Condicion Frente al IVA del receptor/i.test(texto)) {
+            return getArcaHint(10245);
+        }
+        return undefined;
     }
 }

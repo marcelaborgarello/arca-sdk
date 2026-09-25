@@ -10,6 +10,7 @@ import type {
     TaxRecord,
 } from '../types/padron';
 import { callArcaApi } from '../utils/network';
+import { escapeXml } from '../utils/xml';
 import { XMLParser } from 'fast-xml-parser';
 import { VatCondition } from '../types/wsfe';
 
@@ -63,10 +64,10 @@ export class PadronService {
   <soapenv:Header/>
   <soapenv:Body>
     <a13:getPersona>
-      <token>${ticket.token}</token>
-      <sign>${ticket.sign}</sign>
-      <cuitRepresentada>${this.config.cuit}</cuitRepresentada>
-      <idPersona>${taxId}</idPersona>
+      <token>${escapeXml(ticket.token)}</token>
+      <sign>${escapeXml(ticket.sign)}</sign>
+      <cuitRepresentada>${escapeXml(this.config.cuit)}</cuitRepresentada>
+      <idPersona>${escapeXml(taxId)}</idPersona>
     </a13:getPersona>
   </soapenv:Body>
 </soapenv:Envelope>`;
