@@ -35,12 +35,18 @@ export type {
 export type {
     WsfeConfig,
     InvoiceItem,
+    InvoiceTax,
+    InvoiceOptional,
+    AssociatedInvoice,
+    ServiceDates,
+    IssueOptions,
     Buyer,
     IssueInvoiceRequest,
     CAEResponse,
     InvoiceDetails,
     PointOfSale,
     ServiceStatus,
+    ArcaDateInput,
 } from './types/wsfe';
 
 // Tipos CAEA
@@ -59,6 +65,7 @@ export {
     BillingConcept,
     TaxIdType,
     VatCondition,
+    VALID_VAT_CONDITION_IDS,
 } from './types/wsfe';
 
 // Errores
@@ -67,6 +74,7 @@ export {
     ArcaAuthError,
     ArcaValidationError,
     ArcaNetworkError,
+    ArcaRejectionError,
 } from './types/common';
 
 // Utilidades para Frontend/Impresión

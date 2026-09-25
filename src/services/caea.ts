@@ -1,5 +1,5 @@
 import { getWsfeEndpoint } from '../constants/endpoints';
-import { ArcaError, ArcaValidationError } from '../types/common';
+import { ArcaError, ArcaValidationError, ArcaRejectionError } from '../types/common';
 import type {
     CaeaConfig,
     CAEASolicitarRequest,
@@ -283,8 +283,43 @@ export class CaeaService {
                 }
             }
 
+            // Otros tributos: van aparte del IVA y suman al total.
+            const taxTotal = round((inv.taxes ?? []).reduce((acc, t) => acc + t.amount, 0));
+            total = round(total + taxTotal);
+
             if (total <= 0) {
                 throw new ArcaValidationError(`El monto total del comprobante número ${inv.invoiceNumber} debe ser mayor a 0.`);
+            }
+
+            const currency = inv.currency ?? 'PES';
+            const exchangeRate = inv.exchangeRate ?? 1;
+            if (currency !== 'PES' && (!exchangeRate || exchangeRate <= 0)) {
+                throw new ArcaValidationError(
+                    `Comprobante ${inv.invoiceNumber}: con moneda ${currency} hay que informar una cotización mayor a cero.`,
+                    { currency, exchangeRate, hint: 'Traé la cotización oficial con FEParamGetCotizacion.' }
+                );
+            }
+
+            // CanMisMonExt sólo viaja con moneda extranjera.
+            const canMisMonExtXml = currency !== 'PES' && inv.payInSameForeignCurrency !== undefined
+                ? `\n          <ar:CanMisMonExt>${inv.payInSameForeignCurrency ? 'S' : 'N'}</ar:CanMisMonExt>`
+                : '';
+
+            // <Tributos> va entre <CbtesAsoc> e <Iva>.
+            let tribXml = '';
+            if (inv.taxes && inv.taxes.length > 0) {
+                tribXml = '<ar:Tributos>';
+                inv.taxes.forEach(tax => {
+                    tribXml += `
+            <ar:Tributo>
+              <ar:Id>${tax.id}</ar:Id>${tax.description ? `
+              <ar:Desc>${escapeXml(tax.description)}</ar:Desc>` : ''}
+              <ar:BaseImp>${tax.taxBase.toFixed(2)}</ar:BaseImp>
+              <ar:Alic>${tax.rate.toFixed(2)}</ar:Alic>
+              <ar:Importe>${tax.amount.toFixed(2)}</ar:Importe>
+            </ar:Tributo>`;
+                });
+                tribXml += '\n          </ar:Tributos>';
             }
 
             // RG 5616: condición de IVA del receptor (ej. 5 Consumidor Final, 6 Responsable
@@ -297,11 +332,19 @@ export class CaeaService {
             // Fechas de servicio (Obligatorio si concept es 2 (Servicios) o 3 (Productos y Servicios))
             let fechasServicioXml = '';
             if (inv.concept === BillingConcept.SERVICES || inv.concept === BillingConcept.PRODUCTS_AND_SERVICES) {
+                // Se respeta `serviceDates` si viene; si no, se cae a la fecha del
+                // comprobante para las tres. Hasta v1.5.0 el campo no existía en
+                // CaeaInvoice y siempre se usaba la fecha del comprobante, lo que
+                // informaba mal el período de cualquier servicio rendido por CAEA.
                 const defaultDateStr = formatArcaDateOnly(date);
+                const startDateStr = inv.serviceDates?.startDate ? formatArcaDateOnly(inv.serviceDates.startDate) : defaultDateStr;
+                const endDateStr = inv.serviceDates?.endDate ? formatArcaDateOnly(inv.serviceDates.endDate) : defaultDateStr;
+                const dueDateStr = inv.serviceDates?.dueDate ? formatArcaDateOnly(inv.serviceDates.dueDate) : defaultDateStr;
+
                 fechasServicioXml = `
-          <ar:FchServDesde>${defaultDateStr}</ar:FchServDesde>
-          <ar:FchServHasta>${defaultDateStr}</ar:FchServHasta>
-          <ar:FchVtoPago>${defaultDateStr}</ar:FchVtoPago>`;
+          <ar:FchServDesde>${startDateStr}</ar:FchServDesde>
+          <ar:FchServHasta>${endDateStr}</ar:FchServHasta>
+          <ar:FchVtoPago>${dueDateStr}</ar:FchVtoPago>`;
             }
 
             let asocXml = '';
@@ -351,10 +394,11 @@ export class CaeaService {
           <ar:ImpNeto>${net.toFixed(2)}</ar:ImpNeto>
           <ar:ImpOpEx>0.00</ar:ImpOpEx>
           <ar:ImpIVA>${vat.toFixed(2)}</ar:ImpIVA>
-          <ar:ImpTrib>0.00</ar:ImpTrib>${fechasServicioXml}
-          <ar:MonId>PES</ar:MonId>
-          <ar:MonCotiz>1</ar:MonCotiz>${condicionIVAReceptorXml}
+          <ar:ImpTrib>${taxTotal.toFixed(2)}</ar:ImpTrib>${fechasServicioXml}
+          <ar:MonId>${escapeXml(currency)}</ar:MonId>
+          <ar:MonCotiz>${exchangeRate}</ar:MonCotiz>${canMisMonExtXml}${condicionIVAReceptorXml}
           ${asocXml}
+          ${tribXml}
           ${vatXml}
           ${optXml}
           <ar:CAEA>${escapeXml(params.caea)}</ar:CAEA>
@@ -431,6 +475,23 @@ export class CaeaService {
                 ? det.Observaciones.Obs
                 : [det.Observaciones.Obs];
             obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
+        }
+
+        // ARCA procesó la rendición y la rechazó: los comprobantes no quedaron
+        // informados. Devolverlo como resultado normal hace que quien no mire `result`
+        // crea que rindió el período — y en CAEA la rendición tiene plazo fatal.
+        if (cab.Resultado === 'R') {
+            const motivo = observations[0] ?? 'ARCA no informó el motivo.';
+            throw new ArcaRejectionError(
+                `ARCA rechazó la rendición informativa de CAEA: ${motivo}`,
+                observations,
+                {
+                    caea: String(det?.CAEA || params.caea),
+                    pointOfSale: Number(cab.PtoVta),
+                    invoiceType: Number(cab.CbteTipo),
+                    result: cab.Resultado,
+                }
+            );
         }
 
         return {

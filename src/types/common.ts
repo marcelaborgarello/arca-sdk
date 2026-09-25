@@ -38,8 +38,8 @@ export class ArcaError extends Error {
  * Error de autenticación WSAA
  */
 export class ArcaAuthError extends ArcaError {
-    constructor(message: string, details?: unknown) {
-        super(message, 'AUTH_ERROR', details);
+    constructor(message: string, details?: unknown, hint?: string) {
+        super(message, 'AUTH_ERROR', details, hint);
         this.name = 'ArcaAuthError';
     }
 }
@@ -53,6 +53,33 @@ export class ArcaValidationError extends ArcaError {
         this.name = 'ArcaValidationError';
     }
 }
+/**
+ * ARCA procesó el comprobante y lo **rechazó** (`Resultado = 'R'`).
+ *
+ * No es un error de red ni de validación local: la llamada salió bien y ARCA contestó
+ * que no autoriza. El comprobante **no existe** y no tiene CAE; el motivo viene en
+ * `observations`.
+ *
+ * @remarks Hasta la v1.x el SDK devolvía un `CAEResponse` con `result: 'R'` y `cae: ''`
+ * en vez de lanzar, así que quien no chequeara `result` creía haber facturado. Se
+ * cambió porque devolver un comprobante inexistente como si fuera válido es una
+ * pérdida silenciosa de datos.
+ *
+ * Disponible desde v2.0.0.
+ */
+export class ArcaRejectionError extends ArcaError {
+    constructor(
+        message: string,
+        /** Motivos del rechazo, tal como los devuelve ARCA en `Observaciones`. */
+        public observations: string[],
+        details?: unknown,
+        hint?: string
+    ) {
+        super(message, 'REJECTED', details, hint);
+        this.name = 'ArcaRejectionError';
+    }
+}
+
 /**
  * Error de comunicación/red
  */
