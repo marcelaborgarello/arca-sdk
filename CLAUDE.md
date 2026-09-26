@@ -307,6 +307,36 @@ dedicado sin una corrida verde ahí. La lista autoritativa la da `FEParamGetTipo
 - No modificar la normativa implementada sin verificar contra el PDF oficial del manual.
   Las fuentes secundarias se equivocan seguido.
 
+### Los tests de este proyecto fueron insuficientes, y hay que corregirlo
+
+No es una aspiración de calidad: es un problema medido. Dos bugs reales pasaron la
+suite entera y los encontró una corrida a mano contra homologación.
+
+- **El rechazo de ARCA no lanzaba** (`Resultado = 'R'` devuelto como éxito con
+  `cae: ''`). Estuvo **desde la primera versión del SDK** y los 122 tests estaban
+  verdes: todos los fixtures escritos a mano describían un CAE aprobado. Un XML
+  inventado describe el mundo que uno imaginó, no el que ARCA devuelve.
+- **`getActivities()` devolvía `[]`** por una letra en el nombre de un elemento XML
+  (`ActividadTipo` en vez de `ActividadesTipo`). Se agregaron 11 catálogos y se
+  testearon 4; los otros siete nunca se ejecutaron. Seis funcionaban por casualidad.
+
+De ahí, tres reglas que se aplican sin excepción:
+
+1. **Ningún método público se agrega sin al menos un test.** No "el bloque de métodos
+   quedó cubierto": cada método. Los que andan por casualidad son indistinguibles de
+   los que andan.
+2. **Todo camino que puede fallar lleva un test del fallo**, no sólo del éxito. Un
+   rechazo, un campo ausente, una respuesta vacía. Si el test sólo prueba el camino
+   feliz, no prueba nada de lo que se rompe en producción.
+3. **Una respuesta vacía se asume error, no dato.** Cuando el bug se manifiesta como
+   lista vacía, el test tiene que exigir contenido: `toHaveLength(0)` es verde ante un
+   éxito y ante una falla silenciosa.
+
+Y el límite de lo que la suite unitaria puede probar: mockea `callArcaApi`, así que
+**no puede ponerse roja porque ARCA rechace algo**. Ahí sólo llega
+`tests/integration/`. Un método que nunca corrió contra homologación no está
+verificado, por más tests unitarios verdes que tenga.
+
 ## Nota sobre el repo
 
 No hay `.gitattributes` y los archivos están en CRLF en disco pero LF en el índice, así
