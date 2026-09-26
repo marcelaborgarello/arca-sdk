@@ -78,7 +78,7 @@ Es responsabilidad de la aplicación que implementa el SDK:
 
 ```typescript
 import * as fs from 'fs';
-import { WsaaService, WsfeService } from 'arca-sdk';
+import { WsaaService, WsfeService, TaxIdType, VatCondition } from 'arca-sdk';
 
 // 1. Autenticación con WSAA (se renueva automáticamente)
 const wsaa = new WsaaService({
@@ -99,15 +99,26 @@ const wsfe = new WsfeService({
   pointOfSale: 4,
 });
 
-// 3. Emitir Factura C — una línea
+// 3. Emitir Factura C
 const result = await wsfe.issueInvoiceC({
   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,   // RG 5616 — ver abajo
+  },
 });
 
 console.log('CAE:', result.cae);              // '75157992335329'
 console.log('Vto:', result.caeExpiry);        // '20260302'
 console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/?p=...'
 ```
+
+> [!IMPORTANT]
+> **`buyer.vatCondition` no es opcional en la práctica.** Homologación ya rechaza los
+> comprobantes que no lo informan, y en producción es obligatorio desde el 01/12/2026
+> (RG 5616). Si lo omitís, ARCA devuelve `Resultado = 'R'` y el SDK lanza
+> `ArcaRejectionError`. Detalle en "Normativas ARCA 2026", punto 0.
 
 > Los certificados se obtienen en el [portal de ARCA](https://auth.afip.gob.ar/contribuyente_/login.xhtml) (CLAVE FISCAL nivel 3+).
 
@@ -122,6 +133,7 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 | **WSAA** | Autenticación y Autorización | ✅ Completo |
 | **WSFE v1** | Facturación Electrónica (A, B, C) | ✅ Completo |
 | **Padrón A13** | Consulta de datos de contribuyentes | ✅ Completo |
+| **CAEA** | Contingencia: solicitud, consulta y rendición informativa | ⚠️ Implementado, sin verificar contra homologación |
 
 ### ✅ Tipos de comprobantes
 
@@ -150,9 +162,32 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 | Método | Descripción |
 |--------|-------------|
 | `wsfe.getInvoice(type, n)` | Consulta un comprobante ya emitido (FECompConsultar) |
-| `wsfe.getPointsOfSale()` | Lista puntos de venta habilitados (FEParamGetPtosVenta) |
+| `wsfe.getPointsOfSale()` | Lista puntos de venta habilitados (FEParamGetPtosVenta). Devuelve `[]` si el CUIT no tiene ninguno |
 | `WsfeService.checkStatus()` | Estado de los servidores de ARCA (FEDummy) |
 | `padron.getTaxpayer(cuit)` | Datos del contribuyente — nombre, domicilio, condición IVA |
+
+### ✅ Catálogos de referencia (`FEParamGet*`)
+
+Los enums de este SDK son una copia local del catálogo de ARCA: dan autocompletado y
+chequeo en compilación, pero **se desactualizan en silencio**. Estos métodos consultan la
+fuente autoritativa en vivo.
+
+| Método | Servicio | Devuelve |
+|--------|----------|----------|
+| `wsfe.getInvoiceTypes()` | `FEParamGetTiposCbte` | La lista real de comprobantes emitibles |
+| `wsfe.getVatRates()` | `FEParamGetTiposIva` | Alícuotas de IVA vigentes |
+| `wsfe.getTaxTypes()` | `FEParamGetTiposTributos` | Tributos para `taxes` |
+| `wsfe.getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Condiciones de IVA admitidas **para el emisor autenticado**, con la clase de comprobante en que aplican |
+| `wsfe.getExchangeRate(moneda, fecha?)` | `FEParamGetCotizacion` | Cotización oficial — usala en vez de fijar `exchangeRate` a mano |
+| `wsfe.getDocumentTypes()` | `FEParamGetTiposDoc` | Tipos de documento del receptor |
+| `wsfe.getCurrencies()` | `FEParamGetTiposMonedas` | Monedas |
+| `wsfe.getConceptTypes()` | `FEParamGetTiposConcepto` | Productos / servicios / ambos |
+| `wsfe.getOptionalTypes()` | `FEParamGetTiposOpcional` | Ids válidos para `optionals` |
+| `wsfe.getActivities()` | `FEParamGetActividades` | Actividades económicas del emisor |
+
+> **`getVatConditions()` depende del emisor**: ARCA devuelve las combinaciones válidas para
+> ese CUIT, que no coinciden necesariamente con la tabla del manual. Por eso esa relación
+> no está hardcodeada en el SDK.
 
 ---
 
@@ -179,7 +214,7 @@ console.log('QR URL:', result.qrUrl);
 ### Factura B con IVA discriminado
 
 ```typescript
-import { TaxIdType } from 'arca-sdk';
+import { TaxIdType, VatCondition } from 'arca-sdk';
 
 const result = await wsfe.issueInvoiceB({
   items: [
@@ -189,6 +224,7 @@ const result = await wsfe.issueInvoiceB({
   buyer: {
     docType: TaxIdType.CUIT,
     docNumber: '20987654321',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,
   },
 });
 
@@ -198,35 +234,55 @@ result.vat?.forEach(v => {
 });
 ```
 
-### Factura C con Parámetros Opcionales (Ej: Condición IVA Receptor - RG 5616)
+### Campos opcionales (`optionals`)
 
-AFIP requiere mediante la RG 5616 incluir la "Condición frente al IVA del receptor" en ciertas Facturas C, lo cual se envía a través del campo Opcionales.
+Los Opcionales son un array de pares `id`/`value` del esquema de ARCA, para datos que
+sólo aplican a ciertos regímenes. El caso más común es la **leyenda de Factura A** que
+exige la RG 5762/2025 — ver "Normativas ARCA 2026", punto 2.
+
+> [!IMPORTANT]
+> **La Condición frente al IVA del receptor NO se envía por `optionals`.** Tiene campo
+> propio: `buyer.vatCondition` (el `CondicionIVAReceptorId` del esquema). Hasta la v1.1.0
+> este README documentaba mandarla como un opcional; ese camino quedó obsoleto cuando el
+> Manual del Desarrollador le dio un campo propio, y **los valores del catálogo no son los
+> mismos**. Ver "Normativas ARCA 2026", punto 0.
 
 ```typescript
+import { TaxIdType, VatCondition } from 'arca-sdk';
+
 const result = await wsfe.issueInvoiceC({
   items: [
     { description: 'Licencia de software', quantity: 1, unitPrice: 15000 },
   ],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,   // ← campo propio, no un opcional
+  },
   optionals: [
-    {
-      id: 1010, // ID 1010: Condición IVA Receptor
-      value: '2' // 2: Responsable Monotributo
-    }
-  ]
+    { id: 5, value: '1' },   // consultá el catálogo antes de fijar un id a mano
+  ],
 });
-
-console.log('Factura emitida exitosamente con Opcionales integrados.');
 ```
+
+> El catálogo de ids válidos lo devuelve `wsfe.getOptionalTypes()`
+> (`FEParamGetTiposOpcional`). Es la fuente autoritativa: los ids que aplican dependen del
+> régimen y de la clase de comprobante.
 
 ### Nota de Crédito (Anulando factura previa)
 
 ```typescript
-import { InvoiceType } from 'arca-sdk';
+import { InvoiceType, TaxIdType, VatCondition } from 'arca-sdk';
 
 const result = await wsfe.issueCreditNoteC({
   items: [
     { description: 'Anulación de equipo defectuoso', quantity: 1, unitPrice: 45000 },
   ],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+  },
   // ⚠️ Obligatorio en NC/ND: especificar el comprobante original afectado
   associatedInvoices: [{
     type: InvoiceType.FACTURA_C, // La factura que estoy anulando
@@ -293,6 +349,11 @@ import { generateQRUrl } from 'arca-sdk';
 // 1. Ya viene integrado en todos los métodos de emisión:
 const result = await wsfe.issueInvoiceC({
   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+  },
 });
 console.log(result.qrUrl); // listo para embeber en un generador de QR
 
@@ -348,7 +409,11 @@ Con la eliminación total de la Factura Clase "M", ARCA instruyó el uso de Fact
   ```typescript
   const result = await wsfe.issueInvoiceA({
     items: [...],
-    buyer: { docType: TaxIdType.CUIT, docNumber: '30716024941' },
+    buyer: {
+      docType: TaxIdType.CUIT,
+      docNumber: '30716024941',
+      vatCondition: VatCondition.IVA_RESPONSABLE_INSCRIPTO,
+    },
     optionals: [
       {
         id: 5, // ID opcional para indicar la condicion
@@ -487,20 +552,32 @@ ARCA distingue dos cosas que conviene no confundir:
 
 ```typescript
 // Servicios
-import { WsaaService, WsfeService, PadronService } from 'arca-sdk';
+import { WsaaService, WsfeService, PadronService, CaeaService } from 'arca-sdk';
 
 // Enums y constantes
 import {
   InvoiceType, BillingConcept, TaxIdType, VatCondition,
-  VALID_VAT_CONDITION_IDS,
+  VALID_VAT_CONDITION_IDS, VAT_RATE_CODES,
 } from 'arca-sdk';
 
 // Tipos de configuración
-import type { WsaaConfig, WsfeConfig, CaeaConfig, TaxpayerServiceConfig } from 'arca-sdk';
+import type {
+  Environment, ArcaConfig,
+  WsaaConfig, WsfeConfig, CaeaConfig, TaxpayerServiceConfig,
+} from 'arca-sdk';
 
 // Tipos de respuesta
 import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus, InvoiceOptional } from 'arca-sdk';
 import type { TaxpayerResponse, Taxpayer, Address, Activity, TaxRecord } from 'arca-sdk';
+
+// Catálogos (FEParamGet*)
+import type { CatalogEntry, VatConditionEntry, CurrencyRate } from 'arca-sdk';
+
+// CAEA (contingencia)
+import type {
+  CAEASolicitarRequest, CAEASolicitarResponse, CAEAConsultarResponse,
+  CaeaInvoice, CAEARegInformativoResponse,
+} from 'arca-sdk';
 
 // Items de factura y opciones de emisión
 import type {
@@ -562,15 +639,23 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
+13 archivos, 152 tests:
+
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
-| Cálculos | `calculations.test.ts` | IVA, subtotales, totales con y sin IVA incluido |
-| QR | `qr.test.ts` | Generación de URL, limpieza de CUIT/CAE, campo comprador |
-| XML | `xml.test.ts` | Construcción de TRA, parsing WSAA, validación de CUIT |
+| WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
+| WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB`, `issueReceiptA`, `issueCreditNoteC`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866 |
+| CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen` |
 | Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA |
-| WSFE | `wsfe.test.ts` | issueSimpleReceipt, issueReceipt, issueInvoiceB, checkStatus |
-| CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, `CbteFchHsGen` |
-| XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD, escapado, Tributos, moneda, rechazos |
+| XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD en los dos builders, escapado, Tributos, moneda extranjera, rechazos |
+| XML / TRA | `xml.test.ts` | Construcción del TRA y sus márgenes de tiempo, parsing de WSAA, validación de CUIT |
+| Fechas | `formatArcaDate.test.ts` | Fecha-calendario vs. instante, conversión a UTC-3, `yyyymmddhhmmss` |
+| Cálculos | `calculations.test.ts` | IVA, subtotales, totales con y sin IVA incluido |
+| Cripto | `crypto.test.ts` | Validación de certificado y clave privada, firma CMS |
+| Ticket | `ticket.test.ts` | `TicketManager`: expiración y reuso |
+| Red | `network.test.ts` | Verificación de identidad del servidor de ARCA, ciphers OpenSSL vs. Bun |
+| Validaciones | `validation.test.ts` | Validaciones del constructor de `WsaaService` |
+| QR | `qr.test.ts` | Generación de URL, limpieza de CUIT/CAE, campo comprador |
 
 > `request-xml.test.ts` mira el XML que **sale**. El resto de la suite mockea la red y
 > sólo verifica la respuesta parseada, con lo cual un request mal formado pasa
@@ -580,8 +665,8 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ## Roadmap
 
-- [ ] `FEParamGetCotizacion` para traer la cotización oficial de ARCA
 - [ ] Comprobantes de Seguros de Caución (Manual v4.7, códigos 10273-10282)
+- [ ] Comprobantes clase B con receptor Sujeto No Categorizado (Manual v4.7, código 10283)
 - [ ] Soporte WSMTXCA (Factura de Crédito Electrónica MiPyME)
 - [ ] Soporte WSCT (Turismo)
 - [ ] Método `consultar()` para servicios adicionales del Padrón
