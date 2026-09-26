@@ -666,7 +666,7 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 ## Roadmap
 
 - [ ] Comprobantes de Seguros de Caución (Manual v4.7, códigos 10273-10282)
-- [ ] Comprobantes clase B con receptor Sujeto No Categorizado (Manual v4.7, código 10283)
+- [ ] Verificación en homologación de comprobantes clase B con receptor Sujeto No Categorizado (Manual v4.7, código 10283)
 - [ ] Soporte WSMTXCA (Factura de Crédito Electrónica MiPyME)
 - [ ] Soporte WSCT (Turismo)
 - [ ] Método `consultar()` para servicios adicionales del Padrón
