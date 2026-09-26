@@ -1,1 +1,0 @@
-src/services/wsfe.ts(828,24): error TS2304: Cannot find name 'ServiceDates'.
