@@ -37,6 +37,7 @@ Thumbs.db
 # Documentación interna
 docs/
 pendientes.md
+explicaciones.md
 
 .ai.npmrc
 .npmrc

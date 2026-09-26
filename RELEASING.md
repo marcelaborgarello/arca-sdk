@@ -3,31 +3,43 @@
 Checklist para publicar `arca-sdk` en npm. Está escrito porque los errores que tira
 npm son engañosos y cuestan más tiempo del que deberían.
 
-## TL;DR — se publica sola con un tag
+## TL;DR — se publica a mano, desde tu máquina
 
 ```bash
-git tag -a v2.0.0 -m "v2.0.0"
-git push origin --tags
+bun run lint && bun run test && bun run build
+npm publish --dry-run    # no publica: lista los archivos que subirían
+bun publish              # abre el navegador para autorizar
 ```
 
-El workflow `.github/workflows/release.yml` hace el resto: lint, tests, build y
-`npm publish` con **trusted publishing (OIDC)**. No hay token que crear, pegar ni
-revocar. Mirás el resultado en la pestaña *Actions*.
+`bun publish` no pide token: abre una URL donde autorizás la publicación con la llave
+(passkey) de la cuenta de npm, que en esta máquina está guardada con el PIN de Windows.
+Autorizás en el navegador y sube.
 
-Requiere haber configurado el trusted publisher **una sola vez** en npmjs.com (§2).
+> **Decidido el 2026-09-26: no hay publicación automática.** El repo tenía un workflow
+> (`.github/workflows/release.yml`) que publicaba solo al pushear un tag de versión, con
+> *trusted publishing* (OIDC). Se borró: la publicación la hace siempre la autora desde
+> su máquina, como fue siempre, y el workflow obligaba a manejar tags y una
+> configuración de trusted publisher en npmjs.com para resolver un problema —cómo
+> autentica un robot sin guardar credenciales— que no existe cuando publica una persona.
+>
+> Un camino, no dos. Dos caminos armados a la vez significaban que un tag pusheado por
+> cualquier motivo disparaba un intento de publicación.
+>
+> Si la configuración de **Trusted Publisher** quedó cargada en npmjs.com (paquete
+> `arca-sdk` → *Settings*), conviene borrarla: ya no hay workflow del otro lado.
 
-> ### ⚠️ El método viejo (token con bypass de 2FA) está siendo apagado
->
-> Hasta mediados de 2026 esto se publicaba con un **Granular Access Token con bypass
-> de 2FA**. npm [lo deprecó](https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation/):
->
-> - **Agosto 2026**: esos tokens ya no pueden hacer operaciones sensibles de cuenta,
->   paquete ni organización — **incluido crear tokens**.
-> - **~Enero 2027**: pierden la publicación directa. Quedan sólo para leer paquetes
->   privados y *stagear* publicaciones que después aprueba una persona con 2FA.
->
-> O sea: si el formulario de npm ya no te ofrece el toggle de bypass, o el token que
-> generás no publica, **no es un error tuyo**. Es la deprecación. Usá OIDC.
+### ⚠️ El token granular con bypass de 2FA ya no sirve
+
+Hasta mediados de 2026 esto se publicaba con un **Granular Access Token con bypass de
+2FA**. npm [lo deprecó](https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation/):
+
+- **Agosto 2026**: esos tokens ya no pueden hacer operaciones sensibles de cuenta,
+  paquete ni organización — **incluido crear tokens**.
+- **~Enero 2027**: pierden la publicación directa.
+
+O sea: si el formulario de npm ya no te ofrece el toggle de bypass, o el token que
+generás no publica, **no es un error tuyo**: es la deprecación. Por eso ahora se publica
+con la llave y la autorización por navegador.
 
 ## 1. Antes de commitear
 
@@ -72,94 +84,72 @@ CRLF. Normalizalo antes de commitear:
 sed -i 's/\r$//' ruta/al/archivo.ts
 ```
 
-## 2. Configurar trusted publishing (una sola vez)
+## 2. La credencial: la llave de npm
 
-Se hace una vez por paquete. Después no se toca más.
+No hay token guardado en ningún archivo. La cuenta de npm tiene una **llave (passkey)**
+registrada, y en esta máquina esa llave está protegida con el **PIN de Windows**. Cuando
+corrés `bun publish`, la consola imprime una URL: la abrís, autorizás con el PIN y la
+publicación sigue sola.
 
-En npmjs.com → paquete **arca-sdk** → *Settings* → **Trusted Publisher** → GitHub Actions:
-
-| Campo | Valor |
-|---|---|
-| Organization or user | `marcelaborgarello` |
-| Repository | `arca-sdk` |
-| Workflow filename | `release.yml` |
-| Environment name | *(vacío)* |
-
-**Sólo el nombre del archivo**, no la ruta: `release.yml`, no `.github/workflows/release.yml`.
-Si no coincide exactamente con el archivo del repo, npm rechaza el OIDC y el publish
-falla — y el error no dice que el problema sea ese.
-
-### Allowed actions: ojo con esto
-
-Las configuraciones creadas **después del 03/09/2026** vienen con `npm stage publish`
-marcado y el publish directo **desactivado**. Con eso, el workflow deja la versión
-*preparada* pero no publicada hasta que una persona la aprueba con 2FA.
-
-- Si querés que el tag publique solo → marcá también **`npm publish`**.
-- Si preferís aprobar a mano cada release (más seguro para una librería que instalan
-  terceros) → dejalo como viene y cambiá el paso final del workflow a
-  `npm stage publish`.
-
-Las dos opciones son válidas. La segunda agrega un clic y evita publicar una major por
-accidente desde un tag mal puesto.
-
-### Por qué ya no hay token
-
-El método anterior era un **Granular Access Token con bypass de 2FA**. npm
-[lo deprecó en julio de 2026](https://github.blog/changelog/2026-07-08-npm-install-time-security-and-gat-bypass2fa-deprecation/):
-desde agosto esos tokens no pueden hacer operaciones sensibles, y hacia enero de 2027
-pierden la publicación directa.
-
-Con OIDC no hay credencial de larga vida: GitHub firma un token efímero para esa
-corrida específica, atado a este repo y a este workflow. No se puede extraer de un log
-ni reutilizar. De yapa, npm publica las **provenance attestations** solo — el paquete
-queda con el sello de "verificado" en npmjs.com, sin pasarle `--provenance`.
+Es más seguro que el token que había antes, por dos razones: la llave **no se puede
+copiar** (vive en el hardware de la máquina, no en un archivo que se pueda filtrar en un
+log o en una captura de pantalla) y **no se puede pescar por phishing**, porque está atada
+al dominio de npm.
 
 > Nunca le pases un token de publish a un asistente ni lo pegues en una conversación.
-> Con trusted publishing directamente no hay token que pasar, que es el punto.
+> Con la llave directamente no hay nada que pegar, que es el punto.
 
-### Si necesitás publicar a mano igual
-
-Queda como plan B mientras el token viejo siga andando (hasta ~enero 2027). Requiere
-`npm profile get` en modo que acepte OTP, y en la práctica es lo que dejó de funcionar.
-Preferí el workflow.
+<!-- POR COMPLETAR: falta anotar el paso a paso exacto de esta pantalla (qué dice la URL,
+     qué botón se toca) la próxima vez que se publique. Lo de arriba describe el flujo
+     pero no se verificó contra una publicación real desde que se configuró la llave. -->
 
 ## 3. Publicar
 
-Antes, un último control local del contenido del tarball:
+Un último control local del contenido del tarball:
 
 ```bash
 npm publish --dry-run    # no publica; sólo lista los archivos. Deben ser 10.
 ```
 
-Y después, todo el release es esto:
+Y después:
 
 ```bash
-git tag -a v2.0.0 -m "v2.0.0"
-git push origin --tags
+bun publish
 ```
 
-El tag dispara `release.yml`, que verifica que el tag coincida con `package.json`,
-corre lint y tests, y publica. Seguilo desde la pestaña *Actions*.
+`prepublishOnly` corre `bun run build && bun run test` antes de subir: es la última red
+antes de algo irreversible. Se abre el navegador, autorizás con la llave, y termina.
 
 ```bash
 npm view arca-sdk version   # confirmá que subió
 ```
 
-> Si el workflow falla, arreglá y volvé a correrlo desde *Actions* con **Run workflow**
-> — no hace falta mover el tag. Si el tag quedó mal puesto:
-> `git tag -d v2.0.0 && git push origin :refs/tags/v2.0.0`, y lo creás de nuevo.
-> Eso se puede deshacer; una versión publicada en npm, no.
+> **Una versión publicada en npm no se puede deshacer ni reemplazar.** Si subiste algo
+> mal, la única salida es publicar otra versión encima. Por eso el `--dry-run` y por eso
+> el checklist.
+
+### Los tags de git son aparte
+
+Un **tag** es una marca en el historial que dice "esta versión salió de este commit".
+Ahora que no hay workflow, **crear un tag no publica nada**: es sólo un marcador para
+poder volver y ver qué código salió en cada versión.
+
+```bash
+git tag -a v2.2.0 -m "v2.2.0"     # después de publicar
+git push origin v2.2.0
+```
+
+Es opcional y no hace falta entenderlo para publicar. Queda anotado porque falta el tag
+`v2.0.0`, que nunca se creó.
 
 ## 4. Descifrar los errores de npm
 
 | Error | Qué significa en realidad |
 |---|---|
-| `E404 Not Found - PUT` / `'arca-sdk@X' does not exist in this registry` | **No es que el paquete no exista.** npm devuelve 404 en vez de 401/403 para no revelar si un paquete privado existe. Es autenticación fallida o token sin permiso. Desde agosto de 2026, la causa más probable es un token con bypass de 2FA, que ya no sirve: usá el workflow con OIDC. |
-| `E403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required` | Estás autenticada, pero falta el segundo factor. **`--otp=` no lo resuelve si entraste con `npm login` por navegador**: esa sesión no acepta OTP al publicar. El bypass de 2FA que pedía este mensaje está deprecado — la salida es trusted publishing. |
-| El formulario de npm no muestra el toggle de bypass de 2FA | No es tu navegador ni tu cuenta. npm lo está retirando (deprecado en julio de 2026). Configurá trusted publishing (§2). |
-| El workflow corre pero npm rechaza el OIDC | El *Workflow filename* del trusted publisher no coincide con el archivo real. Tiene que ser `release.yml` a secas, sin la ruta. |
-| El workflow dice OK pero el paquete no aparece publicado | La configuración quedó sólo con `npm stage publish`: la versión está preparada esperando aprobación con 2FA en npmjs.com. Ver §2, *Allowed actions*. |
+| `E404 Not Found - PUT` / `'arca-sdk@X' does not exist in this registry` | **No es que el paquete no exista.** npm devuelve 404 en vez de 401/403 para no revelar si un paquete privado existe. Es **autenticación fallida**: la sesión venció o la publicación no se autorizó en el navegador. Volvé a correr `bun publish` y autorizá. |
+| `E403 ... Two-factor authentication or granular access token with bypass 2fa enabled is required` | Estás autenticada pero falta el segundo factor, o sea que el publish salió por el camino viejo (token) en vez de la llave. El bypass de 2FA que pedía este mensaje está deprecado y no se puede volver a él. |
+| El formulario de npm no muestra el toggle de bypass de 2FA | No es tu navegador ni tu cuenta: npm lo retiró (deprecado en julio de 2026). Es correcto que no esté. |
+| Nunca se abre el navegador al publicar | La consola imprime la URL de autorización: si no se abrió sola, copiala y pegala a mano. |
 | `EOTP` | El OTP que pasaste es inválido o venció. Los códigos duran 30 segundos. |
 | `E403 ... cannot publish over previously published version` | Esa versión ya existe. npm no permite republicar: subí la versión en `package.json`. |
 | `npm warn ... "repository.url" was normalized` | Cosmético. No es la causa de ningún fallo de publish. Se silencia con `npm pkg fix`. |
@@ -173,11 +163,11 @@ Lo que importa es que sigan siendo **10 archivos**: si aparecen más, se coló a
 
 Dos cosas que ya se corrigieron y conviene no volver a romper:
 
-- **No dejes un PDF que empiece con `README` en la raíz.** npm fuerza la inclusión de
-  todo lo que matchee `README*`, sin importar el campo `files` ni el `.npmignore`. El
-  manual en PDF vive en `docs/manual.pdf` justamente por eso; si regenerás el PDF con
-  `md-to-pdf`, mandá la salida ahí y no a `README.pdf` (pesaba 557 kB, más de la mitad
-  del paquete).
+- **No dejes en la raíz ningún archivo que empiece con `README`** más allá de
+  `README.md`. npm fuerza la inclusión de todo lo que matchee `README*`, **sin importar
+  el campo `files` ni el `.npmignore`**. Ya pasó una vez con un `README.pdf` de 557 kB,
+  que se colaba al paquete y era más de la mitad del peso. (Ese PDF y las herramientas
+  que lo generaban se borraron el 2026-09-26: nada en el repo los enlazaba.)
 - **`LICENSE` tiene que existir en la raíz.** `package.json` declara MIT y el README
   tiene el badge apuntando al archivo. Sin él, el badge da 404 en GitHub y el paquete se
   publica sin el texto de la licencia, lo que deja ambigua la concesión de derechos.
