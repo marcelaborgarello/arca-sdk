@@ -12,7 +12,9 @@ import { formatArcaDate } from './formatArcaDate';
  */
 export function buildTRA(service: string, cuit: string): string {
     const now = new Date();
-    const genTime = new Date(now.getTime() - (10 * 60 * 1000)); 
+    // 10 minutos hacia atrás: cubre el desfasaje entre el reloj de quien integra y el
+    // de ARCA. Un reloj apenas adelantado manda un TRA "del futuro" y WSAA lo rechaza.
+    const genTime = new Date(now.getTime() - (10 * 60 * 1000));
     const expTime = new Date(now.getTime() + (12 * 60 * 60 * 1000));
 
     const tra = {

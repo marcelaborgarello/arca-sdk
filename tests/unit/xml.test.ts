@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { buildTRA, parseWsaaResponse, validateCUIT } from '../../src/utils/xml';
 import { ArcaAuthError } from '../../src/types/common';
 
@@ -21,6 +21,57 @@ describe('buildTRA', () => {
     // Verificar formato ISO
     expect(tra).toMatch(/<generationTime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
     expect(tra).toMatch(/<expirationTime>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/);
+  });
+
+  // Los dos tests de arriba verifican el formato, no los valores: con el signo del
+  // margen invertido siguen pasando, y ARCA rechazaría con el error 1005 ("el TRA ya
+  // expiró antes de ser presentado").
+  describe('márgenes de tiempo', () => {
+    function extraerFechas(tra: string): { gen: Date; exp: Date } {
+      const gen = tra.match(/<generationTime>([^<]+)<\/generationTime>/)?.[1];
+      const exp = tra.match(/<expirationTime>([^<]+)<\/expirationTime>/)?.[1];
+      if (!gen || !exp) throw new Error('El TRA no trae generationTime y expirationTime');
+      return { gen: new Date(gen), exp: new Date(exp) };
+    }
+
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.setSystemTime(new Date('2026-09-26T15:00:00.000Z'));
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    // El margen hacia atrás cubre el desfasaje entre el reloj del servidor de quien
+    // integra y el de ARCA: sin él, un reloj apenas adelantado manda un TRA "del
+    // futuro" y WSAA lo rechaza.
+    it('debe fechar el generationTime 10 minutos en el pasado', () => {
+      const { gen } = extraerFechas(buildTRA('wsfe', '20123456789'));
+
+      expect(gen.getTime()).toBe(Date.now() - 10 * 60 * 1000);
+      expect(gen.getTime()).toBeLessThan(Date.now());
+    });
+
+    it('debe fechar el expirationTime 12 horas en el futuro', () => {
+      const { exp } = extraerFechas(buildTRA('wsfe', '20123456789'));
+
+      expect(exp.getTime()).toBe(Date.now() + 12 * 60 * 60 * 1000);
+      expect(exp.getTime()).toBeGreaterThan(Date.now());
+    });
+
+    it('debe generar un TRA con la generación anterior a la expiración', () => {
+      const { gen, exp } = extraerFechas(buildTRA('wsfe', '20123456789'));
+
+      expect(gen.getTime()).toBeLessThan(exp.getTime());
+    });
+
+    it('debe usar el timestamp en segundos como uniqueId', () => {
+      const tra = buildTRA('wsfe', '20123456789');
+
+      const uniqueId = tra.match(/<uniqueId>(\d+)<\/uniqueId>/)?.[1];
+      expect(uniqueId).toBe(String(Math.floor(Date.now() / 1000)));
+    });
   });
 });
 
