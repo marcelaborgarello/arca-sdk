@@ -72,34 +72,34 @@ Ya contemplado (no reportar como novedad):
   Tope de $10.000.000 para identificar al comprador Consumidor Final.
 - **RG 5762/2025**: disolución de la Factura clase "M". Se emiten Facturas A con leyenda
   ("OPERACIÓN SUJETA A RETENCIÓN" / "PAGO EN CBU INFORMADA") vía el campo `optionals`.
-- **RG 5616/2024**: `CondicionIVAReceptorId`. Pasa a ser **obligatorio el 01/12/2026**
-  (manual v4.8) — no el 01/09, como afirman varias fuentes secundarias.
+- **RG 5616/2024**: `CondicionIVAReceptorId`. Implementado vía `buyer.vatCondition` y
+  validado localmente con `VALID_VAT_CONDITION_IDS` (2, 3 y 11 deprecados). Pasa a ser
+  **obligatorio el 01/12/2026** (manual v4.8) — no el 01/09.
+  > **Homologación ya lo rechaza** (verificado el 25/09/2026). Un `FECAESolicitar`
+  > sin `CondicionIVAReceptorId` vuelve con `Resultado = 'R'`, CAE vacío y la
+  > observación del **10246**, no la del 10245. Emitir sin ese campo ya es imposible
+  > ahí, y el SDK lo informa siempre que pueda.
 - **RG 5782** (manual v4.6, 01/08/2026): todos los puntos de venta CAEA pasan a
   Contingencia y `CbteFchHsGen` es obligatorio.
+- **Manual v4.5**: Tipo de documento receptor `31 - FCI CNV` (entidades financieras)
+  implementado en `TaxIdType.FCI_CNV` (hasta 4 dígitos, código 10271).
+- **Manual v4.7**: Otros tributos (`taxes` → array `<Tributos>` e `ImpTrib` dinámico)
+  implementado en ambos builders desde v2.0.0.
+- **Catálogos `FEParamGet*` (v2.1.0)**: diez métodos en `WsfeService` para consultar
+  fuentes autoritativas en vivo (`getInvoiceTypes`, `getVatRates`, `getExchangeRate`, etc.).
+- **Alícuotas de IVA**: `VAT_RATE_CODES` contempla las seis alícuotas oficiales
+  (incluyendo 5% y 2.5% vigentes desde 2014).
+- **`getPointsOfSale()`**: Devuelve `[]` cuando ARCA responde 602 (`Sin Resultados`).
 - Migración de endpoints `*.afip.gob.ar` → `*.arca.gob.ar` y QR en
   `https://www.arca.gob.ar/fe/qr/?p=...`.
 
-**Vigente y todavía NO implementado** (verificado contra el PDF el 25/09/2026):
+**Vigente y todavía NO implementado**:
 
 - **Manual v4.7 (01/09/2026)**: comprobantes de **Seguros de Caución** — códigos de
   validación 10273 a **10282** (son diez, no nueve), más la modificación del 10054.
-  En la misma versión entran las validaciones de **comprobantes clase B con receptor
-  Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA; modifica 10067 y 1425).
-  El 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado`
-  (RG 2126/2006) en el array `Tributos` — que el SDK **no construye**: `ImpTrib` está
-  fijo en `0.00` en los dos builders.
-- **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio y los
-  códigos 10245 (CAE) y 825 (CAEA) — los que sólo *observan* — quedan en desuso.
-  A partir de esa fecha el rechazo es 10246 / 826.
-
-  > **Homologación ya lo rechaza** (verificado el 25/09/2026). Un `FECAESolicitar`
-  > sin `CondicionIVAReceptorId` vuelve con `Resultado = 'R'`, CAE vacío y la
-  > observación del **10246**, no la del 10245. O sea: la fecha del 01/12/2026 es la
-  > de *producción*; homologación se adelantó para que se pueda probar. Emitir sin
-  > ese campo ya es imposible ahí, y el SDK lo informa siempre que pueda.
-- Tipo de documento receptor `31 - FCI CNV` (v4.5, 02/07/2026) todavía no está en el
-  enum `TaxIdType`. Con `DocTipo=31` el número de documento es numérico de hasta
-  4 dígitos (código 10271).
+- **Manual v4.7**: Verificación en homologación de comprobantes clase B con receptor
+  **Sujeto No Categorizado** (código 10283 / tributo ID 13). La infraestructura técnica
+  (`taxes`) ya existe, falta prueba de emisión real con CUIT 23000000000.
 
 ### `VatCondition` no es el catálogo de `CondicionIVAReceptorId`
 
@@ -108,9 +108,10 @@ que valida ARCA en ese campo —el que devuelve `FEParamGetCondicionIvaReceptor`
 1, 4, 5, 6, 7, 8, 9, 10, **13** (Monotributista Social), **15** (IVA No Alcanzado) y
 **16** (Monotributo Trabajador Independiente Promovido).
 
-No es correlativo: **2, 3 y 11 no existen ahí**. Mandarlos da rechazo 10242. Y cada
-código aplica sólo a ciertas clases de comprobante (10243 rechaza la combinación
-inválida; ej. Consumidor Final no va en Factura A).
+No es correlativo: **2, 3 y 11 no existen ahí** (están `@deprecated` en el enum).
+Mandarlos da rechazo 10242. El SDK valida el valor localmente antes de salir a la red
+con `VALID_VAT_CONDITION_IDS`. Y cada código aplica sólo a ciertas clases de comprobante
+(10243 rechaza la combinación inválida; ej. Consumidor Final no va en Factura A).
 
 ### Tique (81/82/83) vs. Factura: dos regímenes distintos, no dos formatos de lo mismo
 
@@ -212,29 +213,18 @@ El XML SOAP se arma con template strings, no con un serializador. **El orden de 
 elementos importa**: el esquema es un `sequence` y `FECAEADetRequest` extiende
 `FEDetRequest` agregando `CAEA` y `CbteFchHsGen` al final, en ese orden.
 
-La contracara de armar XML a mano: **hoy ningún valor se escapa**. Un `&`, `<` o `>`
-en un campo de texto genera XML inválido — el más fácil de disparar es un `Opcional`
-con razón social o domicilio (`'Belgrano 123 & Cía'`). Los campos numéricos (CUIT,
-importes) no corren riesgo, por eso no explotó todavía. Si tocás un builder, no
-agregues interpolaciones de texto libre sin escapar.
+- **Escapado XML (Resuelto v2.0.0)**: `escapeXml()` en `src/utils/xml.ts` escapa `<`, `>`,
+  `&`, `"` y `'` en todos los builders (`wsfe.ts`, `caea.ts`, `padron.ts`, `wsaa.ts`).
+  Si tocás un builder o agregás campos, asegurate de no interpolar texto libre sin escapar.
 
-**Deuda conocida — el orden está desviado del XSD en los dos builders**, no sólo en
-CAEA (verificado contra el manual el 25/09/2026):
-
-- `buildCAERequest()` (`src/services/wsfe.ts`): `CondicionIVAReceptorId` va pegado a
-  `DocNro` en vez de después de `MonCotiz`; `ImpTrib` e `ImpIVA` están invertidos; y
-  las `FchServ*` van después de `MonId/MonCotiz` en vez de antes.
-- `FECAEADetRequest` (`src/services/caea.ts`): `CondicionIVAReceptorId` pegado a
-  `DocNro`, las `FchServ*` después de `CbteFchHsGen`, y `CAEA`/`CbteFchHsGen` **no
-  están al final** (el XSD los pone después de `PeriodoAsoc`).
-
-Funciona hoy, así que ARCA está siendo tolerante. El riesgo real llega el **01/12/2026**:
-ese día `CondicionIVAReceptorId` se vuelve obligatorio y pasa de ser un campo que casi
-nadie manda a ir en todos los requests, en la posición equivocada.
-
-**Trampa al unificar los dos builders**: el orden de los importes es legítimamente
-distinto entre uno y otro. `FECAEDetRequest` define `ImpOpEx, ImpTrib, ImpIVA`;
-`FECAEADetRequest` define `ImpOpEx, ImpIVA, ImpTrib`. No es una errata del PDF.
+- **Orden del XSD (Resuelto v2.0.0)**: Ambos builders (`buildCAERequest()` y `FECAEADetRequest`)
+  respetan el `sequence` estricto del XSD oficial de ARCA. Esto está asegurado con tests de
+  orden en `tests/unit/request-xml.test.ts` (`expectSequence()`).
+- **Trampa al unificar los dos builders**: el orden de los importes es legítimamente
+  distinto entre uno y otro. `FECAEDetRequest` define `ImpOpEx, ImpTrib, ImpIVA`;
+  `FECAEADetRequest` define `ImpOpEx, ImpIVA, ImpTrib`. No es una errata del PDF.
+- **Tributos (`taxes`) (Resuelto v2.0.0)**: Se construye condicionalmente el bloque
+  `<ar:Tributos>` y se calcula `ImpTrib` dinámicamente en ambos servicios.
 
 **Resuelto (v1.4.2)**: bajo Bun, el `https.Agent` de `src/utils/network.ts` fallaba con
 `FailedToOpenSocket` porque `process.versions.node` también existe bajo Bun (por

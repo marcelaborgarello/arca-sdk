@@ -4,6 +4,35 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [2.2.0] — Unreleased
+
+### ✨ `getPointsOfSale()` devuelve `[]` en vez de lanzar ante el error 602
+
+- **Cambio de comportamiento**: Cuando el CUIT autenticado no tiene puntos de venta dados de alta o listados, ARCA responde con el error 602 (`Sin Resultados`). El método antes lanzaba un `ArcaError` que obligaba a inspeccionar el texto del mensaje para saber si no había puntos de venta o si falló la conexión. Ahora devuelve `[]`.
+- Se mantiene el lanzamiento de excepción en los demás métodos de consulta donde una lista vacía sí representa una anomalía.
+
+### 🐛 `getActivities()` devolvía siempre una lista vacía
+
+- **Bugfix crítico**: El método consultaba el elemento XML `ActividadTipo`, pero ARCA devuelve `ActividadesTipo` (en plural). Al no encontrar la clave, el método retornaba silenciosamente `[]`. Corregido y asegurado con tests de integración que exigen que ningún catálogo de ARCA retorne listas vacías ni campos `undefined`.
+
+### 🔐 Detección robusta de TA vigente en WSAA
+
+- **Bugfix**: La detección de ticket de acceso (TA) vigente en WSAA ahora reconoce tanto `"válido"` (con tilde) como `"valido"` (sin tilde), previniendo que variaciones de ortografía en las respuestas de ARCA impidan emitir el hint correspondiente y bloqueen la autenticación.
+
+### 📖 Documentación y ejemplos coherentes
+
+- **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
+- Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
+- Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
+- Sincronización completa de la suite de tests documentada (13 archivos, 152 tests unitarios).
+
+### ✅ Cobertura y testing
+
+- **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (76.85% de cobertura total).
+- **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 22 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
+
+---
+
 ## [2.1.0] — 2026-09-25
 
 ### 🐛 El SDK rechazaba dos alícuotas de IVA que ARCA acepta desde 2014
@@ -98,7 +127,7 @@ Los enums de este SDK son una copia local del catálogo de ARCA: dan autocomplet
 
 ### 📖 Normativa verificada contra el manual oficial
 
-- **Manual v4.7 (01/09/2026)** — ya vigente, **todavía no implementado**: comprobantes de Seguros de Caución (códigos 10273 a **10282**) y validaciones de comprobantes clase B con receptor **Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA). El código 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` (RG 2126/2006) en el array `Tributos`, que el SDK aún no construye.
+- **Manual v4.7 (01/09/2026)** — ya vigente, **todavía no implementado**: comprobantes de Seguros de Caución (códigos 10273 a **10282**) y validaciones de comprobantes clase B con receptor **Sujeto No Categorizado** (10283 para CAE, 1527 para CAEA). El código 10283 exige informar el tributo `ID 13 – Percepción de IVA No Categorizado` (RG 2126/2006) en el array `Tributos` (desbloqueado con el nuevo campo `taxes`, pendiente de verificación en homologación).
 - **Manual v4.8 (01/12/2026)**: `CondicionIVAReceptorId` pasa a obligatorio; los códigos 10245 (CAE) y 825 (CAEA), que hoy sólo observan, quedan en desuso y el rechazo pasa a ser 10246 / 826. Se confirma el **01/12**, no el 01/09 que indican varias fuentes secundarias.
 - **Homologación ya rechaza los comprobantes sin `CondicionIVAReceptorId`** (verificado contra ARCA el 25/09/2026): la respuesta vuelve con `Resultado = 'R'`, CAE vacío y la observación del código **10246** ("es obligatorio"), no la del 10245 ("resultará obligatorio"). La fecha del 01/12/2026 es la de **producción**; homologación se adelantó para que se pueda probar. Informá siempre `buyer.vatCondition`.
 
