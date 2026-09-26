@@ -333,4 +333,66 @@ describe('WsfeService', () => {
       expect(result.cae).toBeDefined();
     });
   });
+
+  describe('getPointsOfSale', () => {
+    function mockPtosVenta(inner: string): void {
+      (callArcaApi as any).mockResolvedValueOnce({
+        ok: true,
+        text: async () => `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <FEParamGetPtosVentaResponse xmlns="http://ar.gov.afip.dif.FEV1/">
+      <FEParamGetPtosVentaResult>${inner}</FEParamGetPtosVentaResult>
+    </FEParamGetPtosVentaResponse>
+  </soapenv:Body>
+</soapenv:Envelope>`,
+      });
+    }
+
+    it('mapea los puntos de venta que informa ARCA', async () => {
+      mockPtosVenta(`
+        <ResultGet>
+          <PtoVenta><Nro>1</Nro><EmisionTipo>CAE</EmisionTipo><Bloqueado>N</Bloqueado><FchBaja>NULL</FchBaja></PtoVenta>
+          <PtoVenta><Nro>2</Nro><EmisionTipo>CAEA</EmisionTipo><Bloqueado>S</Bloqueado><FchBaja>20260101</FchBaja></PtoVenta>
+        </ResultGet>`);
+
+      const puntos = await new WsfeService(BASE_CONFIG).getPointsOfSale();
+
+      expect(puntos).toHaveLength(2);
+      expect(puntos[0]).toMatchObject({ number: 1, type: 'CAE', isBlocked: false });
+      expect(puntos[1]).toMatchObject({ number: 2, type: 'CAEA', isBlocked: true, blockedSince: '20260101' });
+    });
+
+    // ARCA devuelve un solo elemento como objeto pelado, no como array de uno.
+    it('normaliza la respuesta de un único punto de venta', async () => {
+      mockPtosVenta(`
+        <ResultGet>
+          <PtoVenta><Nro>1</Nro><EmisionTipo>CAE</EmisionTipo><Bloqueado>N</Bloqueado></PtoVenta>
+        </ResultGet>`);
+
+      const puntos = await new WsfeService(BASE_CONFIG).getPointsOfSale();
+
+      expect(puntos).toHaveLength(1);
+      expect(puntos[0].number).toBe(1);
+    });
+
+    // Verificado contra homologación el 2026-09-25: un CUIT sin puntos de venta
+    // listados no recibe una lista vacía sino el error 602 "Sin Resultados". No tener
+    // ninguno es un estado normal —ese CUIT igual emite en el PV 1—, así que el SDK lo
+    // traduce a `[]` en vez de lanzar: distinguirlo de un certificado vencido no puede
+    // depender de leer el texto del mensaje.
+    it('devuelve [] cuando ARCA responde 602 Sin Resultados', async () => {
+      mockPtosVenta('<Errors><Err><Code>602</Code><Msg>Sin Resultados: - Metodo FEParamGetPtosVenta</Msg></Err></Errors>');
+
+      await expect(new WsfeService(BASE_CONFIG).getPointsOfSale()).resolves.toEqual([]);
+    });
+
+    // El 602 es la única excepción: cualquier otro error sigue lanzando.
+    it('lanza ante un error de ARCA que no sea el 602', async () => {
+      mockPtosVenta('<Errors><Err><Code>600</Code><Msg>Token invalido</Msg></Err></Errors>');
+
+      await expect(new WsfeService(BASE_CONFIG).getPointsOfSale())
+        .rejects.toThrow('Token invalido');
+    });
+  });
 });

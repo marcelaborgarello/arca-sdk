@@ -479,6 +479,17 @@ export class WsfeService {
 
     /**
      * Lista los puntos de venta habilitados para el CUIT autenticado (FEParamGetPtosVenta).
+     *
+     * **Devuelve `[]` cuando el CUIT no tiene ninguno listado**, en vez de lanzar. ARCA
+     * contesta ese caso con el error 602 (`Sin Resultados`), pero no tener puntos de
+     * venta listados es un estado normal, no una falla: obligar a distinguirlo de un
+     * certificado vencido inspeccionando el texto del mensaje es una trampa.
+     *
+     * Ojo: una lista vacía **no significa que no se pueda facturar**. El CUIT de
+     * homologación del proyecto no lista ninguno y sin embargo emite en el punto de
+     * venta 1. Usá este método para mostrar opciones, no para validar.
+     *
+     * @since 2.2.0 Antes lanzaba `ArcaError` en ese caso.
      */
     async getPointsOfSale(): Promise<PointOfSale[]> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -521,6 +532,17 @@ export class WsfeService {
 
         if (data.Errors) {
             const error = Array.isArray(data.Errors.Err) ? data.Errors.Err[0] : data.Errors.Err;
+
+            // 602 = "Sin Resultados". Para este método es la forma en que ARCA dice
+            // "este CUIT no tiene puntos de venta listados", que es un estado normal y
+            // no un error. Se traduce a lista vacía para que el que integra no tenga
+            // que distinguirlo de una falla real leyendo el mensaje.
+            //
+            // A propósito NO se hace lo mismo en callParamMethod(): ahí un catálogo
+            // vacío sí sería una anomalía del servicio, y taparla reintroduce el bug
+            // de la lista vacía silenciosa (ver getActivities en la v2.1.0).
+            if (String(error?.Code) === '602') return [];
+
             throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
         }
 
