@@ -175,7 +175,11 @@ export class WsaaService {
             // ARCA no emite un TA nuevo mientras el anterior siga vigente (12 h). Sin
             // persistencia, cada proceso nuevo vuelve a pedir uno y queda bloqueado.
             // El faultstring no trae código, así que se detecta por texto.
-            const hint = /ya posee un TA valido/i.test(faultString)
+            //
+            // Hoy ARCA escribe "valido" sin tilde, pero es prosa de un mensaje de error,
+            // no un código: puede corregirse en cualquier deploy. Se aceptan las dos
+            // grafías para que el hint no desaparezca en silencio por una tilde.
+            const hint = /ya posee un TA v[aá]lido/i.test(faultString)
                 ? getArcaHint('ALREADY_HAS_TA')
                 : undefined;
 
