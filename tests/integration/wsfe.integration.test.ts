@@ -3,6 +3,7 @@ import { VAT_RATE_CODES, VALID_VAT_CONDITION_IDS } from '../../src/types/wsfe';
 import { WsaaService } from '../../src/auth/wsaa';
 import { WsfeService } from '../../src/services/wsfe';
 import { InvoiceType, BillingConcept, TaxIdType, VatCondition } from '../../src/types/wsfe';
+import type { CatalogEntry } from '../../src/types/wsfe';
 import type { LoginTicket } from '../../src/types/wsaa';
 import { ArcaRejectionError } from '../../src/types/common';
 import { getIntegrationConfig, fileTokenStorage } from './helpers';
@@ -151,6 +152,104 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
     // que se desactualiza. Estos tests comparan una contra otra: si ARCA agrega un
     // valor, se ponen en rojo y avisan que hay que actualizar el enum.
     describe('catálogos de referencia', () => {
+        /**
+         * Los diez métodos que devuelven una lista, con la cantidad de entradas vista
+         * contra homologación el 2026-09-25 como referencia (no se asertan: si ARCA
+         * agrega o da de baja un valor, eso no es una falla del SDK).
+         *
+         * La tabla está para que agregar un catálogo nuevo sin test sea imposible de
+         * pasar por alto: el método entra acá o no entra a la API pública.
+         */
+        const CATALOGOS: Array<{
+            nombre: string;
+            traer: (w: WsfeService) => Promise<CatalogEntry[]>;
+            vistos: number;
+        }> = [
+            { nombre: 'getInvoiceTypes', traer: w => w.getInvoiceTypes(), vistos: 48 },
+            { nombre: 'getVatRates', traer: w => w.getVatRates(), vistos: 6 },
+            { nombre: 'getTaxTypes', traer: w => w.getTaxTypes(), vistos: 11 },
+            { nombre: 'getDocumentTypes', traer: w => w.getDocumentTypes(), vistos: 36 },
+            { nombre: 'getCurrencies', traer: w => w.getCurrencies(), vistos: 49 },
+            { nombre: 'getOptionalTypes', traer: w => w.getOptionalTypes(), vistos: 25 },
+            { nombre: 'getConceptTypes', traer: w => w.getConceptTypes(), vistos: 3 },
+            { nombre: 'getVatConditions', traer: w => w.getVatConditions(), vistos: 11 },
+            { nombre: 'getActivities', traer: w => w.getActivities(), vistos: 1 },
+        ];
+
+        /**
+         * **Ningún catálogo devuelve una lista vacía.**
+         *
+         * Es el test que faltaba. `getActivities()` devolvió `[]` desde la v2.1.0
+         * porque buscaba el elemento `ActividadTipo` y ARCA manda `ActividadesTipo`:
+         * `toArray()` traduce el `undefined` de una clave inexistente a lista vacía,
+         * así que un nombre mal escrito es indistinguible de "ARCA no tiene datos".
+         * Se agregaron once métodos y se testearon cuatro; seis andaban por casualidad.
+         *
+         * Se asertan también `id` y `description` no vacíos porque el mapeo usa
+         * `String(e.Id)`: con el elemento bien y los campos internos mal, la lista
+         * viene con el largo correcto y cada entrada dice el string `'undefined'`.
+         */
+        it.each(CATALOGOS)('$nombre devuelve entradas con id y descripción', async ({ nombre, traer }) => {
+            const entradas = await traer(makeService());
+
+            expect(
+                entradas.length,
+                `${nombre} devolvió una lista vacía. Casi siempre significa que el nombre ` +
+                'del elemento XML no coincide con el que manda ARCA, no que ARCA no tenga datos: ' +
+                'mirá el XML crudo de la respuesta antes de asumir que el catálogo está vacío.'
+            ).toBeGreaterThan(0);
+
+            for (const entrada of entradas) {
+                expect(
+                    entrada.id,
+                    `${nombre} devolvió una entrada sin Id (${JSON.stringify(entrada)})`
+                ).toMatch(/^\S+$/);
+                expect(entrada.id, `${nombre}: el campo Id no se mapeó`).not.toBe('undefined');
+                expect(
+                    entrada.description,
+                    `${nombre}: el campo Desc no se mapeó (${JSON.stringify(entrada)})`
+                ).not.toBe('undefined');
+                expect(entrada.description.length).toBeGreaterThan(0);
+            }
+        });
+
+        // Regresión del bug de la v2.1.0: este método devolvía `[]` y era el único roto
+        // de los once. Verificado contra homologación mirando el XML crudo, que trae
+        // <ActividadesTipo><Id>181200</Id><Orden>1</Orden><Desc>SERVICIOS...</Desc>.
+        it('getActivities devuelve la actividad del emisor con código numérico', async () => {
+            const actividades = await makeService().getActivities();
+
+            expect(actividades.length).toBeGreaterThan(0);
+            for (const act of actividades) {
+                expect(act.id).toMatch(/^\d+$/);
+            }
+        });
+
+        // No entra en la regla de "ninguna lista vacía": el CUIT de homologación no
+        // lista puntos de venta y sin embargo emite en el PV 1, así que `[]` es una
+        // respuesta legítima. ARCA la informa como error 602 ("Sin Resultados") y el
+        // SDK la traduce a lista vacía: este test verifica que no lance.
+        it('getPointsOfSale resuelve y devuelve entradas con forma válida', async () => {
+            const puntos = await makeService().getPointsOfSale();
+
+            expect(Array.isArray(puntos)).toBe(true);
+            for (const pv of puntos) {
+                expect(pv.number).toBeGreaterThan(0);
+                expect(typeof pv.isBlocked).toBe('boolean');
+            }
+        });
+
+        // `Number(undefined)` es NaN y `String(undefined)` es 'undefined': sin asertar
+        // el tipo, un cambio en los nombres de campo pasa como cotización válida.
+        it('getExchangeRate devuelve una cotización numérica y una fecha yyyymmdd', async () => {
+            const cotizacion = await makeService().getExchangeRate('DOL');
+
+            expect(cotizacion.currency).toBe('DOL');
+            expect(Number.isFinite(cotizacion.rate)).toBe(true);
+            expect(cotizacion.rate).toBeGreaterThan(0);
+            expect(cotizacion.date).toMatch(/^\d{8}$/);
+        });
+
         it('devuelve las alícuotas de IVA y el SDK las tiene todas', async () => {
             const rates = await makeService().getVatRates();
 

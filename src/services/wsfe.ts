@@ -674,7 +674,7 @@ export class WsfeService {
      * Actividades vigentes del emisor (`FEParamGetActividades`).
      */
     async getActivities(): Promise<CatalogEntry[]> {
-        return this.getCatalog('FEParamGetActividades', 'ActividadTipo');
+        return this.getCatalog('FEParamGetActividades', 'ActividadesTipo');
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
