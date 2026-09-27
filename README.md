@@ -458,10 +458,9 @@ await wsfe.issueCreditNoteA({
 
 > **Por qué no hay helper de emisión todavía.** Los cuatro tipos están verificados contra
 > el catálogo de ARCA (`FEParamGetTiposCbte`, consultado el 27/09/2026), pero **nunca se
-> emitió uno realmente** en homologación: el CUIT de prueba del proyecto es
-> monotributista y no puede emitir clase A. Un helper afirma que el camino funciona, y
-> eso todavía no está probado — es exactamente lo que produjo el episodio del error 11001
-> con los Tique. Si necesitás emitirlos,
+> emitió uno realmente** en homologación. Un helper afirma que el camino funciona, y eso
+> todavía no está probado — es exactamente lo que produjo el episodio del error 11001 con
+> los Tique. Si necesitás emitirlos,
 > [abrí un issue](https://github.com/marcelaborgarello/arca-sdk/issues).
 
 > **La leyenda de "Pago en CBU informada"** de la misma RG **no está implementada** y no

@@ -69,8 +69,57 @@ expiró.
 - Certificado de **homologación** (emitido por "Computadores Test"), no de producción.
 - El CUIT tiene que tener la relación con el servicio `wsfe` habilitada.
 - El punto de venta tiene que estar dado de alta **como Webservices** en el portal.
-  Si `FEParamGetPtosVenta` devuelve "Sin Resultados", falta ese alta y la emisión va
-  a fallar con 10048 o 602.
+
+> **`FEParamGetPtosVenta` vacío no significa nada.** Hasta el 27/09/2026 acá decía que
+> si devuelve "Sin Resultados" falta el alta del punto de venta y la emisión va a fallar
+> con 10048 o 602. **Es falso**, y medido: en homologación devuelve `[]` para el CUIT
+> del proyecto *y* para el CUIT de prueba 30000000007, y los dos facturan sin problema
+> desde el punto de venta 1 (el del proyecto lleva 26 Facturas C). La lista vacía no
+> predice nada — no la uses como diagnóstico.
+
+## Probar comprobantes clase A siendo monotributista
+
+Se puede, y no hace falta pedirle un CUIT prestado a nadie. El certificado identifica al
+**sistema cliente**, no al contribuyente: el CUIT emisor viaja aparte, en `<Auth><Cuit>`,
+que en el SDK es `config.cuit`. **No hay que cambiar una línea de código ni generar otro
+certificado.**
+
+Receta, verificada el 27/09/2026 (Factura A autorizada, CAE `86390929393429`):
+
+1. Entrar a [WSASS homologación](https://wsass-homo.afip.gob.ar/wsass/portal/main.aspx)
+   con Clave Fiscal → **"Crear autorización a servicio"**.
+2. Dejar el alias del DN, poner el CUIT a representar en **"CUIT representado"** y elegir
+   el servicio `wsfe`. El campo *"CUIT autorizante"* queda clavado en el usuario conectado:
+   **homologación no valida la representación**, no hay consentimiento de un tercero.
+3. **Pedir un TA nuevo** (ver abajo, es el paso que más confunde).
+4. Correr con `ARCA_TEST_CUIT=<CUIT representado>`. El `WsaaService` se sigue construyendo
+   con el CUIT del certificado; sólo cambia el del `WsfeService`.
+
+Para clase A sirve el CUIT de prueba **30000000007**, que ARCA acepta como emisor de
+comprobantes A. Ojo con dos cosas:
+
+- **La numeración es compartida** con el resto de los desarrolladores que lo usen.
+  Consultar siempre el último autorizado; nunca hardcodear un número.
+- Un receptor inexistente **no hace fallar** el comprobante: `20000000001` no está en el
+  padrón y ARCA igual autorizó, devolviendo `Resultado = 'A'` **con** una observación.
+  Eso no es un error (ver "Rechazo ≠ error" en `CLAUDE.md`).
+
+### La delegación tiene que existir ANTES de pedir el TA
+
+Es el detalle que no está documentado en ningún manual de ARCA y cuesta media hora
+entenderlo.
+
+**El TA trae congelada la lista de relaciones del momento en que se emitió.** Si creás la
+delegación en WSASS y reusás un TA anterior —el que cachea `.ta-cache.json`, por
+ejemplo— wsfev1 la ignora y devuelve:
+
+```
+Error ARCA 600: ValidacionDeToken: No aparecio CUIT en lista de relaciones: 30000000007
+```
+
+No es que la delegación no sirva: es que ese token no la conoce. **Después de crear
+cualquier delegación nueva, borrá el cache de TA.** Y acordate del bloqueo de 10 minutos
+de arriba: si el TA anterior se generó recién, hay que esperar.
 
 ## Regla de diseño
 

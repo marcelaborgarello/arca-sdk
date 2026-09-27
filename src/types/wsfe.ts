@@ -51,10 +51,9 @@ export enum InvoiceType {
      * ({@link WsfeService.getInvoice}) y **asociar** ({@link AssociatedInvoice.type},
      * para una Nota de Crédito que anule una Factura A con leyenda).
      *
-     * @remarks **No se verificó por emisión real.** El CUIT de homologación del proyecto
-     * es monotributista y no puede emitir comprobantes clase A, así que la única prueba
-     * es que ARCA los lista en su catálogo. Por eso tampoco hay helper dedicado: un
-     * helper afirma que el camino funciona, y eso todavía no está probado.
+     * @remarks **No se verificó por emisión real.** La única prueba es que ARCA lo lista
+     * en su catálogo. Por eso tampoco hay helper dedicado: un helper afirma que el camino
+     * funciona, y eso todavía no está probado.
      *
      * Disponible desde v2.2.0.
      */

@@ -38,7 +38,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 ### ✨ Comprobantes "A con leyenda Operación Sujeta a Retención" (RG 5762/2025)
 
 - Se agregan a `InvoiceType`: **`FACTURA_A_LEYENDA`** (51), **`NOTA_DEBITO_A_LEYENDA`** (52), **`NOTA_CREDITO_A_LEYENDA`** (53) y **`RECIBO_A_LEYENDA`** (54). Aditivo: no cambia ninguna firma.
-- **El SDK todavía no puede emitirlos**, y no hay helper dedicado a propósito: los métodos de emisión fijan internamente su `CbteTipo` y no existe uno genérico que reciba un `InvoiceType`. Los valores sirven hoy para `getInvoice()` y para `associatedInvoices[].type` — por ejemplo, para emitir una Nota de Crédito que anule una Factura A con leyenda. Verificados contra `FEParamGetTiposCbte` (vigentes desde el **22/05/2015**, o sea que la RG 5762 no los creó: los convirtió en el reemplazo de la clase "M"), pero **nunca se emitió uno realmente**: el CUIT de homologación del proyecto es monotributista y no puede emitir clase A. Un helper afirma que el camino funciona, y eso no está probado.
+- **El SDK todavía no puede emitirlos**, y no hay helper dedicado a propósito: los métodos de emisión fijan internamente su `CbteTipo` y no existe uno genérico que reciba un `InvoiceType`. Los valores sirven hoy para `getInvoice()` y para `associatedInvoices[].type` — por ejemplo, para emitir una Nota de Crédito que anule una Factura A con leyenda. Verificados contra `FEParamGetTiposCbte` (vigentes desde el **22/05/2015**, o sea que la RG 5762 no los creó: los convirtió en el reemplazo de la clase "M"), pero **nunca se emitió uno realmente**. Un helper afirma que el camino funciona, y eso no está probado.
 
 ### 📖 El README enseñaba un mecanismo que no existe para la leyenda de la RG 5762
 
@@ -71,6 +71,8 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 - **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (76.85% de cobertura total).
 - **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 22 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
+- **El IVA discriminado corrió por primera vez contra ARCA real.** Hasta el 27/09/2026 el array `<Iva>`, `ImpIVA` y `AlicIva` nunca habían pasado por homologación: el CUIT de prueba del proyecto es monotributista y se creía que eso impedía emitir clase A. **Es falso** — delegando en WSASS a un CUIT Responsable Inscripto de prueba se emite sin cambiar una línea de código, porque el certificado identifica al *sistema cliente* y el CUIT emisor viaja aparte en `<Auth><Cuit>`. Se autorizó una Factura A con IVA discriminado. La receta quedó en `tests/integration/README.md`.
+  > **Alcance declarado**: corrió **una sola alícuota, el 21%**. Las otras cinco de `VAT_RATE_CODES` (0, 2,5, 5, 10,5 y 27%) siguen sin haber pasado por ARCA — y el 5% y el 2,5% son justamente las que el SDK rechazaba por error hasta la v2.1.0.
 - **Suite del diccionario de errores**: Nueva suite `tests/unit/errors.test.ts` con 8 tests. Un hint no lo mira ni el compilador ni ningún otro test, así que puede quedar congelado —o colgado del código equivocado— sin que nada se ponga en rojo: es exactamente lo que pasó con el 10043. El test exige que el hint del 10019 siga nombrando todas las alícuotas de `VAT_RATE_CODES`. **Alcance declarado: cubre sólo los dos códigos de IVA**; los otros ~38 hints del diccionario siguen sin cobertura.
 
 ---

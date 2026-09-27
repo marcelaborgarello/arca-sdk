@@ -85,7 +85,14 @@ Ya contemplado (no reportar como novedad):
   > **El SDK no puede emitirlas todavía**: `issueDocument()` es privado y no hay método
   > público que reciba un `InvoiceType`. Los valores del enum sirven hoy para
   > `getInvoice()` y para `associatedInvoices[].type`. No agregar helper dedicado sin una
-  > emisión real — el CUIT de homologación del proyecto es monotributista y no puede.
+  > emisión real de un **51**, que nunca se hizo.
+  >
+  > Hasta el 27/09/2026 este archivo daba otro motivo: *"el CUIT de homologación del
+  > proyecto es monotributista y no puede"*. **Ese motivo era falso.** Delegando en WSASS
+  > a un CUIT Responsable Inscripto de prueba se emite clase A sin problema — ese día se
+  > autorizó una Factura A (`CbteTipo` 1) con CAE. La receta está en
+  > `tests/integration/README.md`. O sea: probar el 51 hoy **es posible**, sólo falta
+  > hacerlo.
   >
   > La leyenda **"PAGO EN CBU INFORMADA"** de la misma RG **no figura en ninguna de las
   > 202 páginas del manual v4.8** y no se sabe por qué campo viaja. Los opcionales de CBU
@@ -290,7 +297,7 @@ prueba que el SDK hace lo que creemos, no que ARCA lo acepte.
 
 Es opt-in por variables de entorno y no corre en CI. Ver `tests/integration/README.md`.
 
-Dos cosas que muerden:
+Tres cosas que muerden:
 
 - **Teniendo un TA vigente, ARCA se niega a emitir otro por unos minutos.** Sin persistir
   el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"*. Por eso los
@@ -307,6 +314,23 @@ Dos cosas que muerden:
   > correr los tests de integración cuesta 10 minutos, no un día.
 - La numeración es correlativa y real: no correr dos suites en paralelo contra el mismo
   punto de venta.
+- **Una delegación nueva no sirve con un TA viejo.** El TA trae congelada la lista de
+  relaciones del momento en que se emitió: si delegás un CUIT en WSASS y reusás el TA
+  cacheado, wsfev1 devuelve *"ValidacionDeToken: No aparecio CUIT en lista de
+  relaciones"* (error 600). Hay que borrar `.ta-cache.json` y pedir uno nuevo.
+  No está documentado en ningún manual de ARCA.
+
+> **Se puede probar clase A aunque el CUIT del proyecto sea monotributista.** Delegando
+> en WSASS a un CUIT Responsable Inscripto de prueba (`30000000007` sirve). El
+> certificado no cambia: identifica al sistema cliente, no al contribuyente, y el CUIT
+> emisor viaja en `<Auth><Cuit>` (`config.cuit`). Verificado el 27/09/2026 con una
+> Factura A autorizada. La receta completa está en `tests/integration/README.md`.
+> Con eso, el IVA discriminado (el array `<Iva>`, `ImpIVA`, `AlicIva`) **corrió por
+> primera vez contra ARCA real**, cosa que hasta ese día no había pasado nunca. Pero
+> ojo con el alcance: corrió **una sola alícuota, el 21%**. Las otras cinco de
+> `VAT_RATE_CODES` —0, 2,5, 5, 10,5 y 27%— siguen sin haber pasado por ARCA, y el **5%
+> y el 2,5% son justamente los que el SDK rechazaba por error hasta la v2.1.0**. El
+> agujero se angostó, no se cerró.
 
 **Regla de diseño**: ningún tipo de comprobante entra al enum público ni recibe helper
 dedicado sin una corrida verde ahí. La lista autoritativa la da `FEParamGetTiposCbte`.
