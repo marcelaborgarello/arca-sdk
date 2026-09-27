@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WsfeService } from '../../src/services/wsfe';
 import { callArcaApi } from '../../src/utils/network';
-import { InvoiceType, BillingConcept, TaxIdType, VatCondition } from '../../src/types/wsfe';
+import { InvoiceType, BillingConcept, TaxIdType, VatCondition, VAT_RATE_CODES, listVatRates } from '../../src/types/wsfe';
+import { ArcaValidationError } from '../../src/types/common';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -394,5 +395,128 @@ describe('WsfeService', () => {
       await expect(new WsfeService(BASE_CONFIG).getPointsOfSale())
         .rejects.toThrow('Token invalido');
     });
+  });
+});
+
+/**
+ * Los dos hints de alícuota de `WsfeService`.
+ *
+ * Por qué existen estos tests: un hint no lo mira ni el compilador ni ningún otro test.
+ * Hasta acá, el de `validateItemsWithVAT` nombraba **cuatro** alícuotas de las seis —el
+ * SDK aceptaba el 5% y el 2,5% y en el mismo mensaje le decía al usuario que no
+ * existían— y la suite estaba entera en verde. El camino de la alícuota inválida no
+ * tenía ningún test.
+ *
+ * Ahora los dos textos se derivan de `VAT_RATE_CODES`. Esto verifica que sigan
+ * derivados: si alguien vuelve a escribir la lista a mano y queda corta, se pone rojo.
+ */
+describe('WsfeService — los hints de alícuota de IVA', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  /**
+   * Alícuotas de `rates` que el texto no nombra como número suelto.
+   *
+   * Vive afuera de los tests a propósito, igual que en `errors.test.ts`: así se la
+   * puede correr contra un texto **inventado** y comprobar que detecta lo que dice
+   * detectar. Un chequeo debilitado por descuido quedaría verde para siempre y sería
+   * indistinguible de uno que funciona.
+   *
+   * No reutiliza `listVatRates()` a propósito: si lo hiciera, estaría comparando la
+   * función consigo misma y un error dentro de ella pasaría desapercibido.
+   */
+  function alicuotasNoNombradas(
+    texto: string,
+    rates: Readonly<Record<number, number>> = VAT_RATE_CODES,
+  ): string[] {
+    return Object.keys(rates)
+      .filter(porcentaje => {
+        // El número tiene que aparecer suelto. Dos trampas, las dos reales:
+        //   - el "5" de "10.5" no es el 5%      → no puede venir precedido de dígito ni punto
+        //   - el "27" de "27." SÍ es el 27%     → el punto final de una oración no es un decimal,
+        //                                         así que sólo descarta si le sigue un dígito
+        const suelto = new RegExp(`(^|[^\\d.])${porcentaje.replace('.', '\\.')}(?!\\d)(?!\\.\\d)`);
+        return !suelto.test(texto);
+      })
+      // Orden numérico: `Object.keys` devuelve primero las claves enteras y después el
+      // resto, con lo cual la lista de faltantes saldría en un orden difícil de leer.
+      .sort((a, b) => Number(a) - Number(b));
+  }
+
+  describe('el chequeo se puede poner en rojo', () => {
+    it('detecta las alícuotas que faltan', () => {
+      // El texto que tenía el SDK hasta la v2.1.0.
+      expect(alicuotasNoNombradas('Agregá vatRate a cada item (21, 10.5, 27, o 0)'))
+        .toEqual(['2.5', '5']);
+    });
+
+    it('no se deja engañar por el 5 que vive adentro de 10.5', () => {
+      expect(alicuotasNoNombradas('Vigentes: 0, 2.5, 10.5, 21, 27')).toEqual(['5']);
+    });
+
+    it('no marca faltantes cuando están las seis', () => {
+      expect(alicuotasNoNombradas('Vigentes: 0, 2.5, 5, 10.5, 21 y 27.')).toEqual([]);
+    });
+
+    it('VAT_RATE_CODES tiene las seis alícuotas', () => {
+      // Con el mapa vacío, `alicuotasNoNombradas` devolvería [] para cualquier texto y
+      // los tests de abajo pasarían sin mirar nada.
+      expect(Object.keys(VAT_RATE_CODES)).toHaveLength(6);
+    });
+  });
+
+  describe('listVatRates()', () => {
+    it('ordena de menor a mayor', () => {
+      // `Object.keys` solo devuelve primero las claves enteras en orden ascendente y
+      // después el resto: daría '0, 5, 21, 27, 2.5, 10.5'. El orden es explícito.
+      expect(listVatRates()).toBe('0, 2.5, 5, 10.5, 21, 27');
+    });
+  });
+
+  /** Emite y devuelve el error, tipado. `.catch()` suelto da la unión con `CAEResponse`. */
+  async function capturarError(emitir: () => Promise<unknown>): Promise<ArcaValidationError> {
+    try {
+      await emitir();
+    } catch (e) {
+      return e as ArcaValidationError;
+    }
+    throw new Error('Se esperaba un ArcaValidationError y la emisión no lanzó');
+  }
+
+  it('el hint de "falta vatRate" nombra las seis alícuotas', async () => {
+    const wsfe = new WsfeService(BASE_CONFIG);
+
+    const error = await capturarError(() => wsfe.issueInvoiceB({
+      items: [{ description: 'Servicio', quantity: 1, unitPrice: 1000 }], // sin vatRate
+      buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+    }));
+
+    expect(error).toBeInstanceOf(ArcaValidationError);
+    // El hint viaja en `details`, no en `.hint`: ArcaValidationError no se lo pasa al
+    // constructor de ArcaError.
+    const { hint } = error.details as { hint: string };
+    expect(alicuotasNoNombradas(hint)).toEqual([]);
+  });
+
+  it('el hint de la alícuota inválida nombra las seis y manda al catálogo en vivo', async () => {
+    mockCalls(6);
+    const wsfe = new WsfeService(BASE_CONFIG);
+
+    // 13% no es una alícuota de ARCA: `getVATCode` no la encuentra en VAT_RATE_CODES.
+    const error = await capturarError(() => wsfe.issueInvoiceB({
+      items: [{ description: 'Servicio', quantity: 1, unitPrice: 1000, vatRate: 13 }],
+      buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+    }));
+
+    expect(error).toBeInstanceOf(ArcaValidationError);
+    expect(error.message).toContain('13');
+
+    const { hint, validRates } = error.details as { hint: string; validRates: number[] };
+    expect(alicuotasNoNombradas(hint)).toEqual([]);
+    // VAT_RATE_CODES es una copia local y se desactualiza en silencio; la fuente
+    // autoritativa es FEParamGetTiposIva.
+    expect(hint).toContain('getVatRates()');
+    expect(validRates).toHaveLength(6);
   });
 });

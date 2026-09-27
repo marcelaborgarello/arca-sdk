@@ -21,6 +21,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - El hint del **10019** nombra ahora las **seis** alícuotas vigentes —antes listaba cuatro: faltaban el 2,5% (id 9) y el 5% (id 8)— y remite a `wsfe.getVatRates()` como fuente autoritativa en lugar de la lista fija.
 - El hint del **10043** pasa a describir lo que el manual dice de `ImpTotConc`, incluida la excepción de Bienes Usados (comprobante tipo 49) con emisor monotributista.
 
+### 🐛 Dos mensajes de error negaban alícuotas de IVA que el SDK acepta
+
+- **Bugfix**: el JSDoc de `InvoiceItem.vatRate` y el hint del error *"falta vatRate"* nombraban cuatro alícuotas (`0, 10.5, 21, 27`). El **5%** (id 8) y el **2,5%** (id 9) están vigentes desde el 20/10/2014 y el SDK los acepta desde la v2.1.0: los textos habían quedado en la versión anterior. Quien facturaba con esas alícuotas leía —en el tooltip del editor y en el mensaje de error— que su valor no existía, exactamente el síntoma que la v2.1.0 había ido a corregir.
+- Los tres mensajes que nombran alícuotas **se derivan ahora de `VAT_RATE_CODES`** en vez de tener cada uno su copia escrita a mano. Era la causa de fondo: la lista estaba repetida en siete lugares y las que se desactualizaron fueron, sin excepción, las copias manuales.
+- **`CaeaService` pasa a usar la misma tabla que `WsfeService`.** Tenía su propio `getVATCode()` con un `switch` en paralelo a `VAT_RATE_CODES`. Las dos listas coincidían, pero nada lo garantizaba: una alícuota agregada en un solo lado habría hecho que el mismo comprobante se aceptara por CAE y se rechazara por CAEA. Es un método privado — no cambia ninguna firma pública.
+- **Cobertura**: 14 tests nuevos. Incluyen el camino de la alícuota inválida de CAEA, que no tenía **ninguno**, y la verificación de que las seis alícuotas viajan al XML con el `<Id>` correcto.
+
 ### 🔐 Detección robusta de TA vigente en WSAA
 
 - **Bugfix**: La detección de ticket de acceso (TA) vigente en WSAA ahora reconoce tanto `"válido"` (con tilde) como `"valido"` (sin tilde), previniendo que variaciones de ortografía en las respuestas de ARCA impidan emitir el hint correspondiente y bloqueen la autenticación.
@@ -30,7 +37,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 160 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 174 tests unitarios).
 
 ### ✅ Cobertura y testing
 

@@ -12,6 +12,8 @@ import {
     InvoiceType,
     BillingConcept,
     TaxIdType,
+    VAT_RATE_CODES,
+    listVatRates,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -622,20 +624,31 @@ export class CaeaService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Mapea alícuotas numéricas a los códigos internos de ARCA
+     * Mapea alícuota % al código interno de ARCA.
+     *
+     * Usa {@link VAT_RATE_CODES}, la misma tabla que `WsfeService`. Hasta la v2.1.0 este
+     * método tenía su propia copia en un `switch`: las dos listas coincidían, pero nada
+     * lo garantizaba. Una alícuota nueva agregada en un solo lado habría hecho que el
+     * mismo comprobante se aceptara por CAE y se rechazara por CAEA — y CAEA es
+     * justamente el servicio que menos se ejercita, así que la divergencia habría
+     * tardado en aparecer.
+     *
+     * El catálogo autoritativo lo devuelve `FEParamGetTiposIva`
+     * ({@link WsfeService.getVatRates}).
      */
     private getVATCode(rate: number): number {
-        switch (rate) {
-            case 0: return 3; // 0% / Exento / No gravado (código 3 en catálogo ARCA)
-            case 10.5: return 4;
-            case 21: return 5;
-            case 27: return 6;
-            case 5: return 8;
-            case 2.5: return 9;
-            default:
-                throw new ArcaValidationError(`Alícuota IVA no soportada por ARCA: ${rate}%`, {
-                    supportedRates: [0, 10.5, 21, 27, 5, 2.5]
-                });
+        const code = VAT_RATE_CODES[rate];
+        if (code === undefined) {
+            throw new ArcaValidationError(
+                `Alícuota IVA inválida: ${rate}%`,
+                {
+                    validRates: Object.keys(VAT_RATE_CODES).map(Number),
+                    hint: `Alícuotas vigentes: ${listVatRates()}. Si ARCA agregó una ` +
+                        'nueva, consultala con wsfe.getVatRates() y abrí un issue.',
+                }
+            );
         }
+
+        return code;
     }
 }

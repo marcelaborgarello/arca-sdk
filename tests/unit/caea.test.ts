@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { CaeaService } from '../../src/services/caea';
 import { callArcaApi } from '../../src/utils/network';
-import { InvoiceType, BillingConcept, TaxIdType } from '../../src/types/wsfe';
+import { InvoiceType, BillingConcept, TaxIdType, VAT_RATE_CODES } from '../../src/types/wsfe';
+import { ArcaValidationError } from '../../src/types/common';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -415,6 +416,84 @@ describe('CaeaService', () => {
 
       expect(capturedXml).toContain('<ar:FECAEASinMovimientoConsultar>');
       expect(String(result.CAEA)).toBe('25157992335329');
+    });
+  });
+
+  /**
+   * CAEA tenía su propia copia de la tabla de alícuotas en un `switch`, en paralelo a
+   * `VAT_RATE_CODES`. Las dos listas coincidían, pero nada lo garantizaba: una alícuota
+   * agregada en un solo lado habría hecho que el mismo comprobante se aceptara por CAE
+   * y se rechazara por CAEA. Ahora las dos leen la misma tabla, y esto lo verifica.
+   *
+   * Antes de esto, el camino de la alícuota inválida de CAEA no tenía **ningún** test.
+   */
+  describe('alícuotas de IVA (misma tabla que WsfeService)', () => {
+    /** Emite y devuelve el error, tipado. */
+    async function capturarError(emitir: () => Promise<unknown>): Promise<ArcaValidationError> {
+      try {
+        await emitir();
+      } catch (e) {
+        return e as ArcaValidationError;
+      }
+      throw new Error('Se esperaba un ArcaValidationError y la rendición no lanzó');
+    }
+
+    function rendirCon(vatRate: number): Promise<unknown> {
+      (callArcaApi as any).mockResolvedValueOnce({
+        ok: true,
+        text: async () => MOCK_REG_INFORMATIVO_RESPONSE,
+      });
+
+      return new CaeaService(BASE_CONFIG).reportCAEAPeriod({
+        caea: '25157992335329',
+        invoices: [{
+          invoiceType: InvoiceType.FACTURA_A,
+          concept: BillingConcept.PRODUCTS,
+          invoiceNumber: 150,
+          date: '2026-08-24',
+          generatedAt: new Date('2026-08-25T01:35:07Z'),
+          items: [{ description: 'Test Item', quantity: 1, unitPrice: 1000, vatRate }],
+          buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        }],
+      });
+    }
+
+    // Las seis, con el código que ARCA espera en <AlicIva><Id>. El 5% (8) y el 2.5% (9)
+    // están vigentes desde el 20/10/2014 y el SDK los rechazaba hasta la v2.1.0.
+    it.each(Object.entries(VAT_RATE_CODES))(
+      'acepta la alícuota %s%% y la manda con el Id %s',
+      async (porcentaje, codigo) => {
+        let capturedXml = '';
+        (callArcaApi as any).mockImplementationOnce((_url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => MOCK_REG_INFORMATIVO_RESPONSE });
+        });
+
+        await new CaeaService(BASE_CONFIG).reportCAEAPeriod({
+          caea: '25157992335329',
+          invoices: [{
+            invoiceType: InvoiceType.FACTURA_A,
+            concept: BillingConcept.PRODUCTS,
+            invoiceNumber: 150,
+            date: '2026-08-24',
+            generatedAt: new Date('2026-08-25T01:35:07Z'),
+            items: [{ description: 'Test Item', quantity: 1, unitPrice: 1000, vatRate: Number(porcentaje) }],
+            buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+          }],
+        });
+
+        expect(capturedXml).toContain(`<ar:Id>${codigo}</ar:Id>`);
+      },
+    );
+
+    it('rechaza una alícuota que no está en el catálogo', async () => {
+      const error = await capturarError(() => rendirCon(13));
+
+      expect(error).toBeInstanceOf(ArcaValidationError);
+      expect(error.message).toContain('13');
+
+      const { validRates } = error.details as { validRates: number[] };
+      expect(validRates).toHaveLength(6);
     });
   });
 });

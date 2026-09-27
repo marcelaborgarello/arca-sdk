@@ -90,7 +90,12 @@ export interface InvoiceItem {
     quantity: number;
     /** Precio unitario */
     unitPrice: number;
-    /** Alícuota IVA % (0, 10.5, 21, 27) */
+    /**
+     * Alícuota de IVA en porcentaje: `0`, `2.5`, `5`, `10.5`, `21` o `27`.
+     *
+     * El catálogo completo, con el código que ARCA espera en `<AlicIva><Id>`, está en
+     * {@link VAT_RATE_CODES}; la fuente autoritativa la da `wsfe.getVatRates()`.
+     */
     vatRate?: number;
 }
 
@@ -201,6 +206,28 @@ export const VAT_RATE_CODES: Readonly<Record<number, number>> = {
     21: 5,
     27: 6,
 };
+
+/**
+ * Las alícuotas de {@link VAT_RATE_CODES} en porcentaje, ordenadas de menor a mayor y
+ * listas para intercalar en un mensaje: `'0, 2.5, 5, 10.5, 21, 27'`.
+ *
+ * Existe para que ningún mensaje de error tenga su propia copia de la lista. Hasta la
+ * v2.1.0 había varias copias escritas a mano y dos de ellas nombraban cuatro alícuotas
+ * de las seis: el SDK aceptaba el 5% y el 2,5% y al mismo tiempo le decía al usuario
+ * que no existían.
+ *
+ * `Object.keys` por sí solo no alcanza: JavaScript devuelve primero las claves que son
+ * enteros, en orden ascendente, y después el resto en orden de inserción — daría
+ * `0, 5, 21, 27, 2.5, 10.5`. De ahí el orden numérico explícito.
+ *
+ * @internal Uso interno del SDK. No se exporta desde el índice del paquete.
+ */
+export function listVatRates(): string {
+    return Object.keys(VAT_RATE_CODES)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .join(', ');
+}
 
 /**
  * Códigos que ARCA acepta en `CondicionIVAReceptorId`.

@@ -25,6 +25,7 @@ import {
     TaxIdType,
     VALID_VAT_CONDITION_IDS,
     VAT_RATE_CODES,
+    listVatRates,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -980,7 +981,9 @@ export class WsfeService {
                 'Esta operación requiere `vatRate` en todos los items',
                 {
                     itemsMissingVAT: missingVAT.map(i => i.description),
-                    hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)'
+                    // La lista se deriva de VAT_RATE_CODES: escrita a mano se desactualiza
+                    // y termina negando una alícuota que el SDK acepta.
+                    hint: `Agregá vatRate a cada item. Alícuotas vigentes: ${listVatRates()}.`
                 }
             );
         }
@@ -1111,7 +1114,7 @@ export class WsfeService {
                 `Alícuota IVA inválida: ${percentage}%`,
                 {
                     validRates: Object.keys(VAT_RATE_CODES).map(Number),
-                    hint: 'Alícuotas vigentes: 0, 2.5, 5, 10.5, 21 y 27. Si ARCA agregó una ' +
+                    hint: `Alícuotas vigentes: ${listVatRates()}. Si ARCA agregó una ` +
                         'nueva, consultala con wsfe.getVatRates() y abrí un issue.',
                 }
             );
