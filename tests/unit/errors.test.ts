@@ -1,0 +1,90 @@
+import { describe, it, expect } from 'vitest';
+import { getArcaHint } from '../../src/constants/errors';
+import { VAT_RATE_CODES } from '../../src/types/wsfe';
+
+/**
+ * Tests del diccionario de hints (`src/constants/errors.ts`).
+ *
+ * **Alcance: sólo los códigos de IVA (10019 y 10043).** El resto de los hints sigue sin
+ * cobertura. Que este archivo exista no significa que el diccionario esté probado.
+ *
+ * Por qué existe: un hint no lo mira ni el compilador ni ningún otro test, así que puede
+ * quedar congelado —o directamente colgado del código equivocado— sin que nada se ponga
+ * en rojo. Fue exactamente lo que pasó con la alícuota de IVA.
+ */
+
+/**
+ * Alícuotas de `rates` que el hint no nombra en la forma `código (porcentaje%)`.
+ *
+ * Vive afuera del test a propósito: así se la puede correr contra un hint **inventado**
+ * y comprobar que detecta lo que dice detectar. Un `toContain` debilitado por descuido
+ * quedaría verde para siempre, y sería indistinguible de uno que funciona.
+ */
+function alicuotasFaltantes(
+    hint: string,
+    rates: Readonly<Record<number, number>> = VAT_RATE_CODES,
+): string[] {
+    return Object.entries(rates)
+        .filter(([percentage, code]) => !hint.includes(`${code} (${percentage}%)`))
+        .map(([percentage]) => `${percentage}%`);
+}
+
+describe('ARCA_ERROR_HINTS — códigos de IVA', () => {
+    // Estos tres prueban el chequeo, no el hint. Son los que hacen que los de más abajo
+    // signifiquen algo.
+    describe('el chequeo de alícuotas se puede poner en rojo', () => {
+        it('detecta la alícuota que falta', () => {
+            const incompleto = 'Los códigos vigentes son 3 (0%), 8 (5%), 4 (10.5%), 5 (21%) y 6 (27%).';
+
+            expect(alicuotasFaltantes(incompleto)).toEqual(['2.5%']);
+        });
+
+        it('no marca faltantes cuando están las seis', () => {
+            const completo = 'Los códigos vigentes son 3 (0%), 9 (2.5%), 8 (5%), 4 (10.5%), 5 (21%) y 6 (27%).';
+
+            expect(alicuotasFaltantes(completo)).toEqual([]);
+        });
+
+        it('VAT_RATE_CODES tiene las seis alícuotas', () => {
+            // Con el mapa vacío, `alicuotasFaltantes` devolvería [] para cualquier hint y
+            // los tests de abajo pasarían sin mirar nada.
+            expect(Object.keys(VAT_RATE_CODES)).toHaveLength(6);
+        });
+    });
+
+    // Manual del Desarrollador RG 4291 v4.8, p. 43:
+    // <AlicIVA><id> — 10019 — "Siempre que se informe Id, debe ser un valor devuelto por
+    // el método FEParamGetTiposIva. No aplica para comprobantes tipo C."
+    describe('10019 — alícuota de IVA fuera del catálogo', () => {
+        it('tiene hint', () => {
+            expect(getArcaHint(10019)).toBeDefined();
+        });
+
+        it('nombra las seis alícuotas de VAT_RATE_CODES con su código', () => {
+            // Si alguien agrega una alícuota a VAT_RATE_CODES y no toca el hint, acá se
+            // pone en rojo. Hasta la v2.1.0 el hint listaba cuatro de las seis.
+            expect(alicuotasFaltantes(getArcaHint(10019)!)).toEqual([]);
+        });
+
+        it('manda al catálogo en vivo y no sólo a la lista fija', () => {
+            // VAT_RATE_CODES es una copia local y se desactualiza en silencio; la fuente
+            // autoritativa es FEParamGetTiposIva.
+            expect(getArcaHint(10019)).toContain('getVatRates()');
+        });
+    });
+
+    // Manual del Desarrollador RG 4291 v4.8, p. 47:
+    // <ImpTotConc> — 10043 — "El campo 'Importe neto no gravado' <ImpTotConc>. No puede
+    // ser menor a cero (0). Para comprobantes tipo C debe ser igual a cero (0)."
+    describe('10043 — ImpTotConc, no es un código de IVA', () => {
+        it('habla de ImpTotConc', () => {
+            expect(getArcaHint(10043)).toContain('ImpTotConc');
+        });
+
+        it('no habla de alícuotas', () => {
+            // Regresión: este hint describía la alícuota de IVA inválida, que es el 10019.
+            // Quien recibiera un 10043 leía una respuesta sobre otro campo.
+            expect(getArcaHint(10043)).not.toMatch(/al[ií]cuota/i);
+        });
+    });
+});

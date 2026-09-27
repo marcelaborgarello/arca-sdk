@@ -15,6 +15,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 - **Bugfix crítico**: El método consultaba el elemento XML `ActividadTipo`, pero ARCA devuelve `ActividadesTipo` (en plural). Al no encontrar la clave, el método retornaba silenciosamente `[]`. Corregido y asegurado con tests de integración que exigen que ningún catálogo de ARCA retorne listas vacías ni campos `undefined`.
 
+### 🐛 El hint del código 10043 explicaba un error que no es
+
+- **Bugfix**: el diccionario de hints (`getArcaHint`) tenía la explicación de *"alícuota de IVA inválida"* colgada del código **10043**, que según el Manual del Desarrollador RG 4291 v4.8 (p. 47) es una validación del campo `ImpTotConc` —importe neto no gravado— y no habla de IVA. Quien recibía un 10043 leía una respuesta sobre otro campo. El código correcto para la alícuota fuera de catálogo es el **10019** (v4.8, p. 43: *"siempre que se informe Id, debe ser un valor devuelto por el método `FEParamGetTiposIva`"*).
+- El hint del **10019** nombra ahora las **seis** alícuotas vigentes —antes listaba cuatro: faltaban el 2,5% (id 9) y el 5% (id 8)— y remite a `wsfe.getVatRates()` como fuente autoritativa en lugar de la lista fija.
+- El hint del **10043** pasa a describir lo que el manual dice de `ImpTotConc`, incluida la excepción de Bienes Usados (comprobante tipo 49) con emisor monotributista.
+
 ### 🔐 Detección robusta de TA vigente en WSAA
 
 - **Bugfix**: La detección de ticket de acceso (TA) vigente en WSAA ahora reconoce tanto `"válido"` (con tilde) como `"valido"` (sin tilde), previniendo que variaciones de ortografía en las respuestas de ARCA impidan emitir el hint correspondiente y bloqueen la autenticación.
@@ -24,12 +30,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (13 archivos, 152 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 160 tests unitarios).
 
 ### ✅ Cobertura y testing
 
 - **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (76.85% de cobertura total).
 - **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 22 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
+- **Suite del diccionario de errores**: Nueva suite `tests/unit/errors.test.ts` con 8 tests. Un hint no lo mira ni el compilador ni ningún otro test, así que puede quedar congelado —o colgado del código equivocado— sin que nada se ponga en rojo: es exactamente lo que pasó con el 10043. El test exige que el hint del 10019 siga nombrando todas las alícuotas de `VAT_RATE_CODES`. **Alcance declarado: cubre sólo los dos códigos de IVA**; los otros ~38 hints del diccionario siguen sin cobertura.
 
 ---
 

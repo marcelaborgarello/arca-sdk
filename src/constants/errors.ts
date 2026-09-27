@@ -31,12 +31,22 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     // === WSFE — Comprobantes y montos ===
     10015: 'Factura B: El importe supera el límite para consumidores finales anónimos. Identificá al comprador con CUIT/DNI.',
     10016: 'El CUIT informado como receptor no es válido o no existe en el Padrón.',
+    // Hoy ambos builders mandan ImpTotConc fijo en 0.00, así que el SDK no puede provocarlo.
+    // Queda escrito para el día que se soporte el neto no gravado.
+    10043: 'El campo ImpTotConc ("importe neto no gravado") no puede ser menor a cero, y en los ' +
+        'comprobantes clase C debe ser igual a cero. Excepción: en Bienes Usados (tipo 49) con ' +
+        'emisor monotributista, ImpTotConc lleva el subtotal de la operación.',
     600: 'No se pudo autorizar el comprobante. Revisá el campo `observations` en la respuesta para más detalle.',
     601: 'El comprobante ya fue autorizado anteriormente. No emitas dos veces el mismo número.',
     602: 'El número de comprobante es inválido o no es el correcto según el último autorizado.',
 
     // === WSFE — IVA ===
-    10043: 'La alícuota de IVA informada no existe o es incorrecta. Usá 3 (0%), 4 (10.5%), 5 (21%) o 6 (27%).',
+    // El código de la alícuota inválida es el 10019, no el 10043: hasta acá este hint
+    // estuvo colgado del 10043, que es una validación de importes y no habla de IVA.
+    // La lista de abajo tiene que seguir a VAT_RATE_CODES — lo exige tests/unit/errors.test.ts.
+    10019: 'La alícuota de IVA informada no está en el catálogo de ARCA. Los códigos vigentes son ' +
+        '3 (0%), 9 (2.5%), 8 (5%), 4 (10.5%), 5 (21%) y 6 (27%). La lista autoritativa la da ' +
+        'FEParamGetTiposIva: consultala con wsfe.getVatRates(). No aplica a comprobantes clase C.',
     10044: 'El importe de IVA no cuadra con la base imponible × alícuota.',
 
     // === RG 5616 — Condición frente al IVA del receptor ===
