@@ -40,14 +40,23 @@ comprobantes en homologación. Enganchalos al `prepublishOnly`, no a cada PR.
 
 ## El TA vigente
 
-ARCA **no emite un ticket de acceso nuevo mientras el anterior siga vigente** (12 h).
+Teniendo un TA vigente, ARCA **se niega a emitir otro** durante un lapso preventivo.
 Si la suite pidiera uno en cada corrida, la segunda fallaría con:
 
 ```
 Error AFIP WSAA: El CEE ya posee un TA valido para el acceso al WSN solicitado
 ```
 
-...y quedaría bloqueada hasta que expire. Por eso `helpers.ts` implementa un
+**Cuánto dura el bloqueo: 10 minutos en homologación**, 2 en producción, según el
+*WSAA Manual del Desarrollador* cap. 10.6 — que aclara que esos valores *"pueden ser
+modificados dinámicamente y sin aviso previo"*. Medido contra homologación real el
+2026-09-26: el bloqueo se levantó entre los 9m32s y los 10m32s del TA anterior.
+
+> **No confundir con las 12 h**, que es la **vigencia** del TA (`expirationTime`). Son
+> dos números distintos y hasta la v2.2.0 la documentación de este proyecto usaba el de
+> la vigencia para describir el bloqueo. Equivocarse acá cuesta 10 minutos, no un día.
+
+Por eso `helpers.ts` implementa un
 `TokenStorage` que persiste el TA en `.ta-cache.json` (gitignorado). Es el mismo
 patrón que necesita cualquier consumidor del SDK en producción: pasarle un `storage`
 a `WsaaService` en vez de hacer `login()` en cada proceso.

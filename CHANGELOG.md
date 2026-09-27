@@ -21,6 +21,20 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - El hint del **10019** nombra ahora las **seis** alícuotas vigentes —antes listaba cuatro: faltaban el 2,5% (id 9) y el 5% (id 8)— y remite a `wsfe.getVatRates()` como fuente autoritativa en lugar de la lista fija.
 - El hint del **10043** pasa a describir lo que el manual dice de `ImpTotConc`, incluida la excepción de Bienes Usados (comprobante tipo 49) con emisor monotributista.
 
+### 🐛 El SDK decía que quedarse sin ticket de acceso costaba 12 horas. Son 10 minutos.
+
+- **Corrección de dato**: el hint `ALREADY_HAS_TA` —y otros nueve lugares del repo— afirmaban que ARCA no emite un TA nuevo *"hasta que expire el anterior (12 h)"*. Son dos números distintos: las **12 h** son la **vigencia** del ticket; el bloqueo para pedir otro es un *lapso preventivo* de **10 minutos en homologación** y **2 en producción**, según el *WSAA Manual del Desarrollador* cap. 10.6 — que aclara que *"estos valores pueden ser modificados dinámicamente y sin aviso previo"*.
+- **Medido**, no sólo leído: contra homologación real el 26/09/2026, el bloqueo se levantó entre los 9m32s y los 10m32s del TA anterior. Es una sola corrida, de una noche, en homologación; el valor de producción no se midió.
+- Por qué importa: quien se quedaba trabado creía haber perdido el día. La documentación de los tests de integración desalentaba correrlos por un costo que no era real.
+- Corregido también en `tests/integration/README.md`, en el JSDoc de `fileTokenStorage` y en los comentarios de `wsaa.ts`. Con tests de regresión en `errors.test.ts`.
+
+### 📖 Los JSDoc enseñaban lo que el resto de la documentación ya había corregido
+
+- **`WsfeService`**: el `@example` de la clase —el que aparece solo al pasar el mouse, sin ir a buscarlo— mostraba una Factura B con `buyer` **sin `vatCondition`**, que es exactamente lo que homologación rechaza hoy con la observación **10246**. Ahora los dos ejemplos lo informan. (También declaraba `const cae` dos veces en el mismo bloque.)
+- **`Buyer.vatCondition`**: decía sólo *"Opcional:"*. Sigue siendo opcional en el tipo para no romper la compilación de quien ya usa el SDK, pero el JSDoc ahora dice que omitirlo significa no poder facturar.
+- **`IssueInvoiceRequest.optionals`**: daba como ejemplo *"Condición IVA receptor ID 1010"*, que es la forma vieja y hoy da rechazo **10242** — la misma que ya se había quitado del README.
+- **`IssueOptions.optionals`**: daba como ejemplo *"RG 5762/2025, leyendas de Factura A"*, que es el mecanismo inexistente corregido en esta misma versión.
+
 ### ✨ Comprobantes "A con leyenda Operación Sujeta a Retención" (RG 5762/2025)
 
 - Se agregan a `InvoiceType`: **`FACTURA_A_LEYENDA`** (51), **`NOTA_DEBITO_A_LEYENDA`** (52), **`NOTA_CREDITO_A_LEYENDA`** (53) y **`RECIBO_A_LEYENDA`** (54). Aditivo: no cambia ninguna firma.
@@ -51,7 +65,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 176 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 179 tests unitarios).
 
 ### ✅ Cobertura y testing
 
@@ -146,7 +160,8 @@ Los enums de este SDK son una copia local del catálogo de ARCA: dan autocomplet
 
 ### 🔐 Hint para el TA vigente de WSAA
 
-- ARCA **no emite un ticket de acceso nuevo mientras el anterior siga vigente** (12 h). Sin persistir el ticket, cualquier proceso que haga `login()` de nuevo se come el fault *"El CEE ya posee un TA valido para el acceso al WSN solicitado"* y queda bloqueado hasta que expire. El error ahora llega con un `hint` que explica la causa y apunta a `storage` (`TokenStorage`). `ArcaAuthError` acepta un `hint` opcional (aditivo).
+- Teniendo un ticket de acceso vigente, ARCA **se niega a emitir otro** durante un lapso preventivo. Sin persistir el ticket, cualquier proceso que haga `login()` de nuevo se come el fault *"El CEE ya posee un TA valido para el acceso al WSN solicitado"*. El error ahora llega con un `hint` que explica la causa y apunta a `storage` (`TokenStorage`). `ArcaAuthError` acepta un `hint` opcional (aditivo).
+  > **Corregido el 27/09/2026.** Esta entrada decía que ARCA no emite otro ticket *"mientras el anterior siga vigente (12 h)"* y que el proceso *"queda bloqueado hasta que expire"*. Es falso: las 12 h son la **vigencia** del TA, mientras que el bloqueo dura **10 minutos en homologación** y 2 en producción (*WSAA Manual del Desarrollador* cap. 10.6, que aclara que pueden cambiar sin aviso), medido contra homologación el 26/09/2026. Se corrige acá además de en la versión nueva porque el `CHANGELOG` viaja dentro del paquete npm.
 
 ### ✅ Suite de integración contra ARCA homologación
 

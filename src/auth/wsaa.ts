@@ -172,8 +172,9 @@ export class WsaaService {
                 // Ignorar error de parseo si no es XML válido
             }
 
-            // ARCA no emite un TA nuevo mientras el anterior siga vigente (12 h). Sin
-            // persistencia, cada proceso nuevo vuelve a pedir uno y queda bloqueado.
+            // Teniendo un TA vigente, ARCA se niega a emitir otro durante un lapso
+            // preventivo de minutos (ver el hint ALREADY_HAS_TA). Sin persistencia, cada
+            // proceso nuevo vuelve a pedir uno y queda trabado.
             // El faultstring no trae código, así que se detecta por texto.
             //
             // Hoy ARCA escribe "valido" sin tilde, pero es prosa de un mensaje de error,

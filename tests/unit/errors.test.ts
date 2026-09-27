@@ -73,6 +73,37 @@ describe('ARCA_ERROR_HINTS — códigos de IVA', () => {
         });
     });
 
+    /**
+     * WSAA Manual del Desarrollador 20.2.19, cap. 10.6:
+     * "ACTUALMENTE ESE LAPSO PREVENTIVO ES DE 10 MINUTOS EN EL WSAA DE TESTING Y 2
+     * MINUTOS EN EL WSAA DE PRODUCCION. TENER EN CUENTA QUE ESTOS VALORES PUEDEN SER
+     * MODIFICADOS DINAMICAMENTE Y SIN AVISO PREVIO."
+     *
+     * Medido contra homologación el 2026-09-26: el bloqueo se levantó entre los 9m32s y
+     * los 10m32s del TA anterior.
+     */
+    describe('ALREADY_HAS_TA — el bloqueo no dura lo que dura el TA', () => {
+        it('no dice que el bloqueo dure hasta que expire el TA', () => {
+            // Regresión: hasta la v2.2.0 el hint decía que ARCA no emite otro TA "hasta
+            // que expire (12 h)". Las 12 h son la vigencia del ticket; el bloqueo son
+            // minutos. La confusión estaba en diez lugares del repo y hacía parecer que
+            // equivocarse corriendo los tests de integración costaba un día.
+            //
+            // No se puede chequear simplemente que el hint no diga "12 h": el texto
+            // actual las nombra a propósito, para desmentirlas. Lo que no puede volver
+            // es la afirmación.
+            expect(getArcaHint('ALREADY_HAS_TA')).not.toMatch(/hasta que expire/i);
+        });
+
+        it('nombra la unidad correcta del bloqueo', () => {
+            expect(getArcaHint('ALREADY_HAS_TA')).toMatch(/minutos/i);
+        });
+
+        it('sigue mandando a persistir el ticket, que es la solución', () => {
+            expect(getArcaHint('ALREADY_HAS_TA')).toContain('TokenStorage');
+        });
+    });
+
     // Manual del Desarrollador RG 4291 v4.8, p. 47:
     // <ImpTotConc> — 10043 — "El campo 'Importe neto no gravado' <ImpTotConc>. No puede
     // ser menor a cero (0). Para comprobantes tipo C debe ser igual a cero (0)."

@@ -684,7 +684,7 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 176 tests:
+14 archivos, 179 tests:
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|

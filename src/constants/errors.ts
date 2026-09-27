@@ -16,9 +16,14 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     1001: 'El servicio solicitado no existe o el certificado no tiene autorización para usarlo.',
     1003: 'El TRA (Ticket de Requerimiento de Acceso) tiene un formato inválido.',
     1005: 'El TRA ya expiró antes de ser presentado. Verificá la hora del sistema.',
-    // ARCA no emite un TA nuevo mientras el anterior siga vigente (12 h). Sin
-    // persistencia, cada proceso nuevo pide uno y choca con esto.
-    ALREADY_HAS_TA: 'Ya existe un TA vigente para este CUIT y servicio: ARCA no emite otro hasta que expire (12 h). ' +
+    // Dos números distintos que es fácil confundir, y el SDK los confundió hasta la
+    // v2.2.0: el TA *vale* 12 h, pero el bloqueo para pedir otro dura mucho menos.
+    // Manual de WSAA cap. 10.6: el "lapso preventivo" es de 10 minutos en testing y 2 en
+    // producción, y avisa que puede cambiar sin previo aviso. Medido en homologación el
+    // 2026-09-26: se liberó entre los 9m32s y los 10m32s.
+    ALREADY_HAS_TA: 'Ya existe un TA vigente para este CUIT y servicio y ARCA no emite otro por unos minutos ' +
+        '(el manual de WSAA indica 10 en homologación y 2 en producción, y aclara que puede cambiar sin aviso). ' +
+        'No son las 12 h que dura el ticket: eso es su vigencia, no el bloqueo. ' +
         'Guardá el ticket entre ejecuciones pasando un `storage` (TokenStorage) a WsaaService, en vez de hacer login cada vez.',
 
     // === WSFE — Puntos de venta y configuración ===

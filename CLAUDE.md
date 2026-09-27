@@ -292,10 +292,19 @@ Es opt-in por variables de entorno y no corre en CI. Ver `tests/integration/READ
 
 Dos cosas que muerden:
 
-- **ARCA no emite un TA nuevo mientras el anterior siga vigente** (12 h). Sin persistir
-  el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"* y queda
-  bloqueada hasta que expire. Por eso los tests usan un `TokenStorage` en archivo, que
-  es además lo que necesita cualquier consumidor en producción.
+- **Teniendo un TA vigente, ARCA se niega a emitir otro por unos minutos.** Sin persistir
+  el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"*. Por eso los
+  tests usan un `TokenStorage` en archivo, que es además lo que necesita cualquier
+  consumidor en producción.
+  > **Son 10 minutos en homologación** y 2 en producción (*WSAA Manual del Desarrollador*
+  > cap. 10.6, que aclara que pueden cambiar sin aviso). **Medido** contra homologación
+  > el 2026-09-26: se liberó entre los 9m32s y los 10m32s.
+  >
+  > **No son 12 h.** Las 12 h son la *vigencia* del TA (`expirationTime`), que es otra
+  > cosa. Hasta el 2026-09-27 este archivo, el hint `ALREADY_HAS_TA`, `wsaa.ts`,
+  > `helpers.ts`, `tests/integration/README.md` y tres comentarios de `wsaa.test.ts`
+  > decían todos que el bloqueo duraba 12 h, y ninguno tenía fuente. Equivocarse al
+  > correr los tests de integración cuesta 10 minutos, no un día.
 - La numeración es correlativa y real: no correr dos suites en paralelo contra el mismo
   punto de venta.
 
