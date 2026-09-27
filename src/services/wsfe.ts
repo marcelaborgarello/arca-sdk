@@ -25,6 +25,7 @@ import {
     TaxIdType,
     VALID_VAT_CONDITION_IDS,
     VAT_RATE_CODES,
+    listVatRates,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -33,10 +34,10 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly } from '../utils/formatArcaDate';
-import { parseXml, escapeXml } from '../utils/xml';
+import { parseXml, escapeXml, parseObservations } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
-import { getArcaHint } from '../constants/errors';
+import { getArcaHint, getHintForObservations } from '../constants/errors';
 
 /**
  * Servicio de Facturación Electrónica WSFE v1
@@ -50,17 +51,32 @@ import { getArcaHint } from '../constants/errors';
  *   pointOfSale: 4,
  * });
  *
- * // Factura C rápida (consumidor final)
- * const cae = await wsfe.issueInvoiceC({ items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }] });
- * console.log('CAE:', cae.cae);
- * console.log('QR:', cae.qrUrl);
+ * // Factura C a consumidor final
+ * const facturaC = await wsfe.issueInvoiceC({
+ *   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+ *   buyer: {
+ *     docType: TaxIdType.FINAL_CONSUMER,
+ *     docNumber: '0',
+ *     vatCondition: VatCondition.CONSUMIDOR_FINAL,
+ *   },
+ * });
+ * console.log('CAE:', facturaC.cae);
+ * console.log('QR:', facturaC.qrUrl);
  *
  * // Factura A/B con IVA discriminado
- * const cae = await wsfe.issueInvoiceB({
+ * const facturaB = await wsfe.issueInvoiceB({
  *   items: [{ description: 'Servicio', quantity: 1, unitPrice: 1000, vatRate: 21 }],
- *   buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+ *   buyer: {
+ *     docType: TaxIdType.CUIT,
+ *     docNumber: '20987654321',
+ *     vatCondition: VatCondition.CONSUMIDOR_FINAL,
+ *   },
  * });
  * ```
+ *
+ * @remarks Los ejemplos informan siempre `buyer.vatCondition` a propósito: sin ese
+ * campo, homologación **ya rechaza** el comprobante con la observación 10246 (RG 5616),
+ * y producción hace lo mismo desde el 01/12/2026.
  */
 export class WsfeService {
     private config: WsfeConfig;
@@ -149,89 +165,6 @@ export class WsfeService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Emite un Ticket C simple (solo monto total, sin detalle de items).
-     *
-     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
-     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
-     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
-     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
-     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
-     * Fiscal) usá {@link issueInvoiceC}.
-     */
-    async issueSimpleReceipt(params: {
-        total: number;
-        concept?: BillingConcept;
-        date?: Date;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
-        if (process.env.NODE_ENV !== 'production') {
-            console.warn(
-                '[arca-sdk WARNING] issueSimpleReceipt() está deprecado: emite Tique C ' +
-                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
-                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
-                'Services estándar. Usá issueInvoiceC() para el caso general.'
-            );
-        }
-        return this.issueDocument({
-            type: InvoiceType.TICKET_C,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            total: params.total,
-            date: params.date,
-            buyer: {
-                docType: TaxIdType.FINAL_CONSUMER,
-                docNumber: '0',
-            },
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
-        });
-    }
-
-    /**
-     * Emite un Ticket C con detalle de items.
-     * Los items se guardan en la respuesta pero no se envían a ARCA.
-     *
-     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
-     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
-     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
-     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
-     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
-     * Fiscal) usá {@link issueInvoiceC}.
-     */
-    async issueReceipt(params: {
-        items: InvoiceItem[];
-        concept?: BillingConcept;
-        date?: Date;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
-        if (process.env.NODE_ENV !== 'production') {
-            console.warn(
-                '[arca-sdk WARNING] issueReceipt() está deprecado: emite Tique C ' +
-                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
-                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
-                'Services estándar. Usá issueInvoiceC() para el caso general.'
-            );
-        }
-        const total = round(calculateTotal(params.items));
-
-        const cae = await this.issueDocument({
-            type: InvoiceType.TICKET_C,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            total,
-            date: params.date,
-            buyer: {
-                docType: TaxIdType.FINAL_CONSUMER,
-                docNumber: '0',
-            },
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
-        });
-
-        return { ...cae, items: params.items };
-    }
-
-    /**
      * Emite una Factura A (Responsable Inscripto a Responsable Inscripto, con IVA discriminado).
      * REQUIERE `vatRate` en todos los items.
      */
@@ -257,11 +190,40 @@ export class WsfeService {
 
     /**
      * Emite una Factura C (consumidor final, sin discriminación de IVA).
+     *
+     * Acepta **`items` o `total`, uno de los dos**. `total` es el atajo para una venta de
+     * mostrador que no se detalla; con `items` el total se calcula. El tipo no deja mandar
+     * los dos ni ninguno.
+     *
+     * Si se omite `buyer`, se asume consumidor final sin identificar (`DocTipo` 99,
+     * `DocNro` 0). Ojo que eso tiene límite: desde la RG 5866/2026, a partir de
+     * $10.000.000 es obligatorio identificar al comprador y el SDK lo valida antes de
+     * salir a la red.
+     *
+     * @example
+     * ```typescript
+     * // Venta de mostrador, sin detallar
+     * await wsfe.issueInvoiceC({
+     *   total: 1500,
+     *   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+     * });
+     *
+     * // Con detalle
+     * await wsfe.issueInvoiceC({
+     *   items: [{ description: 'Producto', quantity: 2, unitPrice: 750 }],
+     *   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+     * });
+     * ```
+     *
+     * @remarks `total` existe desde la v3.0.0. Reemplaza la comodidad que daba
+     * `issueSimpleReceipt({ total })`, eliminado en esa versión: esa parte del método viejo
+     * estaba bien — lo que estaba mal era que emitía Tique C (83), un comprobante que ARCA
+     * no acepta por este webservice.
      */
-    async issueInvoiceC(params: {
-        items: InvoiceItem[];
-        buyer?: Buyer;
-    } & IssueOptions): Promise<CAEResponse> {
+    async issueInvoiceC(params: (
+        | { items: InvoiceItem[]; total?: never }
+        | { total: number; items?: never }
+    ) & { buyer?: Buyer } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.FACTURA_C, params);
     }
 
@@ -489,7 +451,7 @@ export class WsfeService {
      * homologación del proyecto no lista ninguno y sin embargo emite en el punto de
      * venta 1. Usá este método para mostrar opciones, no para validar.
      *
-     * @since 2.2.0 Antes lanzaba `ArcaError` en ese caso.
+     * @since 3.0.0 Antes lanzaba `ArcaError` en ese caso.
      */
     async getPointsOfSale(): Promise<PointOfSale[]> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
@@ -788,18 +750,41 @@ export class WsfeService {
     }
 
     /**
-     * Helper para emitir comprobantes tipo C que no discriminan IVA
+     * Helper para emitir comprobantes tipo C que no discriminan IVA.
+     *
+     * `items` y `total` son los dos opcionales acá porque `issueInvoiceC` admite cualquiera
+     * de los dos. El resto de los que usan este helper (NC, ND, Recibo C) exigen `items`
+     * en su propia firma, así que para ellos no cambia nada.
      */
     private async issueInvoiceWithoutVAT(
         type: InvoiceType,
         params: {
-            items: InvoiceItem[];
+            items?: InvoiceItem[];
+            total?: number;
             associatedInvoices?: AssociatedInvoice[];
             buyer?: Buyer;
         } & IssueOptions
     ): Promise<CAEResponse> {
         this.validateAssociatedInvoices(type, params.associatedInvoices);
-        const total = round(calculateTotal(params.items));
+
+        const hasItems = Boolean(params.items && params.items.length > 0);
+
+        // El tipo de `issueInvoiceC` ya impide mandar ninguno de los dos, pero al SDK lo
+        // consume también JavaScript sin tipos: sin este chequeo, un llamado sin `items`
+        // ni `total` emitiría un comprobante por $0 y consumiría un número real.
+        if (!hasItems && params.total === undefined) {
+            throw new ArcaValidationError(
+                'Faltan `items` y `total`: hay que informar uno de los dos.',
+                {
+                    hint: 'Para una venta sin detallar pasá `total`; para detallarla, `items`. ' +
+                        'Los dos juntos no: el total se calcula de los items.',
+                }
+            );
+        }
+
+        const total = hasItems
+            ? round(calculateTotal(params.items!))
+            : round(params.total!);
 
         return this.issueDocument({
             ...params,
@@ -980,7 +965,9 @@ export class WsfeService {
                 'Esta operación requiere `vatRate` en todos los items',
                 {
                     itemsMissingVAT: missingVAT.map(i => i.description),
-                    hint: 'Agregá vatRate a cada item (21, 10.5, 27, o 0)'
+                    // La lista se deriva de VAT_RATE_CODES: escrita a mano se desactualiza
+                    // y termina negando una alícuota que el SDK acepta.
+                    hint: `Agregá vatRate a cada item. Alícuotas vigentes: ${listVatRates()}.`
                 }
             );
         }
@@ -1111,7 +1098,7 @@ export class WsfeService {
                 `Alícuota IVA inválida: ${percentage}%`,
                 {
                     validRates: Object.keys(VAT_RATE_CODES).map(Number),
-                    hint: 'Alícuotas vigentes: 0, 2.5, 5, 10.5, 21 y 27. Si ARCA agregó una ' +
+                    hint: `Alícuotas vigentes: ${listVatRates()}. Si ARCA agregó una ` +
                         'nueva, consultala con wsfe.getVatRates() y abrí un issue.',
                 }
             );
@@ -1325,13 +1312,8 @@ export class WsfeService {
             throw new ArcaError('Respuesta WSFE incompleta: falta detalle del comprobante', 'PARSE_ERROR');
         }
 
-        const observations: string[] = [];
-        if (det.Observaciones) {
-            const obsArray = Array.isArray(det.Observaciones.Obs)
-                ? det.Observaciones.Obs
-                : [det.Observaciones.Obs];
-            obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
-        }
+        const observationDetails = parseObservations(det);
+        const observations = observationDetails.map(o => o.message);
 
         // ARCA procesó la solicitud y no autorizó el comprobante: no hay CAE y el
         // comprobante no existe. Devolverlo como si fuera un resultado válido hace que
@@ -1347,7 +1329,8 @@ export class WsfeService {
                     invoiceNumber: Number(det.CbteDesde),
                     result: det.Resultado,
                 },
-                this.hintForObservations(observations)
+                getHintForObservations(observationDetails),
+                observationDetails
             );
         }
 
@@ -1360,24 +1343,7 @@ export class WsfeService {
             caeExpiry: String(det.CAEFchVto),
             result: det.Resultado,
             observations: observations.length > 0 ? observations : undefined,
+            observationDetails: observationDetails.length > 0 ? observationDetails : undefined,
         };
-    }
-
-    /**
-     * Busca un hint para el motivo de rechazo.
-     *
-     * Las observaciones llegan con su código en `Obs.Code`, pero el parseo actual sólo
-     * conserva el mensaje, así que se reconocen por texto los casos más frecuentes.
-     */
-    private hintForObservations(observations: string[]): string | undefined {
-        const texto = observations.join(' ');
-
-        if (/Condicion Frente al IVA del receptor es obligatorio/i.test(texto)) {
-            return getArcaHint(10246);
-        }
-        if (/Condicion Frente al IVA del receptor/i.test(texto)) {
-            return getArcaHint(10245);
-        }
-        return undefined;
     }
 }

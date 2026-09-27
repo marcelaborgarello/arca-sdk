@@ -16,9 +16,14 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     1001: 'El servicio solicitado no existe o el certificado no tiene autorización para usarlo.',
     1003: 'El TRA (Ticket de Requerimiento de Acceso) tiene un formato inválido.',
     1005: 'El TRA ya expiró antes de ser presentado. Verificá la hora del sistema.',
-    // ARCA no emite un TA nuevo mientras el anterior siga vigente (12 h). Sin
-    // persistencia, cada proceso nuevo pide uno y choca con esto.
-    ALREADY_HAS_TA: 'Ya existe un TA vigente para este CUIT y servicio: ARCA no emite otro hasta que expire (12 h). ' +
+    // Dos números distintos que es fácil confundir, y el SDK los confundió hasta la
+    // v3.0.0: el TA *vale* 12 h, pero el bloqueo para pedir otro dura mucho menos.
+    // Manual de WSAA cap. 10.6: el "lapso preventivo" es de 10 minutos en testing y 2 en
+    // producción, y avisa que puede cambiar sin previo aviso. Medido en homologación el
+    // 2026-09-26: se liberó entre los 9m32s y los 10m32s.
+    ALREADY_HAS_TA: 'Ya existe un TA vigente para este CUIT y servicio y ARCA no emite otro por unos minutos ' +
+        '(el manual de WSAA indica 10 en homologación y 2 en producción, y aclara que puede cambiar sin aviso). ' +
+        'No son las 12 h que dura el ticket: eso es su vigencia, no el bloqueo. ' +
         'Guardá el ticket entre ejecuciones pasando un `storage` (TokenStorage) a WsaaService, en vez de hacer login cada vez.',
 
     // === WSFE — Puntos de venta y configuración ===
@@ -31,12 +36,22 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     // === WSFE — Comprobantes y montos ===
     10015: 'Factura B: El importe supera el límite para consumidores finales anónimos. Identificá al comprador con CUIT/DNI.',
     10016: 'El CUIT informado como receptor no es válido o no existe en el Padrón.',
+    // Hoy ambos builders mandan ImpTotConc fijo en 0.00, así que el SDK no puede provocarlo.
+    // Queda escrito para el día que se soporte el neto no gravado.
+    10043: 'El campo ImpTotConc ("importe neto no gravado") no puede ser menor a cero, y en los ' +
+        'comprobantes clase C debe ser igual a cero. Excepción: en Bienes Usados (tipo 49) con ' +
+        'emisor monotributista, ImpTotConc lleva el subtotal de la operación.',
     600: 'No se pudo autorizar el comprobante. Revisá el campo `observations` en la respuesta para más detalle.',
     601: 'El comprobante ya fue autorizado anteriormente. No emitas dos veces el mismo número.',
     602: 'El número de comprobante es inválido o no es el correcto según el último autorizado.',
 
     // === WSFE — IVA ===
-    10043: 'La alícuota de IVA informada no existe o es incorrecta. Usá 3 (0%), 4 (10.5%), 5 (21%) o 6 (27%).',
+    // El código de la alícuota inválida es el 10019, no el 10043: hasta acá este hint
+    // estuvo colgado del 10043, que es una validación de importes y no habla de IVA.
+    // La lista de abajo tiene que seguir a VAT_RATE_CODES — lo exige tests/unit/errors.test.ts.
+    10019: 'La alícuota de IVA informada no está en el catálogo de ARCA. Los códigos vigentes son ' +
+        '3 (0%), 9 (2.5%), 8 (5%), 4 (10.5%), 5 (21%) y 6 (27%). La lista autoritativa la da ' +
+        'FEParamGetTiposIva: consultala con wsfe.getVatRates(). No aplica a comprobantes clase C.',
     10044: 'El importe de IVA no cuadra con la base imponible × alícuota.',
 
     // === RG 5616 — Condición frente al IVA del receptor ===
@@ -88,4 +103,48 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
  */
 export function getArcaHint(code: string | number): string | undefined {
     return ARCA_ERROR_HINTS[code];
+}
+
+/**
+ * Busca un hint para un rechazo, a partir de las observaciones que devolvió ARCA.
+ *
+ * **Por código, que es lo que corresponde.** Hasta la v3.0.0 el SDK descartaba `Obs.Code`
+ * al parsear y esta búsqueda se hacía con dos expresiones regulares sobre el texto: de los
+ * ~40 hints del diccionario, sólo dos podían llegar por el canal de los rechazos. Y es el
+ * canal que más importa, porque es donde ARCA explica por qué no autorizó el comprobante.
+ *
+ * Se devuelve el hint de la **primera** observación que tenga uno. ARCA puede mandar
+ * varias y no todas son accionables.
+ *
+ * @param observations - Observaciones con código, de `parseObservations()`.
+ * @param fallbackText - Texto libre para el último recurso. Si ninguna observación trae un
+ *   código conocido —o ARCA no mandó código— se reconocen por texto los dos casos de la
+ *   RG 5616, que son los más frecuentes y los que motivaron el parche original.
+ *
+ * Disponible desde v3.0.0.
+ */
+export function getHintForObservations(
+    observations: ReadonlyArray<{ code: number; message: string }>,
+    fallbackText?: string
+): string | undefined {
+    for (const obs of observations) {
+        if (!Number.isNaN(obs.code)) {
+            const hint = getArcaHint(obs.code);
+            if (hint) return hint;
+        }
+    }
+
+    // Último recurso por texto. Se conserva porque una observación sin código —o con un
+    // código que el diccionario todavía no tiene— igual debería dar la pista del 10246,
+    // que va a ser el rechazo masivo del 01/12/2026.
+    const texto = fallbackText ?? observations.map(o => o.message).join(' ');
+
+    if (/Condicion Frente al IVA del receptor es obligatorio/i.test(texto)) {
+        return getArcaHint(10246);
+    }
+    if (/Condicion Frente al IVA del receptor/i.test(texto)) {
+        return getArcaHint(10245);
+    }
+
+    return undefined;
 }

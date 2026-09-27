@@ -4,6 +4,7 @@ import { CaeaService } from '../../src/services/caea';
 import { callArcaApi } from '../../src/utils/network';
 import { escapeXml } from '../../src/utils/xml';
 import { ArcaRejectionError } from '../../src/types/common';
+import { getArcaHint } from '../../src/constants/errors';
 import {
   InvoiceType,
   BillingConcept,
@@ -506,6 +507,62 @@ describe('XML del request', () => {
         expect(error.observations[0]).toMatch(/Condicion Frente al IVA/);
         // El hint tiene que explicar qué hacer, no repetir el mensaje de ARCA.
         expect(error.hint).toMatch(/buyer\.vatCondition/);
+      }
+    });
+
+    it('expone el código de cada observación en observationDetails', async () => {
+      mockRechazo();
+      const wsfe = new WsfeService(BASE_CONFIG);
+
+      try {
+        await wsfe.issueInvoiceC({ items: [{ description: 'X', quantity: 1, unitPrice: 100 }] });
+        expect.unreachable('debería haber lanzado');
+      } catch (e) {
+        const error = e as ArcaRejectionError;
+
+        // Disponible desde v3.0.0. Antes el código se descartaba al parsear y quien
+        // quisiera ramificar tenía que hacer regex sobre el texto.
+        expect(error.observationDetails).toEqual([
+          { code: 10246, message: expect.stringMatching(/Condicion Frente al IVA/) },
+        ]);
+      }
+    });
+
+    /**
+     * El rechazo que antes llegaba sin hint.
+     *
+     * Hasta la v3.0.0 el hint de un rechazo se buscaba con dos expresiones regulares sobre
+     * el texto —10245 y 10246— porque el parseo descartaba `Obs.Code`. Cualquier otro
+     * código, por más que tuviera hint en el diccionario, llegaba con `hint: undefined`.
+     *
+     * Este test usa el **10048** a propósito: tiene hint desde hace versiones y su texto no
+     * matchea ninguno de los dos regex. Si alguien vuelve a tirar el código al parsear, esto
+     * se pone en rojo.
+     */
+    it('encuentra el hint de un rechazo cuyo texto no matchea ningún regex', async () => {
+      const MOCK_RECHAZO_10048 = MOCK_RECHAZO
+        .replace('<Code>10246</Code>', '<Code>10048</Code>')
+        .replace(
+          /<Msg>.*<\/Msg>/,
+          '<Msg>El punto de venta no se encuentra habilitado para emitir comprobantes.</Msg>'
+        );
+
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_LAST_INVOICE })
+        .mockResolvedValueOnce({ ok: true, text: async () => MOCK_RECHAZO_10048 });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+
+      try {
+        await wsfe.issueInvoiceC({ items: [{ description: 'X', quantity: 1, unitPrice: 100 }] });
+        expect.unreachable('debería haber lanzado');
+      } catch (e) {
+        const error = e as ArcaRejectionError;
+
+        expect(error.observationDetails?.[0].code).toBe(10048);
+        // Lo que antes era undefined.
+        expect(error.hint).toBe(getArcaHint(10048));
+        expect(error.hint).toBeDefined();
       }
     });
   });

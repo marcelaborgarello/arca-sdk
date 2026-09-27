@@ -1,10 +1,33 @@
-# Changelog
+﻿# Changelog
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [2.2.0] — Unreleased
+## [3.0.0] — Unreleased
+
+> Hay **un cambio incompatible**: se eliminaron los Tique. Ver abajo. Si nunca los usaste,
+> actualizar no te pide tocar nada. El resto de la versión es aditivo o corrección de bugs.
+>
+> **Lo más urgente sigue siendo otra cosa**: `CondicionIVAReceptorId` es obligatorio en
+> producción desde el **01/12/2026** y **homologación ya lo rechaza hoy**. Si emitís sin
+> `buyer.vatCondition`, ARCA no autoriza el comprobante.
+
+### 💥 Cambio incompatible: se eliminaron los Tique (81/82/83)
+
+Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos era ofrecer algo que **no funciona**.
+
+- **Eliminados**: `WsfeService.issueSimpleReceipt()`, `WsfeService.issueReceipt()` y los miembros `InvoiceType.TICKET_A` (81), `TICKET_B` (82) y `TICKET_C` (83).
+- **Migración**: los dos métodos se reemplazan por `issueInvoiceC()`, y es de una línea porque `issueInvoiceC()` pasa a aceptar `total` (ver abajo):
+  ```diff
+  - const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
+  + const cae = await wsfe.issueInvoiceC({ total: 1500 });
+  ```
+  La tabla completa está en el README, sección "Migrar a la v3.0.0".
+- **Por qué, con la evidencia**: los Tique son de la **RG 3561/2013** (Controladores Fiscales), un régimen distinto del de la RG 4291/wsfev1 que sigue el resto del SDK. Hay dos pruebas independientes: (1) `FECAESolicitar` con `CbteTipo=83` se rechaza con el error **11001** desde un punto de venta Web Services —el único tipo que un consumidor del SDK puede tener— verificado el 28/08/2026; y (2) **ARCA no los lista en `FEParamGetTiposCbte`**, verificado el 27/09/2026: de los quince valores que tenía `InvoiceType`, los **únicos tres** ausentes del catálogo eran exactamente 81, 82 y 83. La segunda es la más fuerte: no es que ARCA los rechace desde cierto punto de venta, es que **no existen en este webservice**.
+- Los fixtures de la suite unitaria usaban `CbteTipo=83` por defecto: describían un CAE aprobado para un comprobante que ARCA nunca autoriza. Ahora usan 11 (Factura C).
+- **No confundir con `issueReceiptA/B/C()`**, que emiten **Recibo** (códigos 4, 9 y 15), son comprobantes legítimos de wsfev1 y **no** se tocaron. El nombre engaña.
+- Si necesitás emitir tique, no hay camino por `wsfev1`: hace falta un Controlador Fiscal homologado, o el régimen "Facturador" de la RG 5198/2022, que usa otros códigos (109, 114) y todavía no se investigó.
 
 ### ✨ `getPointsOfSale()` devuelve `[]` en vez de lanzar ante el error 602
 
@@ -15,6 +38,63 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 - **Bugfix crítico**: El método consultaba el elemento XML `ActividadTipo`, pero ARCA devuelve `ActividadesTipo` (en plural). Al no encontrar la clave, el método retornaba silenciosamente `[]`. Corregido y asegurado con tests de integración que exigen que ningún catálogo de ARCA retorne listas vacías ni campos `undefined`.
 
+### 🐛 El hint del código 10043 explicaba un error que no es
+
+- **Bugfix**: el diccionario de hints (`getArcaHint`) tenía la explicación de *"alícuota de IVA inválida"* colgada del código **10043**, que según el Manual del Desarrollador RG 4291 v4.8 (p. 47) es una validación del campo `ImpTotConc` —importe neto no gravado— y no habla de IVA. Quien recibía un 10043 leía una respuesta sobre otro campo. El código correcto para la alícuota fuera de catálogo es el **10019** (v4.8, p. 43: *"siempre que se informe Id, debe ser un valor devuelto por el método `FEParamGetTiposIva`"*).
+- El hint del **10019** nombra ahora las **seis** alícuotas vigentes —antes listaba cuatro: faltaban el 2,5% (id 9) y el 5% (id 8)— y remite a `wsfe.getVatRates()` como fuente autoritativa en lugar de la lista fija.
+- El hint del **10043** pasa a describir lo que el manual dice de `ImpTotConc`, incluida la excepción de Bienes Usados (comprobante tipo 49) con emisor monotributista.
+
+### 🐛 El SDK decía que quedarse sin ticket de acceso costaba 12 horas. Son 10 minutos.
+
+- **Corrección de dato**: el hint `ALREADY_HAS_TA` —y otros nueve lugares del repo— afirmaban que ARCA no emite un TA nuevo *"hasta que expire el anterior (12 h)"*. Son dos números distintos: las **12 h** son la **vigencia** del ticket; el bloqueo para pedir otro es un *lapso preventivo* de **10 minutos en homologación** y **2 en producción**, según el *WSAA Manual del Desarrollador* cap. 10.6 — que aclara que *"estos valores pueden ser modificados dinámicamente y sin aviso previo"*.
+- **Medido**, no sólo leído: contra homologación real el 26/09/2026, el bloqueo se levantó entre los 9m32s y los 10m32s del TA anterior. Es una sola corrida, de una noche, en homologación; el valor de producción no se midió.
+- Por qué importa: quien se quedaba trabado creía haber perdido el día. La documentación de los tests de integración desalentaba correrlos por un costo que no era real.
+- Corregido también en `tests/integration/README.md`, en el JSDoc de `fileTokenStorage` y en los comentarios de `wsaa.ts`. Con tests de regresión en `errors.test.ts`.
+
+### 📖 Los JSDoc enseñaban lo que el resto de la documentación ya había corregido
+
+- **`WsfeService`**: el `@example` de la clase —el que aparece solo al pasar el mouse, sin ir a buscarlo— mostraba una Factura B con `buyer` **sin `vatCondition`**, que es exactamente lo que homologación rechaza hoy con la observación **10246**. Ahora los dos ejemplos lo informan. (También declaraba `const cae` dos veces en el mismo bloque.)
+- **`Buyer.vatCondition`**: decía sólo *"Opcional:"*. Sigue siendo opcional en el tipo para no romper la compilación de quien ya usa el SDK, pero el JSDoc ahora dice que omitirlo significa no poder facturar.
+- **`IssueInvoiceRequest.optionals`**: daba como ejemplo *"Condición IVA receptor ID 1010"*, que es la forma vieja y hoy da rechazo **10242** — la misma que ya se había quitado del README.
+- **`IssueOptions.optionals`**: daba como ejemplo *"RG 5762/2025, leyendas de Factura A"*, que es el mecanismo inexistente corregido en esta misma versión.
+
+### 🐛 Los hints no llegaban cuando ARCA rechazaba un comprobante
+
+Es el arreglo que hace que el resto del trabajo de esta versión le sirva a alguien.
+
+- **Bugfix**: al parsear la respuesta, el SDK **descartaba `Obs.Code`** y guardaba sólo el mensaje. Como el diccionario de hints se busca por código, el hint de un rechazo se resolvía con **dos expresiones regulares sobre el texto** (los códigos 10245 y 10246). De los ~40 hints del diccionario, **sólo esos dos podían llegar por el canal de los rechazos** — que es justamente el que importa, porque es donde ARCA explica por qué no autorizó el comprobante. Cualquier otro rechazo llegaba con `hint: undefined`.
+- Ahora el código se conserva y el hint se busca por código, con el reconocimiento por texto como último recurso (una observación sin código igual da la pista del 10246, que va a ser el rechazo masivo del 01/12/2026).
+- **`CaeaService` no pasaba ningún hint.** Ni siquiera los dos por texto: construía el `ArcaRejectionError` sin ese argumento. Un rechazo de rendición informativa —que tiene **plazo fatal**— llegaba sin una sola pista. Ahora usa el mismo camino que `WsfeService`.
+- **Aditivo**: se agrega `observationDetails?: ArcaObservation[]` a `CAEResponse`, a `CAEARegInformativoResponse` y a `ArcaRejectionError`, con `{ code, message }` por observación. `observations` **sigue siendo `string[]`** y no cambia: es el mismo dato, sólo los mensajes. Se exporta el tipo `ArcaObservation`.
+- El parseo de `<Observaciones>` estaba **copiado** en `wsfe.ts` y en `caea.ts`, y las dos copias tiraban el código. Se unificó en `parseObservations()` (`utils/xml.ts`): arreglar una sola habría dejado la otra rota, que es lo que ya había pasado con `getVATCode`.
+
+### ✨ `issueInvoiceC()` acepta `total` además de `items`
+
+- Para una venta de mostrador que no se detalla: `issueInvoiceC({ total: 1500 })`. Los dos campos son **excluyentes** —el tipo no deja mandar ambos ni ninguno— y con `items` el total se calcula como antes. Si se omite `buyer`, se asume consumidor final sin identificar. Aditivo: no cambia ninguna firma existente.
+- **De dónde viene**: es la comodidad que daba `issueSimpleReceipt({ total })`, eliminado en esta misma versión. Esa parte del método viejo **estaba bien**; lo que estaba mal era que emitía Tique C (83), un comprobante que ARCA no acepta por este webservice. Al revisar por qué existía quedó claro que **nunca fue una feature de impresión térmica ni nada parecido** —no hay una línea sobre impresión en todo el SDK— sino un atajo razonable colgado del tipo de comprobante equivocado. El atajo se conserva; la etiqueta falsa, no.
+- Se valida en el mismo lugar que antes: el tope de $10.000.000 de la RG 5866/2026 sigue exigiendo identificar al comprador, también por este camino. Y llamarlo sin `items` ni `total` lanza `ArcaValidationError` **antes de tocar la red**, para que un consumidor desde JavaScript sin tipos no emita un comprobante por $0 gastando un número real.
+
+### ✨ Comprobantes "A con leyenda Operación Sujeta a Retención" (RG 5762/2025)
+
+- Se agregan a `InvoiceType`: **`FACTURA_A_LEYENDA`** (51), **`NOTA_DEBITO_A_LEYENDA`** (52), **`NOTA_CREDITO_A_LEYENDA`** (53) y **`RECIBO_A_LEYENDA`** (54). Aditivo: no cambia ninguna firma.
+- **El SDK todavía no puede emitirlos**, y no hay helper dedicado a propósito: los métodos de emisión fijan internamente su `CbteTipo` y no existe uno genérico que reciba un `InvoiceType`. Los valores sirven hoy para `getInvoice()` y para `associatedInvoices[].type` — por ejemplo, para emitir una Nota de Crédito que anule una Factura A con leyenda. Verificados contra `FEParamGetTiposCbte` (vigentes desde el **22/05/2015**, o sea que la RG 5762 no los creó: los convirtió en el reemplazo de la clase "M"), pero **nunca se emitió uno realmente**. Un helper afirma que el camino funciona, y eso no está probado.
+
+### 📖 El README enseñaba un mecanismo que no existe para la leyenda de la RG 5762
+
+- **Corrección de documentación**: el README indicaba informar la leyenda de Factura A con `optionals: [{ id: 5, value: '1' }]`. Las tres partes estaban mal, verificado contra el Manual del Desarrollador v4.8 y contra el catálogo en vivo de ARCA:
+  1. **La leyenda no es un opcional**, es una clase de comprobante (códigos 51 a 54). Las validaciones 10017, 10061, 10063, 10217 y 10234 la tratan como clase, y el 10061 la identifica por número.
+  2. **El `id` 5 de `optionals` es otra cosa**: un código de excepción de la **RG 3668**, con valores `01` a `06` (validaciones 10086, 10088, 10089).
+  3. **`value: '1'` sería inválido igual**: el 10088 exige alfanumérico de **dos** caracteres.
+- La sección de `optionals` pasa a enumerar los ids reales que documenta el manual y a advertir que cada régimen tiene el suyo, con su formato propio. El ejemplo usa ahora el `id` 2 (Promoción Industrial, numérico de 8 dígitos).
+- La leyenda **"PAGO EN CBU INFORMADA"** de la misma RG queda documentada como **no implementada**: no figura en ninguna de las 202 páginas del manual, y los opcionales de CBU que sí documenta (`2101`, `27`) son exclusivos de MiPyME FCE (validaciones 10214-10216).
+
+### 🐛 Dos mensajes de error negaban alícuotas de IVA que el SDK acepta
+
+- **Bugfix**: el JSDoc de `InvoiceItem.vatRate` y el hint del error *"falta vatRate"* nombraban cuatro alícuotas (`0, 10.5, 21, 27`). El **5%** (id 8) y el **2,5%** (id 9) están vigentes desde el 20/10/2014 y el SDK los acepta desde la v2.1.0: los textos habían quedado en la versión anterior. Quien facturaba con esas alícuotas leía —en el tooltip del editor y en el mensaje de error— que su valor no existía, exactamente el síntoma que la v2.1.0 había ido a corregir.
+- Los tres mensajes que nombran alícuotas **se derivan ahora de `VAT_RATE_CODES`** en vez de tener cada uno su copia escrita a mano. Era la causa de fondo: la lista estaba repetida en siete lugares y las que se desactualizaron fueron, sin excepción, las copias manuales.
+- **`CaeaService` pasa a usar la misma tabla que `WsfeService`.** Tenía su propio `getVATCode()` con un `switch` en paralelo a `VAT_RATE_CODES`. Las dos listas coincidían, pero nada lo garantizaba: una alícuota agregada en un solo lado habría hecho que el mismo comprobante se aceptara por CAE y se rechazara por CAEA. Es un método privado — no cambia ninguna firma pública.
+- **Cobertura**: 14 tests nuevos. Incluyen el camino de la alícuota inválida de CAEA, que no tenía **ninguno**, y la verificación de que las seis alícuotas viajan al XML con el `<Id>` correcto.
+
 ### 🔐 Detección robusta de TA vigente en WSAA
 
 - **Bugfix**: La detección de ticket de acceso (TA) vigente en WSAA ahora reconoce tanto `"válido"` (con tilde) como `"valido"` (sin tilde), previniendo que variaciones de ortografía en las respuestas de ARCA impidan emitir el hint correspondiente y bloqueen la autenticación.
@@ -24,12 +104,15 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (13 archivos, 152 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 194 tests unitarios).
 
 ### ✅ Cobertura y testing
 
 - **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (76.85% de cobertura total).
 - **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 22 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
+- **El IVA discriminado corrió por primera vez contra ARCA real.** Hasta el 27/09/2026 el array `<Iva>`, `ImpIVA` y `AlicIva` nunca habían pasado por homologación: el CUIT de prueba del proyecto es monotributista y se creía que eso impedía emitir clase A. **Es falso** — delegando en WSASS a un CUIT Responsable Inscripto de prueba se emite sin cambiar una línea de código, porque el certificado identifica al *sistema cliente* y el CUIT emisor viaja aparte en `<Auth><Cuit>`. Se autorizó una Factura A con IVA discriminado. La receta quedó en `tests/integration/README.md`.
+  > **Alcance declarado**: corrió **una sola alícuota, el 21%**. Las otras cinco de `VAT_RATE_CODES` (0, 2,5, 5, 10,5 y 27%) siguen sin haber pasado por ARCA — y el 5% y el 2,5% son justamente las que el SDK rechazaba por error hasta la v2.1.0.
+- **Suite del diccionario de errores**: Nueva suite `tests/unit/errors.test.ts` con 8 tests. Un hint no lo mira ni el compilador ni ningún otro test, así que puede quedar congelado —o colgado del código equivocado— sin que nada se ponga en rojo: es exactamente lo que pasó con el 10043. El test exige que el hint del 10019 siga nombrando todas las alícuotas de `VAT_RATE_CODES`. **Alcance declarado: cubre sólo los dos códigos de IVA**; los otros ~38 hints del diccionario siguen sin cobertura.
 
 ---
 
@@ -118,7 +201,8 @@ Los enums de este SDK son una copia local del catálogo de ARCA: dan autocomplet
 
 ### 🔐 Hint para el TA vigente de WSAA
 
-- ARCA **no emite un ticket de acceso nuevo mientras el anterior siga vigente** (12 h). Sin persistir el ticket, cualquier proceso que haga `login()` de nuevo se come el fault *"El CEE ya posee un TA valido para el acceso al WSN solicitado"* y queda bloqueado hasta que expire. El error ahora llega con un `hint` que explica la causa y apunta a `storage` (`TokenStorage`). `ArcaAuthError` acepta un `hint` opcional (aditivo).
+- Teniendo un ticket de acceso vigente, ARCA **se niega a emitir otro** durante un lapso preventivo. Sin persistir el ticket, cualquier proceso que haga `login()` de nuevo se come el fault *"El CEE ya posee un TA valido para el acceso al WSN solicitado"*. El error ahora llega con un `hint` que explica la causa y apunta a `storage` (`TokenStorage`). `ArcaAuthError` acepta un `hint` opcional (aditivo).
+  > **Corregido el 27/09/2026.** Esta entrada decía que ARCA no emite otro ticket *"mientras el anterior siga vigente (12 h)"* y que el proceso *"queda bloqueado hasta que expire"*. Es falso: las 12 h son la **vigencia** del TA, mientras que el bloqueo dura **10 minutos en homologación** y 2 en producción (*WSAA Manual del Desarrollador* cap. 10.6, que aclara que pueden cambiar sin aviso), medido contra homologación el 26/09/2026. Se corrige acá además de en la versión nueva porque el `CHANGELOG` viaja dentro del paquete npm.
 
 ### ✅ Suite de integración contra ARCA homologación
 

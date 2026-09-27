@@ -70,8 +70,33 @@ Ya contemplado (no reportar como novedad):
 
 - **RG 5866/2026** (01/07/2026): unificó y abrogó el régimen de factura electrónica.
   Tope de $10.000.000 para identificar al comprador Consumidor Final.
-- **RG 5762/2025**: disolución de la Factura clase "M". Se emiten Facturas A con leyenda
-  ("OPERACIÓN SUJETA A RETENCIÓN" / "PAGO EN CBU INFORMADA") vía el campo `optionals`.
+- **RG 5762/2025**: disolución de la Factura clase "M". Se reemplaza por los comprobantes
+  **"A con leyenda 'Operación Sujeta a Retención'"**, que son una **clase propia** con sus
+  propios `CbteTipo`: **51** (Factura), **52** (NDébito), **53** (NCrédito) y **54**
+  (Recibo). Están en `InvoiceType` desde la v3.0.0.
+  > **No viajan por `optionals`.** Hasta el 27/09/2026 el README y este archivo decían que
+  > sí, y era falso: el manual las trata como clase de comprobante (validaciones 10017,
+  > 10061, 10063, 10217, 10234 hablan de *"Clase A y A con leyenda…"*) y ARCA las lista en
+  > `FEParamGetTiposCbte`, **vigentes desde el 22/05/2015** — la RG 5762 no las creó, las
+  > convirtió en el reemplazo de la "M". El `id` 5 de `optionals`, que el README daba como
+  > la forma de informarlas, es otra cosa: un **código de excepción de la RG 3668**,
+  > alfanumérico de dos caracteres (validaciones 10086, 10088, 10089).
+  >
+  > **El SDK no puede emitirlas todavía**: `issueDocument()` es privado y no hay método
+  > público que reciba un `InvoiceType`. Los valores del enum sirven hoy para
+  > `getInvoice()` y para `associatedInvoices[].type`. No agregar helper dedicado sin una
+  > emisión real de un **51**, que nunca se hizo.
+  >
+  > Hasta el 27/09/2026 este archivo daba otro motivo: *"el CUIT de homologación del
+  > proyecto es monotributista y no puede"*. **Ese motivo era falso.** Delegando en WSASS
+  > a un CUIT Responsable Inscripto de prueba se emite clase A sin problema — ese día se
+  > autorizó una Factura A (`CbteTipo` 1) con CAE. La receta está en
+  > `tests/integration/README.md`. O sea: probar el 51 hoy **es posible**, sólo falta
+  > hacerlo.
+  >
+  > La leyenda **"PAGO EN CBU INFORMADA"** de la misma RG **no figura en ninguna de las
+  > 202 páginas del manual v4.8** y no se sabe por qué campo viaja. Los opcionales de CBU
+  > documentados (`2101`, `27`) son exclusivos de MiPyME FCE (validaciones 10214-10216).
 - **RG 5616/2024**: `CondicionIVAReceptorId`. Implementado vía `buyer.vatCondition` y
   validado localmente con `VALID_VAT_CONDITION_IDS` (2, 3 y 11 deprecados). Pasa a ser
   **obligatorio el 01/12/2026** (manual v4.8) — no el 01/09.
@@ -115,7 +140,17 @@ con `VALID_VAT_CONDITION_IDS`. Y cada código aplica sólo a ciertas clases de c
 
 ### Tique (81/82/83) vs. Factura: dos regímenes distintos, no dos formatos de lo mismo
 
-`InvoiceType.TICKET_A/B/C` (81/82/83) no son "una Factura con otro nombre" —
+> **ELIMINADOS DEL SDK EN LA v3.0.0.** Ya no existen `InvoiceType.TICKET_A/B/C` ni
+> `issueSimpleReceipt()` / `issueReceipt()`. Esta sección **se conserva entera** porque es
+> el razonamiento normativo que justifica la decisión, y porque la pregunta *"¿por qué el
+> SDK no emite tique?"* va a volver. **No reagregarlos** sin leer todo esto.
+>
+> Lo que cerró la discusión, además del rechazo 11001: **ARCA no los lista en
+> `FEParamGetTiposCbte`** (27/09/2026 — de los quince valores que tenía el enum, los
+> únicos tres ausentes del catálogo eran ésos). No es que ARCA los rechace desde cierto
+> punto de venta: **no existen en wsfev1**.
+
+Los Tique (81/82/83) no son "una Factura con otro nombre" —
 son la clase de comprobante "Tique", regida por la **RG 3561/2013
 (Controladores Fiscales)**, una resolución aparte de la RG 4291/wsfev1 que
 sigue el resto del SDK. El puente entre ambos regímenes es la **RG 4290/2018**:
@@ -151,12 +186,9 @@ Factura/NC/ND, no para Tique.
 ("no es un tipo de comprobante valido. Ver metodo FEParamGetTiposCbte") desde
 un punto de venta Web Services estándar — el único tipo de punto de venta que
 un consumidor del SDK puede tener. La misma llamada con `CbteTipo=11`
-(Factura C) se acepta sin problema. O sea: `issueSimpleReceipt()` e
-`issueReceipt()` (`src/services/wsfe.ts`), que hardcodean `TICKET_C`, no
-funcionan contra ARCA real para prácticamente nadie que use el SDK. No es un
-problema de elegibilidad por actividad económica (la duda original) — el tipo
-de comprobante en sí está fuera del alcance de un punto de venta que no sea
-Controlador Fiscal.
+(Factura C) se acepta sin problema. No es un problema de elegibilidad por
+actividad económica (la duda original) — el tipo de comprobante en sí está
+fuera del alcance de un punto de venta que no sea Controlador Fiscal.
 
 Existe un régimen distinto y posterior para tique 100% electrónico sin
 hardware — **RG 5198/2022** ("Facturador", régimen especial de emisión
@@ -165,14 +197,21 @@ electrónica de comprobantes originales) — pero usa otros códigos (109
 es alcanzable vía un webservice de integración general o solo vía la app
 propia de ARCA.
 
-**Resuelto a medias (v1.4.1)**: `issueSimpleReceipt()` e `issueReceipt()` quedaron
-marcados `@deprecated` y emiten un warning en runtime fuera de producción. Siguen
-funcionando igual que antes — la deprecación avisa, no cambia el comportamiento.
+**Resuelto (v3.0.0, 2026-09-27)**: `issueSimpleReceipt()`, `issueReceipt()` y
+`TICKET_A/B/C` **se eliminaron**. Estuvieron `@deprecated` con warning en runtime desde
+la v1.4.1; la deprecación avisaba pero el SDK seguía ofreciendo un comprobante imposible.
 
-Lo que **no** está decidido es el destino final: eliminarlos en el próximo major o
-cambiarlos para que emitan Factura C. Hacerlos emitir un comprobante distinto del que
-dice el nombre es peor que borrarlos, pero borrarlos rompe a terceros. Es un cambio
-de API pública: no se resuelve sin discutirlo primero.
+La decisión la tomó Marcela, y descartó la alternativa que estaba sobre la mesa —hacer
+que emitieran Factura C conservando el nombre—: **un método que emite algo distinto de lo
+que dice su nombre es peor que uno que no existe**, porque el error es silencioso. Borrar
+rompe la compilación, que es ruidoso y se arregla una vez.
+
+La migración está en el `CHANGELOG` de la v3.0.0 y en el README, sección "Migrar a la
+v3.0.0". Ojo que la firma cambia: `issueSimpleReceipt({ total })` → `issueInvoiceC({
+items, buyer })`.
+
+> **No confundir con `issueReceiptA/B/C()`**, que emiten **Recibo** (4, 9 y 15), son
+> comprobantes legítimos de wsfev1 y **no** se tocaron. El nombre engaña.
 
 ## Fechas: instante vs. fecha-calendario
 
@@ -272,14 +311,40 @@ prueba que el SDK hace lo que creemos, no que ARCA lo acepte.
 
 Es opt-in por variables de entorno y no corre en CI. Ver `tests/integration/README.md`.
 
-Dos cosas que muerden:
+Tres cosas que muerden:
 
-- **ARCA no emite un TA nuevo mientras el anterior siga vigente** (12 h). Sin persistir
-  el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"* y queda
-  bloqueada hasta que expire. Por eso los tests usan un `TokenStorage` en archivo, que
-  es además lo que necesita cualquier consumidor en producción.
+- **Teniendo un TA vigente, ARCA se niega a emitir otro por unos minutos.** Sin persistir
+  el ticket, la segunda corrida se come *"El CEE ya posee un TA valido"*. Por eso los
+  tests usan un `TokenStorage` en archivo, que es además lo que necesita cualquier
+  consumidor en producción.
+  > **Son 10 minutos en homologación** y 2 en producción (*WSAA Manual del Desarrollador*
+  > cap. 10.6, que aclara que pueden cambiar sin aviso). **Medido** contra homologación
+  > el 2026-09-26: se liberó entre los 9m32s y los 10m32s.
+  >
+  > **No son 12 h.** Las 12 h son la *vigencia* del TA (`expirationTime`), que es otra
+  > cosa. Hasta el 2026-09-27 este archivo, el hint `ALREADY_HAS_TA`, `wsaa.ts`,
+  > `helpers.ts`, `tests/integration/README.md` y tres comentarios de `wsaa.test.ts`
+  > decían todos que el bloqueo duraba 12 h, y ninguno tenía fuente. Equivocarse al
+  > correr los tests de integración cuesta 10 minutos, no un día.
 - La numeración es correlativa y real: no correr dos suites en paralelo contra el mismo
   punto de venta.
+- **Una delegación nueva no sirve con un TA viejo.** El TA trae congelada la lista de
+  relaciones del momento en que se emitió: si delegás un CUIT en WSASS y reusás el TA
+  cacheado, wsfev1 devuelve *"ValidacionDeToken: No aparecio CUIT en lista de
+  relaciones"* (error 600). Hay que borrar `.ta-cache.json` y pedir uno nuevo.
+  No está documentado en ningún manual de ARCA.
+
+> **Se puede probar clase A aunque el CUIT del proyecto sea monotributista.** Delegando
+> en WSASS a un CUIT Responsable Inscripto de prueba (`30000000007` sirve). El
+> certificado no cambia: identifica al sistema cliente, no al contribuyente, y el CUIT
+> emisor viaja en `<Auth><Cuit>` (`config.cuit`). Verificado el 27/09/2026 con una
+> Factura A autorizada. La receta completa está en `tests/integration/README.md`.
+> Con eso, el IVA discriminado (el array `<Iva>`, `ImpIVA`, `AlicIva`) **corrió por
+> primera vez contra ARCA real**, cosa que hasta ese día no había pasado nunca. Pero
+> ojo con el alcance: corrió **una sola alícuota, el 21%**. Las otras cinco de
+> `VAT_RATE_CODES` —0, 2,5, 5, 10,5 y 27%— siguen sin haber pasado por ARCA, y el **5%
+> y el 2,5% son justamente los que el SDK rechazaba por error hasta la v2.1.0**. El
+> agujero se angostó, no se cerró.
 
 **Regla de diseño**: ningún tipo de comprobante entra al enum público ni recibe helper
 dedicado sin una corrida verde ahí. La lista autoritativa la da `FEParamGetTiposCbte`.

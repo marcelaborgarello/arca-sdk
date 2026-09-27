@@ -12,6 +12,7 @@ export { CaeaService } from './services/caea';
 export type {
     Environment,
     ArcaConfig,
+    ArcaObservation,
 } from './types/common';
 
 // Tipos WSAA

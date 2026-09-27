@@ -12,6 +12,8 @@ import {
     InvoiceType,
     BillingConcept,
     TaxIdType,
+    VAT_RATE_CODES,
+    listVatRates,
 } from '../types/wsfe';
 import {
     calculateSubtotal,
@@ -20,9 +22,9 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly, formatArcaTimestamp } from '../utils/formatArcaDate';
-import { parseXml, escapeXml } from '../utils/xml';
+import { parseXml, escapeXml, parseObservations } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
-import { getArcaHint } from '../constants/errors';
+import { getArcaHint, getHintForObservations } from '../constants/errors';
 
 /**
  * Servicio de Código de Autorización Electrónico Anticipado (CAEA)
@@ -469,13 +471,8 @@ export class CaeaService {
             ? data.FeDetResp.FECAEDetResponse[0]
             : data.FeDetResp.FECAEDetResponse;
 
-        const observations: string[] = [];
-        if (det?.Observaciones) {
-            const obsArray = Array.isArray(det.Observaciones.Obs)
-                ? det.Observaciones.Obs
-                : [det.Observaciones.Obs];
-            obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
-        }
+        const observationDetails = parseObservations(det);
+        const observations = observationDetails.map(o => o.message);
 
         // ARCA procesó la rendición y la rechazó: los comprobantes no quedaron
         // informados. Devolverlo como resultado normal hace que quien no mire `result`
@@ -490,7 +487,12 @@ export class CaeaService {
                     pointOfSale: Number(cab.PtoVta),
                     invoiceType: Number(cab.CbteTipo),
                     result: cab.Resultado,
-                }
+                },
+                // Hasta la v3.0.0 esta llamada no pasaba hint alguno: un rechazo de
+                // rendición informativa —que tiene plazo fatal— llegaba sin ninguna pista,
+                // ni siquiera las dos que `wsfe.ts` reconocía por texto.
+                getHintForObservations(observationDetails),
+                observationDetails
             );
         }
 
@@ -500,6 +502,7 @@ export class CaeaService {
             pointOfSale: Number(cab.PtoVta),
             invoiceType: Number(cab.CbteTipo),
             observations: observations.length > 0 ? observations : undefined,
+            observationDetails: observationDetails.length > 0 ? observationDetails : undefined,
         };
     }
 
@@ -622,20 +625,31 @@ export class CaeaService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Mapea alícuotas numéricas a los códigos internos de ARCA
+     * Mapea alícuota % al código interno de ARCA.
+     *
+     * Usa {@link VAT_RATE_CODES}, la misma tabla que `WsfeService`. Hasta la v2.1.0 este
+     * método tenía su propia copia en un `switch`: las dos listas coincidían, pero nada
+     * lo garantizaba. Una alícuota nueva agregada en un solo lado habría hecho que el
+     * mismo comprobante se aceptara por CAE y se rechazara por CAEA — y CAEA es
+     * justamente el servicio que menos se ejercita, así que la divergencia habría
+     * tardado en aparecer.
+     *
+     * El catálogo autoritativo lo devuelve `FEParamGetTiposIva`
+     * ({@link WsfeService.getVatRates}).
      */
     private getVATCode(rate: number): number {
-        switch (rate) {
-            case 0: return 3; // 0% / Exento / No gravado (código 3 en catálogo ARCA)
-            case 10.5: return 4;
-            case 21: return 5;
-            case 27: return 6;
-            case 5: return 8;
-            case 2.5: return 9;
-            default:
-                throw new ArcaValidationError(`Alícuota IVA no soportada por ARCA: ${rate}%`, {
-                    supportedRates: [0, 10.5, 21, 27, 5, 2.5]
-                });
+        const code = VAT_RATE_CODES[rate];
+        if (code === undefined) {
+            throw new ArcaValidationError(
+                `Alícuota IVA inválida: ${rate}%`,
+                {
+                    validRates: Object.keys(VAT_RATE_CODES).map(Number),
+                    hint: `Alícuotas vigentes: ${listVatRates()}. Si ARCA agregó una ` +
+                        'nueva, consultala con wsfe.getVatRates() y abrí un issue.',
+                }
+            );
         }
+
+        return code;
     }
 }

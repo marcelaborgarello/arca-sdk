@@ -1,4 +1,4 @@
-import type { ArcaConfig } from './common';
+import type { ArcaConfig, ArcaObservation } from './common';
 import type { LoginTicket } from './wsaa';
 import type { ArcaDateInput } from '../utils/formatArcaDate';
 
@@ -15,7 +15,11 @@ export interface WsfeConfig extends ArcaConfig {
 }
 
 /**
- * Tipo de comprobante ARCA
+ * Tipo de comprobante ARCA (`CbteTipo`).
+ *
+ * Este enum es una selección, no el catálogo completo: ARCA informa 36 tipos y acá hay
+ * los de uso general. **La lista autoritativa la da `FEParamGetTiposCbte`**, consultable
+ * con {@link WsfeService.getInvoiceTypes}.
  */
 export enum InvoiceType {
     FACTURA_A = 1,
@@ -33,9 +37,41 @@ export enum InvoiceType {
     NOTA_CREDITO_C = 13,
     RECIBO_C = 15,
 
-    TICKET_A = 81,
-    TICKET_B = 82,
-    TICKET_C = 83,
+    /**
+     * Factura A con leyenda "Operación Sujeta a Retención".
+     *
+     * Es la clase que el manual abrevia **ALEY** (ver la tabla de {@link VatCondition}).
+     * Junto con 52, 53 y 54 es el reemplazo de la Factura clase "M", disuelta por la
+     * **RG 5762/2025** — pero los códigos no son nuevos: ARCA los tiene vigentes desde
+     * el **22/05/2015**, verificado contra `FEParamGetTiposCbte` el 2026-09-27.
+     *
+     * @remarks **El SDK todavía no puede emitir este comprobante**: los métodos de
+     * emisión fijan internamente su `CbteTipo` y no hay uno genérico que reciba un
+     * `InvoiceType`. Lo que sí sirve hoy es **consultar**
+     * ({@link WsfeService.getInvoice}) y **asociar** ({@link AssociatedInvoice.type},
+     * para una Nota de Crédito que anule una Factura A con leyenda).
+     *
+     * @remarks **No se verificó por emisión real.** La única prueba es que ARCA lo lista
+     * en su catálogo. Por eso tampoco hay helper dedicado: un helper afirma que el camino
+     * funciona, y eso todavía no está probado.
+     *
+     * Disponible desde v3.0.0.
+     */
+    FACTURA_A_LEYENDA = 51,
+    /** Nota de Débito A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    NOTA_DEBITO_A_LEYENDA = 52,
+    /** Nota de Crédito A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    NOTA_CREDITO_A_LEYENDA = 53,
+    /** Recibo A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    RECIBO_A_LEYENDA = 54,
+
+    // Los Tique (81 Tique A, 82 Tique B, 83 Tique C) se **eliminaron en la v3.0.0**.
+    // ARCA no los lista en `FEParamGetTiposCbte` —verificado el 2026-09-27: de los quince
+    // valores que tenía este enum, los únicos tres ausentes del catálogo eran ésos— y
+    // `FECAESolicitar` los rechaza con el error 11001 desde un punto de venta Web
+    // Services. Son de la RG 3561/2013 (Controladores Fiscales), un régimen distinto del
+    // de la RG 4291/wsfev1. No se vuelven a agregar: para el caso general va Factura
+    // (1 / 6 / 11). Ver el CHANGELOG de la v3.0.0 para la migración.
 }
 
 /**
@@ -90,7 +126,12 @@ export interface InvoiceItem {
     quantity: number;
     /** Precio unitario */
     unitPrice: number;
-    /** Alícuota IVA % (0, 10.5, 21, 27) */
+    /**
+     * Alícuota de IVA en porcentaje: `0`, `2.5`, `5`, `10.5`, `21` o `27`.
+     *
+     * El catálogo completo, con el código que ARCA espera en `<AlicIva><Id>`, está en
+     * {@link VAT_RATE_CODES}; la fuente autoritativa la da `wsfe.getVatRates()`.
+     */
     vatRate?: number;
 }
 
@@ -203,6 +244,28 @@ export const VAT_RATE_CODES: Readonly<Record<number, number>> = {
 };
 
 /**
+ * Las alícuotas de {@link VAT_RATE_CODES} en porcentaje, ordenadas de menor a mayor y
+ * listas para intercalar en un mensaje: `'0, 2.5, 5, 10.5, 21, 27'`.
+ *
+ * Existe para que ningún mensaje de error tenga su propia copia de la lista. Hasta la
+ * v2.1.0 había varias copias escritas a mano y dos de ellas nombraban cuatro alícuotas
+ * de las seis: el SDK aceptaba el 5% y el 2,5% y al mismo tiempo le decía al usuario
+ * que no existían.
+ *
+ * `Object.keys` por sí solo no alcanza: JavaScript devuelve primero las claves que son
+ * enteros, en orden ascendente, y después el resto en orden de inserción — daría
+ * `0, 5, 21, 27, 2.5, 10.5`. De ahí el orden numérico explícito.
+ *
+ * @internal Uso interno del SDK. No se exporta desde el índice del paquete.
+ */
+export function listVatRates(): string {
+    return Object.keys(VAT_RATE_CODES)
+        .map(Number)
+        .sort((a, b) => a - b)
+        .join(', ');
+}
+
+/**
  * Códigos que ARCA acepta en `CondicionIVAReceptorId`.
  * Se usa para avisar temprano, antes de gastar un request que ARCA va a rechazar
  * con el código 10242.
@@ -217,7 +280,16 @@ export interface Buyer {
     docType: TaxIdType;
     /** Número de documento (sin guiones) */
     docNumber: string;
-    /** Opcional: Condición frente al IVA del receptor (ej: VatCondition.CONSUMIDOR_FINAL) */
+    /**
+     * Condición frente al IVA del receptor — `CondicionIVAReceptorId` (RG 5616/2024).
+     * Ej.: `VatCondition.CONSUMIDOR_FINAL`.
+     *
+     * @remarks **Opcional en el tipo, obligatorio en los hechos.** Homologación ya
+     * rechaza el comprobante si falta (`Resultado = 'R'` con la observación **10246**,
+     * verificado el 2026-09-25), y en producción pasa a rechazar el **01/12/2026**
+     * (Manual v4.8). Sigue siendo opcional en el tipo para no romper la compilación de
+     * quien ya usa el SDK, pero omitirlo hoy significa no poder facturar.
+     */
     vatCondition?: VatCondition | number;
 }
 
@@ -300,7 +372,15 @@ export interface IssueOptions {
      * `Date` (instante, se convierte al día calendario argentino).
      */
     date?: ArcaDateInput;
-    /** Campos opcionales adjuntos (ej. RG 5762/2025, leyendas de Factura A). */
+    /**
+     * Campos opcionales adjuntos, para regímenes que los exigen. El catálogo lo da
+     * {@link WsfeService.getOptionalTypes}; cada `id` tiene su formato y ARCA lo valida
+     * por separado.
+     *
+     * @remarks No sirven para la leyenda de la RG 5762/2025 —ésa es una clase de
+     * comprobante, {@link InvoiceType.FACTURA_A_LEYENDA}— ni para la condición de IVA
+     * del receptor, que tiene campo propio en {@link Buyer.vatCondition}.
+     */
     optionals?: InvoiceOptional[];
     /** Fechas de servicio. Obligatorias si `concept` es 2 o 3. */
     serviceDates?: ServiceDates;
@@ -347,7 +427,15 @@ export interface IssueInvoiceRequest {
      * (instante, se convierte al día calendario argentino). Ver {@link ArcaDateInput}.
      */
     date?: ArcaDateInput;
-    /** Campos opcionales adjuntos (ej: Condición IVA receptor ID 1010) */
+    /**
+     * Campos opcionales adjuntos, para regímenes que los exigen: Promoción Industrial
+     * (`id` 2), RG 3368 (`10`, `1011`, `1012`), RG 4004-E (`17`, `1801`, `1802`), y
+     * demás. El catálogo lo da {@link WsfeService.getOptionalTypes}.
+     *
+     * @remarks **La condición de IVA del receptor NO va acá.** Tiene campo propio:
+     * {@link Buyer.vatCondition}. Informarla como opcional con el `id` 1010 es la forma
+     * vieja, anterior a que el manual le diera un campo, y hoy da rechazo **10242**.
+     */
     optionals?: InvoiceOptional[];
     /**
      * Otros tributos (percepciones, impuestos internos, tasas). Suman a `ImpTrib`
@@ -404,8 +492,21 @@ export interface CAEResponse {
     caeExpiry: string;
     /** Resultado (A = Aprobado, R = Rechazado) */
     result: 'A' | 'R';
-    /** Observaciones de ARCA */
+    /**
+     * Observaciones de ARCA, sólo los mensajes.
+     *
+     * Un comprobante puede salir **aprobado con observaciones**: eso no es un rechazo y no
+     * lanza. Para ramificar por código usá {@link CAEResponse.observationDetails}.
+     */
     observations?: string[];
+    /**
+     * Las mismas observaciones, con el código de cada una (`Obs.Code`).
+     *
+     * Disponible desde v3.0.0: hasta entonces el SDK descartaba el código al parsear, así
+     * que quien quisiera distinguir una observación de otra tenía que hacer expresiones
+     * regulares sobre el texto.
+     */
+    observationDetails?: ArcaObservation[];
     /** Items (se retornan si fueron proveídos en el request) */
     items?: InvoiceItem[];
     /** Desglose IVA (solo para Factura A/B) */

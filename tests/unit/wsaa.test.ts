@@ -108,9 +108,10 @@ describe('WsaaService.login', () => {
         vi.clearAllMocks();
     });
 
-    // El orden memoria → storage → red es lo más caro de romper de todo el SDK: un
-    // pedido de TA de más deja al CUIT bloqueado 12 h ("el CEE ya posee un TA valido"),
-    // y no es un error que se arregle reintentando.
+    // El orden memoria → storage → red es de lo más caro de romper del SDK: un pedido de
+    // TA de más deja al CUIT trabado unos minutos ("el CEE ya posee un TA valido"), y no
+    // es un error que se arregle reintentando. Son 10 minutos en homologación y 2 en
+    // producción (manual de WSAA cap. 10.6), no las 12 h que dura el ticket.
     describe('prioridad memoria → storage → red', () => {
         it('debe devolver el ticket de memoria sin tocar el storage ni la red', async () => {
             mockNetworkOk('token-de-red');
@@ -289,8 +290,8 @@ describe('WsaaService.login', () => {
 
         // ARCA escribe "valido" sin tilde, pero es prosa de un faultstring, no un código:
         // puede corregirse en cualquier deploy. Si el hint dependiera de la ortografía,
-        // desaparecería en silencio y el usuario se quedaría sin saber por qué está
-        // bloqueado 12 h.
+        // desaparecería en silencio y el usuario se quedaría sin saber por qué ARCA no le
+        // emite otro ticket.
         it('debe agregar el hint también si ARCA escribe "válido" con tilde', async () => {
             mockNetworkFault('El CEE ya posee un TA válido para el acceso al WSN solicitado');
             const wsaa = new WsaaService(BASE_CONFIG);
@@ -419,7 +420,7 @@ describe('WsaaService.clearCache', () => {
     });
 
     // Sólo limpia la memoria: el storage es de quien lo pasó, y borrarlo por debajo
-    // haría que el proceso vuelva a pedir un TA y quede bloqueado 12 h.
+    // haría que el proceso vuelva a pedir un TA y se coma el lapso de bloqueo de ARCA.
     it('no debe borrar el ticket del storage', async () => {
         mockNetworkOk('token-de-red');
         const storage = fakeStorage({

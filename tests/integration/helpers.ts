@@ -51,9 +51,14 @@ export function getIntegrationConfig(): IntegrationConfig | null {
 /**
  * Persistencia de TA en un archivo local.
  *
- * ARCA **no emite un TA nuevo mientras el anterior siga vigente** (12 h): sin esto,
- * la segunda corrida de la suite se come el fault "El CEE ya posee un TA valido para
- * el acceso al WSN solicitado" y queda bloqueada hasta que expire el primero.
+ * Teniendo un TA vigente, ARCA **se niega a emitir otro** durante un lapso preventivo:
+ * sin esto, la segunda corrida de la suite se come el fault "El CEE ya posee un TA
+ * valido para el acceso al WSN solicitado".
+ *
+ * Ese lapso son **10 minutos en homologación** (2 en producción) según el manual de
+ * WSAA cap. 10.6, medido el 2026-09-26 contra homologación real: se liberó entre los
+ * 9m32s y los 10m32s. **No son las 12 h que dura el TA** — eso es su vigencia, y es
+ * otra cosa. El manual avisa que el valor puede cambiar sin previo aviso.
  *
  * Es también el patrón que cualquier consumidor del SDK necesita en producción.
  */

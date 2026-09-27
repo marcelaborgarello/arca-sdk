@@ -165,7 +165,8 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
             traer: (w: WsfeService) => Promise<CatalogEntry[]>;
             vistos: number;
         }> = [
-            { nombre: 'getInvoiceTypes', traer: w => w.getInvoiceTypes(), vistos: 48 },
+            // 36 el 2026-09-27; la nota anterior decía 48 y no se sabe de dónde salía.
+            { nombre: 'getInvoiceTypes', traer: w => w.getInvoiceTypes(), vistos: 36 },
             { nombre: 'getVatRates', traer: w => w.getVatRates(), vistos: 6 },
             { nombre: 'getTaxTypes', traer: w => w.getTaxTypes(), vistos: 11 },
             { nombre: 'getDocumentTypes', traer: w => w.getDocumentTypes(), vistos: 36 },
@@ -292,24 +293,73 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
             }
         });
 
-        it('no lista los Tique entre los tipos de comprobante habilitados', async () => {
+        /**
+         * Los Tique **no están** en el catálogo de ARCA. Es la razón por la que la v3.0.0
+         * eliminó `TICKET_A/B/C` del enum y los dos métodos que los emitían.
+         *
+         * Los códigos van como literales a propósito: el enum ya no los tiene, y el punto
+         * del test es que **sigan sin aparecer**. Si ARCA algún día los habilitara por
+         * wsfev1, esto se pone en rojo y hay que revisar la decisión de haberlos borrado.
+         */
+        it('no lista ninguno de los tres Tique entre los tipos de comprobante', async () => {
             const types = await makeService().getInvoiceTypes();
             const ids = types.map(t => t.id);
 
             // Esta es la consulta que habría evitado el episodio del 11001.
             expect(ids).toContain(String(InvoiceType.FACTURA_C));
-            expect(ids).not.toContain(String(InvoiceType.TICKET_C));
+
+            // Verificado el 2026-09-27: de los quince valores que tenía InvoiceType, los
+            // únicos tres ausentes del catálogo eran exactamente los Tique. Es la segunda
+            // prueba del hallazgo, independiente del rechazo 11001: no es que ARCA los
+            // rechace desde este punto de venta, es que no existen en wsfev1.
+            for (const tique of ['81', '82', '83']) {
+                expect(
+                    ids,
+                    `ARCA ahora lista el Tique ${tique}. La v3.0.0 los borró del SDK porque ` +
+                    'no existían en wsfev1: si reaparecieron, hay que revisar esa decisión.'
+                ).not.toContain(tique);
+            }
+        });
+
+        /**
+         * Los cuatro comprobantes "A con leyenda" de la RG 5762/2025.
+         *
+         * Hasta el 2026-09-27 el README enseñaba a informar la leyenda por `optionals`
+         * con el `id` 5, que es un código de excepción de la RG 3668 y no tiene nada que
+         * ver. La leyenda es una **clase de comprobante**, y este test lo fija contra la
+         * fuente autoritativa en vez de contra el PDF.
+         *
+         * No hay test de emisión todavía: nunca se emitió un 51. **Sí se puede** —desde el
+         * 2026-09-27 se sabe que delegando en WSASS a un CUIT Responsable Inscripto de
+         * prueba se emite clase A sin cambiar código (ver el README de esta carpeta)— así
+         * que es trabajo pendiente, no un bloqueo. Por eso tampoco hay helper dedicado.
+         */
+        it('lista los cuatro comprobantes A con leyenda (RG 5762)', async () => {
+            const types = await makeService().getInvoiceTypes();
+            const porId = new Map(types.map(t => [t.id, t]));
+
+            const conLeyenda = [
+                InvoiceType.FACTURA_A_LEYENDA,
+                InvoiceType.NOTA_DEBITO_A_LEYENDA,
+                InvoiceType.NOTA_CREDITO_A_LEYENDA,
+                InvoiceType.RECIBO_A_LEYENDA,
+            ];
+
+            for (const tipo of conLeyenda) {
+                const entrada = porId.get(String(tipo));
+                expect(entrada, `ARCA no lista el tipo ${tipo} en FEParamGetTiposCbte`).toBeDefined();
+                expect(entrada!.description).toMatch(/leyenda/i);
+                expect(entrada!.description).toMatch(/retenci[oó]n/i);
+            }
         });
     });
 
-    // Confirmado el 2026-08-28: el Tique (RG 3561/2013, Controladores Fiscales) no se
-    // emite por wsfev1 desde un punto de venta Web Services. Este test fija el hallazgo:
-    // si alguna vez ARCA lo habilita, se pone en rojo y hay que revisar la deprecación.
-    it('rechaza Tique C (CbteTipo=83) con el error 11001', async () => {
-        const wsfe = makeService();
-
-        await expect(
-            wsfe.issueSimpleReceipt({ total: 100 })
-        ).rejects.toThrow(/11001|tipo de comprobante/i);
-    });
+    // El test 'rechaza Tique C (CbteTipo=83) con el error 11001' se borró en la v3.0.0
+    // junto con `issueSimpleReceipt()`: ya no hay forma pública de pedirle al SDK que
+    // emita un 83, que es precisamente el objetivo de haberlo eliminado.
+    //
+    // El hallazgo no se perdió: lo cubre 'no lista ninguno de los tres Tique entre los
+    // tipos de comprobante', más arriba, que es una prueba más fuerte. Ese test consulta
+    // el catálogo autoritativo en vez de gastar un intento de emisión, y se pone en rojo
+    // si ARCA alguna vez los habilita.
 });

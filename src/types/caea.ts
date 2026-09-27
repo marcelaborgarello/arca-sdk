@@ -1,4 +1,5 @@
 import type { WsfeConfig, InvoiceType, BillingConcept, Buyer, InvoiceOptional, AssociatedInvoice, InvoiceItem, ArcaDateInput, ServiceDates, InvoiceTax } from './wsfe';
+import type { ArcaObservation } from './common';
 
 /**
  * Configuration for CaeaService (identical to WsfeConfig)
@@ -123,4 +124,10 @@ export interface CAEARegInformativoResponse {
     invoiceType: number;
     /** Any observations/warnings returned by ARCA */
     observations?: string[];
+    /**
+     * Las mismas observaciones, con el código de cada una (`Obs.Code`).
+     *
+     * Disponible desde v3.0.0.
+     */
+    observationDetails?: ArcaObservation[];
 }

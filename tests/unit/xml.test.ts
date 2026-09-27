@@ -1,6 +1,62 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { buildTRA, parseWsaaResponse, validateCUIT } from '../../src/utils/xml';
+import { buildTRA, parseWsaaResponse, validateCUIT, parseObservations } from '../../src/utils/xml';
 import { ArcaAuthError } from '../../src/types/common';
+
+/**
+ * `parseObservations` — el bloque `<Observaciones>` de una respuesta de ARCA.
+ *
+ * Vive en `utils/xml.ts` porque hasta la v3.0.0 estaba **copiado** en `wsfe.ts` y en
+ * `caea.ts`, y las dos copias descartaban `Obs.Code`. Arreglar una sola habría dejado la
+ * otra rota, que es lo que ya había pasado con `getVATCode`.
+ */
+describe('parseObservations', () => {
+  it('conserva el código además del mensaje', () => {
+    // Es el punto de todo el cambio: hasta la v3.0.0 se guardaba sólo el Msg, y como el
+    // diccionario de hints se busca por código, ninguno llegaba por este canal.
+    const det = { Observaciones: { Obs: { Code: 10019, Msg: 'Alicuota invalida' } } };
+
+    expect(parseObservations(det)).toEqual([{ code: 10019, message: 'Alicuota invalida' }]);
+  });
+
+  it('trata una sola observación como lista de uno', () => {
+    // `fast-xml-parser` devuelve objeto con una y array con varias. Tratar el objeto como
+    // lista hace que se itere sobre sus propiedades: dos "observaciones" basura.
+    const det = { Observaciones: { Obs: { Code: 10016, Msg: 'Uno solo' } } };
+
+    expect(parseObservations(det)).toHaveLength(1);
+  });
+
+  it('devuelve todas cuando ARCA manda varias', () => {
+    const det = {
+      Observaciones: {
+        Obs: [
+          { Code: 10245, Msg: 'Resultará obligatorio' },
+          { Code: 10016, Msg: 'CbteDesde' },
+        ],
+      },
+    };
+
+    const obs = parseObservations(det);
+
+    expect(obs).toHaveLength(2);
+    expect(obs.map(o => o.code)).toEqual([10245, 10016]);
+  });
+
+  it('devuelve lista vacía si no hay observaciones', () => {
+    expect(parseObservations({ Resultado: 'A' })).toEqual([]);
+    expect(parseObservations({ Observaciones: {} })).toEqual([]);
+    expect(parseObservations(undefined)).toEqual([]);
+  });
+
+  it('no inventa un código cuando ARCA no lo manda', () => {
+    // `Number(undefined)` es NaN, no 0. Un 0 se confundiría con un código real y
+    // `getHintForObservations` iría a buscar el hint del código 0.
+    const obs = parseObservations({ Observaciones: { Obs: { Msg: 'Sin código' } } });
+
+    expect(obs[0].message).toBe('Sin código');
+    expect(Number.isNaN(obs[0].code)).toBe(true);
+  });
+});
 
 describe('buildTRA', () => {
   it('debe generar XML TRA válido', () => {

@@ -37,6 +37,7 @@ Thumbs.db
 # Documentación interna
 docs/
 pendientes.md
+pendientes-*.md
 historial.md
 explicaciones.md
 

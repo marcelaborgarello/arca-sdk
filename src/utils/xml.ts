@@ -1,7 +1,40 @@
 import { XMLBuilder, XMLParser } from 'fast-xml-parser';
 import { ArcaAuthError } from '../types/common';
+import type { ArcaObservation } from '../types/common';
 import type { LoginTicket } from '../types/wsaa';
 import { formatArcaDate } from './formatArcaDate';
+
+/**
+ * Extrae el bloque `<Observaciones>` de un detalle de respuesta de ARCA.
+ *
+ * Existe acá, y no en cada servicio, porque `wsfe.ts` y `caea.ts` tenían el mismo bloque
+ * copiado. Las dos copias descartaban `Obs.Code`, y arreglar una sola habría dejado la
+ * otra rota — que es exactamente lo que pasó con `getVATCode`.
+ *
+ * El elemento viene como objeto cuando hay una sola observación y como array cuando hay
+ * varias: `fast-xml-parser` no normaliza eso, y tratarlo mal hace que con una sola
+ * observación se itere sobre sus propiedades en vez de sobre la lista.
+ *
+ * @param det - El detalle (`FECAEDetResponse` o equivalente) ya parseado.
+ * @returns Las observaciones con código y mensaje. Lista vacía si no hay.
+ *
+ * Disponible desde v3.0.0.
+ */
+export function parseObservations(det: unknown): ArcaObservation[] {
+    const bloque = (det as { Observaciones?: { Obs?: unknown } } | undefined)?.Observaciones;
+    if (!bloque || bloque.Obs === undefined || bloque.Obs === null) return [];
+
+    const lista = Array.isArray(bloque.Obs) ? bloque.Obs : [bloque.Obs];
+
+    return lista
+        .filter((o): o is { Code?: unknown; Msg?: unknown } => o !== null && typeof o === 'object')
+        .map(o => ({
+            // ARCA manda el código como número, pero el parser puede darlo como string
+            // según el XML. `Number` de algo ausente da NaN, no 0: no inventamos un código.
+            code: Number(o.Code),
+            message: o.Msg === undefined || o.Msg === null ? '' : String(o.Msg),
+        }));
+}
 
 /**
  * Genera el XML TRA (Ticket de Requerimiento de Acceso)
