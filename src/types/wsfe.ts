@@ -289,7 +289,16 @@ export interface Buyer {
     docType: TaxIdType;
     /** Número de documento (sin guiones) */
     docNumber: string;
-    /** Opcional: Condición frente al IVA del receptor (ej: VatCondition.CONSUMIDOR_FINAL) */
+    /**
+     * Condición frente al IVA del receptor — `CondicionIVAReceptorId` (RG 5616/2024).
+     * Ej.: `VatCondition.CONSUMIDOR_FINAL`.
+     *
+     * @remarks **Opcional en el tipo, obligatorio en los hechos.** Homologación ya
+     * rechaza el comprobante si falta (`Resultado = 'R'` con la observación **10246**,
+     * verificado el 2026-09-25), y en producción pasa a rechazar el **01/12/2026**
+     * (Manual v4.8). Sigue siendo opcional en el tipo para no romper la compilación de
+     * quien ya usa el SDK, pero omitirlo hoy significa no poder facturar.
+     */
     vatCondition?: VatCondition | number;
 }
 
@@ -372,7 +381,15 @@ export interface IssueOptions {
      * `Date` (instante, se convierte al día calendario argentino).
      */
     date?: ArcaDateInput;
-    /** Campos opcionales adjuntos (ej. RG 5762/2025, leyendas de Factura A). */
+    /**
+     * Campos opcionales adjuntos, para regímenes que los exigen. El catálogo lo da
+     * {@link WsfeService.getOptionalTypes}; cada `id` tiene su formato y ARCA lo valida
+     * por separado.
+     *
+     * @remarks No sirven para la leyenda de la RG 5762/2025 —ésa es una clase de
+     * comprobante, {@link InvoiceType.FACTURA_A_LEYENDA}— ni para la condición de IVA
+     * del receptor, que tiene campo propio en {@link Buyer.vatCondition}.
+     */
     optionals?: InvoiceOptional[];
     /** Fechas de servicio. Obligatorias si `concept` es 2 o 3. */
     serviceDates?: ServiceDates;
@@ -419,7 +436,15 @@ export interface IssueInvoiceRequest {
      * (instante, se convierte al día calendario argentino). Ver {@link ArcaDateInput}.
      */
     date?: ArcaDateInput;
-    /** Campos opcionales adjuntos (ej: Condición IVA receptor ID 1010) */
+    /**
+     * Campos opcionales adjuntos, para regímenes que los exigen: Promoción Industrial
+     * (`id` 2), RG 3368 (`10`, `1011`, `1012`), RG 4004-E (`17`, `1801`, `1802`), y
+     * demás. El catálogo lo da {@link WsfeService.getOptionalTypes}.
+     *
+     * @remarks **La condición de IVA del receptor NO va acá.** Tiene campo propio:
+     * {@link Buyer.vatCondition}. Informarla como opcional con el `id` 1010 es la forma
+     * vieja, anterior a que el manual le diera un campo, y hoy da rechazo **10242**.
+     */
     optionals?: InvoiceOptional[];
     /**
      * Otros tributos (percepciones, impuestos internos, tasas). Suman a `ImpTrib`

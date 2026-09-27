@@ -51,17 +51,32 @@ import { getArcaHint } from '../constants/errors';
  *   pointOfSale: 4,
  * });
  *
- * // Factura C rápida (consumidor final)
- * const cae = await wsfe.issueInvoiceC({ items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }] });
- * console.log('CAE:', cae.cae);
- * console.log('QR:', cae.qrUrl);
+ * // Factura C a consumidor final
+ * const facturaC = await wsfe.issueInvoiceC({
+ *   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+ *   buyer: {
+ *     docType: TaxIdType.FINAL_CONSUMER,
+ *     docNumber: '0',
+ *     vatCondition: VatCondition.CONSUMIDOR_FINAL,
+ *   },
+ * });
+ * console.log('CAE:', facturaC.cae);
+ * console.log('QR:', facturaC.qrUrl);
  *
  * // Factura A/B con IVA discriminado
- * const cae = await wsfe.issueInvoiceB({
+ * const facturaB = await wsfe.issueInvoiceB({
  *   items: [{ description: 'Servicio', quantity: 1, unitPrice: 1000, vatRate: 21 }],
- *   buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+ *   buyer: {
+ *     docType: TaxIdType.CUIT,
+ *     docNumber: '20987654321',
+ *     vatCondition: VatCondition.CONSUMIDOR_FINAL,
+ *   },
  * });
  * ```
+ *
+ * @remarks Los ejemplos informan siempre `buyer.vatCondition` a propósito: sin ese
+ * campo, homologación **ya rechaza** el comprobante con la observación 10246 (RG 5616),
+ * y producción hace lo mismo desde el 01/12/2026.
  */
 export class WsfeService {
     private config: WsfeConfig;
