@@ -190,11 +190,40 @@ export class WsfeService {
 
     /**
      * Emite una Factura C (consumidor final, sin discriminación de IVA).
+     *
+     * Acepta **`items` o `total`, uno de los dos**. `total` es el atajo para una venta de
+     * mostrador que no se detalla; con `items` el total se calcula. El tipo no deja mandar
+     * los dos ni ninguno.
+     *
+     * Si se omite `buyer`, se asume consumidor final sin identificar (`DocTipo` 99,
+     * `DocNro` 0). Ojo que eso tiene límite: desde la RG 5866/2026, a partir de
+     * $10.000.000 es obligatorio identificar al comprador y el SDK lo valida antes de
+     * salir a la red.
+     *
+     * @example
+     * ```typescript
+     * // Venta de mostrador, sin detallar
+     * await wsfe.issueInvoiceC({
+     *   total: 1500,
+     *   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+     * });
+     *
+     * // Con detalle
+     * await wsfe.issueInvoiceC({
+     *   items: [{ description: 'Producto', quantity: 2, unitPrice: 750 }],
+     *   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+     * });
+     * ```
+     *
+     * @remarks `total` existe desde la v3.0.0. Reemplaza la comodidad que daba
+     * `issueSimpleReceipt({ total })`, eliminado en esa versión: esa parte del método viejo
+     * estaba bien — lo que estaba mal era que emitía Tique C (83), un comprobante que ARCA
+     * no acepta por este webservice.
      */
-    async issueInvoiceC(params: {
-        items: InvoiceItem[];
-        buyer?: Buyer;
-    } & IssueOptions): Promise<CAEResponse> {
+    async issueInvoiceC(params: (
+        | { items: InvoiceItem[]; total?: never }
+        | { total: number; items?: never }
+    ) & { buyer?: Buyer } & IssueOptions): Promise<CAEResponse> {
         return this.issueInvoiceWithoutVAT(InvoiceType.FACTURA_C, params);
     }
 
@@ -721,18 +750,41 @@ export class WsfeService {
     }
 
     /**
-     * Helper para emitir comprobantes tipo C que no discriminan IVA
+     * Helper para emitir comprobantes tipo C que no discriminan IVA.
+     *
+     * `items` y `total` son los dos opcionales acá porque `issueInvoiceC` admite cualquiera
+     * de los dos. El resto de los que usan este helper (NC, ND, Recibo C) exigen `items`
+     * en su propia firma, así que para ellos no cambia nada.
      */
     private async issueInvoiceWithoutVAT(
         type: InvoiceType,
         params: {
-            items: InvoiceItem[];
+            items?: InvoiceItem[];
+            total?: number;
             associatedInvoices?: AssociatedInvoice[];
             buyer?: Buyer;
         } & IssueOptions
     ): Promise<CAEResponse> {
         this.validateAssociatedInvoices(type, params.associatedInvoices);
-        const total = round(calculateTotal(params.items));
+
+        const hasItems = Boolean(params.items && params.items.length > 0);
+
+        // El tipo de `issueInvoiceC` ya impide mandar ninguno de los dos, pero al SDK lo
+        // consume también JavaScript sin tipos: sin este chequeo, un llamado sin `items`
+        // ni `total` emitiría un comprobante por $0 y consumiría un número real.
+        if (!hasItems && params.total === undefined) {
+            throw new ArcaValidationError(
+                'Faltan `items` y `total`: hay que informar uno de los dos.',
+                {
+                    hint: 'Para una venta sin detallar pasá `total`; para detallarla, `items`. ' +
+                        'Los dos juntos no: el total se calcula de los items.',
+                }
+            );
+        }
+
+        const total = hasItems
+            ? round(calculateTotal(params.items!))
+            : round(params.total!);
 
         return this.issueDocument({
             ...params,

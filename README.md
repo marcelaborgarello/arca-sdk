@@ -589,8 +589,8 @@ Se eliminaron:
 
 | Eliminado en v3.0.0 | Reemplazo |
 |---|---|
-| `wsfe.issueSimpleReceipt({ total })` | `wsfe.issueInvoiceC({ items, buyer })` |
-| `wsfe.issueReceipt({ items })` | `wsfe.issueInvoiceC({ items, buyer })` |
+| `wsfe.issueSimpleReceipt({ total })` | `wsfe.issueInvoiceC({ total })` |
+| `wsfe.issueReceipt({ items })` | `wsfe.issueInvoiceC({ items })` |
 | `InvoiceType.TICKET_A` / `TICKET_B` / `TICKET_C` | `InvoiceType.FACTURA_A` / `FACTURA_B` / `FACTURA_C` |
 
 **Por qué se borraron y no se dejaron deprecados.** Estaban `@deprecated` desde la v1.4.1,
@@ -600,23 +600,32 @@ declaraba, los únicos tres ausentes del catálogo eran ésos) y `FECAESolicitar
 con el error **11001**. No es una limitación del SDK ni de tu punto de venta: los Tique son
 de la **RG 3561/2013** (Controladores Fiscales) y no se emiten por este webservice.
 
-El cambio de `issueSimpleReceipt()` a `issueInvoiceC()` no es sólo de nombre: el método
-viejo tomaba un `total` y el nuevo toma `items`. Con un solo importe:
+**La comodidad del método viejo se conservó.** `issueSimpleReceipt()` tomaba un `total` en
+vez de `items`, y eso estaba bien —una venta de mostrador no siempre se detalla—: lo que
+estaba mal era el comprobante que emitía. Así que `issueInvoiceC()` ahora acepta **`items`
+o `total`**, y la migración es de una línea:
 
 ```diff
 - const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
-+ const cae = await wsfe.issueInvoiceC({
-+   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
-+   buyer: {
-+     docType: TaxIdType.FINAL_CONSUMER,
-+     docNumber: '0',
-+     vatCondition: VatCondition.CONSUMIDOR_FINAL,
-+   },
-+ });
++ const cae = await wsfe.issueInvoiceC({ total: 1500 });
 ```
+
+Si no pasás `buyer`, se asume consumidor final sin identificar (`DocTipo` 99, `DocNro` 0),
+igual que hacía el método viejo.
 
 > **Aprovechá para informar `buyer.vatCondition`**, que no es opcional en la práctica:
 > homologación ya rechaza sin ese campo y producción lo hace desde el 01/12/2026 (RG 5616).
+>
+> ```typescript
+> await wsfe.issueInvoiceC({
+>   total: 1500,
+>   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+> });
+> ```
+
+> **`items` y `total` son excluyentes**: el tipo no deja mandar los dos ni ninguno, y en
+> JavaScript sin tipos el SDK lanza `ArcaValidationError` antes de tocar la red. Con `items`
+> el total se calcula.
 
 **Si necesitás emitir tique de verdad**, no hay camino por `wsfev1`: hace falta un
 Controlador Fiscal homologado, o el régimen "Facturador" de la RG 5198/2022 —que usa otros
@@ -730,7 +739,7 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 179 tests:
+14 archivos, 181 tests:
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|

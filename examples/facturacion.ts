@@ -49,17 +49,18 @@ async function main() {
     });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // EJEMPLO 1: Factura C a consumidor final (sin identificar)
+    // EJEMPLO 1: Factura C por un total, sin detallar
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     // Hasta la v3.0.0 este ejemplo usaba issueSimpleReceipt(), que emitía Tique C (83) —
-    // un comprobante que ARCA no lista en FEParamGetTiposCbte y rechaza con el 11001.
+    // un comprobante que ARCA no lista en FEParamGetTiposCbte y rechaza con el 11001. El
+    // atajo de pasar sólo el total se conservó: ahora vive en issueInvoiceC().
 
-    console.log('📱 Ejemplo 1: Factura C a consumidor final\n');
+    console.log('📱 Ejemplo 1: Factura C por un total\n');
 
     try {
         const result = await wsfe.issueInvoiceC({
-            items: [{ description: 'Producto', quantity: 1, unitPrice: 3500 }],
+            total: 3500,
             buyer: {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',

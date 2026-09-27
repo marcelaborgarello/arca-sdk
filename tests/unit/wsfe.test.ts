@@ -73,6 +73,19 @@ function buildMockCAEXml(type = 11): string {
 </soapenv:Envelope>`;
 }
 
+/**
+ * Emite y devuelve el error, tipado. Un `.catch()` suelto da la unión con `CAEResponse` y
+ * TypeScript no deja leerle `.details`.
+ */
+async function capturarError(emitir: () => Promise<unknown>): Promise<ArcaValidationError> {
+  try {
+    await emitir();
+  } catch (e) {
+    return e as ArcaValidationError;
+  }
+  throw new Error('Se esperaba un ArcaValidationError y la emisión no lanzó');
+}
+
 function mockCalls(caeType = 11): void {
   (callArcaApi as any)
     .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
@@ -134,6 +147,71 @@ describe('WsfeService', () => {
       // `items` a mano sobre la respuesta. Era redundante: issueDocument() ya los pone.
       expect(result.items).toEqual(items);
       expect(result.items?.length).toBe(2);
+    });
+  });
+
+  /**
+   * El atajo `total`, que reemplaza la comodidad de `issueSimpleReceipt({ total })`.
+   *
+   * Esa parte del método viejo estaba bien: una venta de mostrador no siempre se detalla.
+   * Lo que estaba mal era que emitía Tique C (83), un comprobante que ARCA no acepta por
+   * wsfev1. Acá el mismo atajo emite Factura C y se llama Factura C.
+   */
+  describe('issueInvoiceC con `total` en vez de `items`', () => {
+    it('emite por el monto informado, sin detallar', async () => {
+      let capturedXml = '';
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockImplementationOnce((_url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => buildMockCAEXml(11) });
+        });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueInvoiceC({ total: 1500 });
+
+      expect(result.cae).toBe('75157992335329');
+      expect(result.invoiceType).toBe(11);
+      // El importe tiene que llegar al XML, no quedarse en el objeto.
+      expect(capturedXml).toContain('<ar:ImpTotal>1500.00</ar:ImpTotal>');
+    });
+
+    it('asume consumidor final sin identificar si no se pasa buyer', async () => {
+      let capturedXml = '';
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockImplementationOnce((_url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => buildMockCAEXml(11) });
+        });
+
+      await new WsfeService(BASE_CONFIG).issueInvoiceC({ total: 1500 });
+
+      expect(capturedXml).toContain('<ar:DocTipo>99</ar:DocTipo>');
+      expect(capturedXml).toContain('<ar:DocNro>0</ar:DocNro>');
+    });
+
+    it('sigue validando el tope de la RG 5866 con el atajo', async () => {
+      // El camino de `total` no puede saltearse la validación del comprador: a partir de
+      // $10.000.000 hay que identificarlo. Era el riesgo de agregar una segunda entrada.
+      const wsfe = new WsfeService(BASE_CONFIG);
+
+      await expect(
+        wsfe.issueInvoiceC({ total: 10000000 })
+      ).rejects.toThrow('es obligatorio identificar al comprador');
+    });
+
+    it('lanza si no se informa ni `items` ni `total`', async () => {
+      // El tipo lo impide, pero al SDK lo consume también JavaScript sin tipos. Sin este
+      // chequeo se emitiría un comprobante por $0 gastando un número real.
+      const wsfe = new WsfeService(BASE_CONFIG);
+
+      const error = await capturarError(() => (wsfe.issueInvoiceC as any)({}));
+
+      expect(error).toBeInstanceOf(ArcaValidationError);
+      expect(error.message).toMatch(/items.*total|total.*items/i);
+      // Y no llegó a tocar la red.
+      expect(callArcaApi).not.toHaveBeenCalled();
     });
   });
 
@@ -491,16 +569,6 @@ describe('WsfeService — los hints de alícuota de IVA', () => {
       expect(listVatRates()).toBe('0, 2.5, 5, 10.5, 21, 27');
     });
   });
-
-  /** Emite y devuelve el error, tipado. `.catch()` suelto da la unión con `CAEResponse`. */
-  async function capturarError(emitir: () => Promise<unknown>): Promise<ArcaValidationError> {
-    try {
-      await emitir();
-    } catch (e) {
-      return e as ArcaValidationError;
-    }
-    throw new Error('Se esperaba un ArcaValidationError y la emisión no lanzó');
-  }
 
   it('el hint de "falta vatRate" nombra las seis alícuotas', async () => {
     const wsfe = new WsfeService(BASE_CONFIG);

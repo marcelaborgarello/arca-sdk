@@ -18,13 +18,10 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos era ofrecer algo que **no funciona**.
 
 - **Eliminados**: `WsfeService.issueSimpleReceipt()`, `WsfeService.issueReceipt()` y los miembros `InvoiceType.TICKET_A` (81), `TICKET_B` (82) y `TICKET_C` (83).
-- **Migración**: los dos métodos se reemplazan por `issueInvoiceC()`. Ojo que la firma cambia — el viejo tomaba `total`, el nuevo toma `items`:
+- **Migración**: los dos métodos se reemplazan por `issueInvoiceC()`, y es de una línea porque `issueInvoiceC()` pasa a aceptar `total` (ver abajo):
   ```diff
   - const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
-  + const cae = await wsfe.issueInvoiceC({
-  +   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
-  +   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
-  + });
+  + const cae = await wsfe.issueInvoiceC({ total: 1500 });
   ```
   La tabla completa está en el README, sección "Migrar a la v3.0.0".
 - **Por qué, con la evidencia**: los Tique son de la **RG 3561/2013** (Controladores Fiscales), un régimen distinto del de la RG 4291/wsfev1 que sigue el resto del SDK. Hay dos pruebas independientes: (1) `FECAESolicitar` con `CbteTipo=83` se rechaza con el error **11001** desde un punto de venta Web Services —el único tipo que un consumidor del SDK puede tener— verificado el 28/08/2026; y (2) **ARCA no los lista en `FEParamGetTiposCbte`**, verificado el 27/09/2026: de los quince valores que tenía `InvoiceType`, los **únicos tres** ausentes del catálogo eran exactamente 81, 82 y 83. La segunda es la más fuerte: no es que ARCA los rechace desde cierto punto de venta, es que **no existen en este webservice**.
@@ -61,6 +58,12 @@ Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos er
 - **`IssueInvoiceRequest.optionals`**: daba como ejemplo *"Condición IVA receptor ID 1010"*, que es la forma vieja y hoy da rechazo **10242** — la misma que ya se había quitado del README.
 - **`IssueOptions.optionals`**: daba como ejemplo *"RG 5762/2025, leyendas de Factura A"*, que es el mecanismo inexistente corregido en esta misma versión.
 
+### ✨ `issueInvoiceC()` acepta `total` además de `items`
+
+- Para una venta de mostrador que no se detalla: `issueInvoiceC({ total: 1500 })`. Los dos campos son **excluyentes** —el tipo no deja mandar ambos ni ninguno— y con `items` el total se calcula como antes. Si se omite `buyer`, se asume consumidor final sin identificar. Aditivo: no cambia ninguna firma existente.
+- **De dónde viene**: es la comodidad que daba `issueSimpleReceipt({ total })`, eliminado en esta misma versión. Esa parte del método viejo **estaba bien**; lo que estaba mal era que emitía Tique C (83), un comprobante que ARCA no acepta por este webservice. Al revisar por qué existía quedó claro que **nunca fue una feature de impresión térmica ni nada parecido** —no hay una línea sobre impresión en todo el SDK— sino un atajo razonable colgado del tipo de comprobante equivocado. El atajo se conserva; la etiqueta falsa, no.
+- Se valida en el mismo lugar que antes: el tope de $10.000.000 de la RG 5866/2026 sigue exigiendo identificar al comprador, también por este camino. Y llamarlo sin `items` ni `total` lanza `ArcaValidationError` **antes de tocar la red**, para que un consumidor desde JavaScript sin tipos no emita un comprobante por $0 gastando un número real.
+
 ### ✨ Comprobantes "A con leyenda Operación Sujeta a Retención" (RG 5762/2025)
 
 - Se agregan a `InvoiceType`: **`FACTURA_A_LEYENDA`** (51), **`NOTA_DEBITO_A_LEYENDA`** (52), **`NOTA_CREDITO_A_LEYENDA`** (53) y **`RECIBO_A_LEYENDA`** (54). Aditivo: no cambia ninguna firma.
@@ -91,7 +94,7 @@ Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos er
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 179 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 181 tests unitarios).
 
 ### ✅ Cobertura y testing
 

@@ -37,9 +37,10 @@ async function run() {
             pointOfSale: 4,  // Tu punto de venta dado de alta en ARCA
         });
 
-        // Emitir Factura C a consumidor final
+        // Emitir Factura C a consumidor final. `total` es el atajo para una venta que no
+        // se detalla; si querés detallarla, pasá `items` en vez de `total`.
         const cae = await wsfe.issueInvoiceC({
-            items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+            total: 1500,
             buyer: {
                 docType: TaxIdType.FINAL_CONSUMER,
                 docNumber: '0',
