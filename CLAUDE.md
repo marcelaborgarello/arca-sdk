@@ -70,8 +70,26 @@ Ya contemplado (no reportar como novedad):
 
 - **RG 5866/2026** (01/07/2026): unificó y abrogó el régimen de factura electrónica.
   Tope de $10.000.000 para identificar al comprador Consumidor Final.
-- **RG 5762/2025**: disolución de la Factura clase "M". Se emiten Facturas A con leyenda
-  ("OPERACIÓN SUJETA A RETENCIÓN" / "PAGO EN CBU INFORMADA") vía el campo `optionals`.
+- **RG 5762/2025**: disolución de la Factura clase "M". Se reemplaza por los comprobantes
+  **"A con leyenda 'Operación Sujeta a Retención'"**, que son una **clase propia** con sus
+  propios `CbteTipo`: **51** (Factura), **52** (NDébito), **53** (NCrédito) y **54**
+  (Recibo). Están en `InvoiceType` desde la v2.2.0.
+  > **No viajan por `optionals`.** Hasta el 27/09/2026 el README y este archivo decían que
+  > sí, y era falso: el manual las trata como clase de comprobante (validaciones 10017,
+  > 10061, 10063, 10217, 10234 hablan de *"Clase A y A con leyenda…"*) y ARCA las lista en
+  > `FEParamGetTiposCbte`, **vigentes desde el 22/05/2015** — la RG 5762 no las creó, las
+  > convirtió en el reemplazo de la "M". El `id` 5 de `optionals`, que el README daba como
+  > la forma de informarlas, es otra cosa: un **código de excepción de la RG 3668**,
+  > alfanumérico de dos caracteres (validaciones 10086, 10088, 10089).
+  >
+  > **El SDK no puede emitirlas todavía**: `issueDocument()` es privado y no hay método
+  > público que reciba un `InvoiceType`. Los valores del enum sirven hoy para
+  > `getInvoice()` y para `associatedInvoices[].type`. No agregar helper dedicado sin una
+  > emisión real — el CUIT de homologación del proyecto es monotributista y no puede.
+  >
+  > La leyenda **"PAGO EN CBU INFORMADA"** de la misma RG **no figura en ninguna de las
+  > 202 páginas del manual v4.8** y no se sabe por qué campo viaja. Los opcionales de CBU
+  > documentados (`2101`, `27`) son exclusivos de MiPyME FCE (validaciones 10214-10216).
 - **RG 5616/2024**: `CondicionIVAReceptorId`. Implementado vía `buyer.vatCondition` y
   validado localmente con `VALID_VAT_CONDITION_IDS` (2, 3 y 11 deprecados). Pasa a ser
   **obligatorio el 01/12/2026** (manual v4.8) — no el 01/09.

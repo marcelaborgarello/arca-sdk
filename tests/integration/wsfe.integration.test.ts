@@ -165,7 +165,8 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
             traer: (w: WsfeService) => Promise<CatalogEntry[]>;
             vistos: number;
         }> = [
-            { nombre: 'getInvoiceTypes', traer: w => w.getInvoiceTypes(), vistos: 48 },
+            // 36 el 2026-09-27; la nota anterior decía 48 y no se sabe de dónde salía.
+            { nombre: 'getInvoiceTypes', traer: w => w.getInvoiceTypes(), vistos: 36 },
             { nombre: 'getVatRates', traer: w => w.getVatRates(), vistos: 6 },
             { nombre: 'getTaxTypes', traer: w => w.getTaxTypes(), vistos: 11 },
             { nombre: 'getDocumentTypes', traer: w => w.getDocumentTypes(), vistos: 36 },
@@ -292,13 +293,50 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
             }
         });
 
-        it('no lista los Tique entre los tipos de comprobante habilitados', async () => {
+        it('no lista ninguno de los tres Tique entre los tipos de comprobante', async () => {
             const types = await makeService().getInvoiceTypes();
             const ids = types.map(t => t.id);
 
             // Esta es la consulta que habría evitado el episodio del 11001.
             expect(ids).toContain(String(InvoiceType.FACTURA_C));
+
+            // Verificado el 2026-09-27: de los valores de InvoiceType, los únicos tres
+            // ausentes del catálogo de ARCA son exactamente los Tique. Es la segunda
+            // prueba del hallazgo, independiente del rechazo 11001: no es que ARCA los
+            // rechace desde este punto de venta, es que no existen en wsfev1.
+            expect(ids).not.toContain(String(InvoiceType.TICKET_A));
+            expect(ids).not.toContain(String(InvoiceType.TICKET_B));
             expect(ids).not.toContain(String(InvoiceType.TICKET_C));
+        });
+
+        /**
+         * Los cuatro comprobantes "A con leyenda" de la RG 5762/2025.
+         *
+         * Hasta el 2026-09-27 el README enseñaba a informar la leyenda por `optionals`
+         * con el `id` 5, que es un código de excepción de la RG 3668 y no tiene nada que
+         * ver. La leyenda es una **clase de comprobante**, y este test lo fija contra la
+         * fuente autoritativa en vez de contra el PDF.
+         *
+         * No hay test de emisión: el CUIT de homologación del proyecto es monotributista
+         * y no puede emitir clase A. Por eso tampoco hay helper dedicado.
+         */
+        it('lista los cuatro comprobantes A con leyenda (RG 5762)', async () => {
+            const types = await makeService().getInvoiceTypes();
+            const porId = new Map(types.map(t => [t.id, t]));
+
+            const conLeyenda = [
+                InvoiceType.FACTURA_A_LEYENDA,
+                InvoiceType.NOTA_DEBITO_A_LEYENDA,
+                InvoiceType.NOTA_CREDITO_A_LEYENDA,
+                InvoiceType.RECIBO_A_LEYENDA,
+            ];
+
+            for (const tipo of conLeyenda) {
+                const entrada = porId.get(String(tipo));
+                expect(entrada, `ARCA no lista el tipo ${tipo} en FEParamGetTiposCbte`).toBeDefined();
+                expect(entrada!.description).toMatch(/leyenda/i);
+                expect(entrada!.description).toMatch(/retenci[oó]n/i);
+            }
         });
     });
 

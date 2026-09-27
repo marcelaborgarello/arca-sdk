@@ -21,6 +21,20 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - El hint del **10019** nombra ahora las **seis** alícuotas vigentes —antes listaba cuatro: faltaban el 2,5% (id 9) y el 5% (id 8)— y remite a `wsfe.getVatRates()` como fuente autoritativa en lugar de la lista fija.
 - El hint del **10043** pasa a describir lo que el manual dice de `ImpTotConc`, incluida la excepción de Bienes Usados (comprobante tipo 49) con emisor monotributista.
 
+### ✨ Comprobantes "A con leyenda Operación Sujeta a Retención" (RG 5762/2025)
+
+- Se agregan a `InvoiceType`: **`FACTURA_A_LEYENDA`** (51), **`NOTA_DEBITO_A_LEYENDA`** (52), **`NOTA_CREDITO_A_LEYENDA`** (53) y **`RECIBO_A_LEYENDA`** (54). Aditivo: no cambia ninguna firma.
+- **El SDK todavía no puede emitirlos**, y no hay helper dedicado a propósito: los métodos de emisión fijan internamente su `CbteTipo` y no existe uno genérico que reciba un `InvoiceType`. Los valores sirven hoy para `getInvoice()` y para `associatedInvoices[].type` — por ejemplo, para emitir una Nota de Crédito que anule una Factura A con leyenda. Verificados contra `FEParamGetTiposCbte` (vigentes desde el **22/05/2015**, o sea que la RG 5762 no los creó: los convirtió en el reemplazo de la clase "M"), pero **nunca se emitió uno realmente**: el CUIT de homologación del proyecto es monotributista y no puede emitir clase A. Un helper afirma que el camino funciona, y eso no está probado.
+
+### 📖 El README enseñaba un mecanismo que no existe para la leyenda de la RG 5762
+
+- **Corrección de documentación**: el README indicaba informar la leyenda de Factura A con `optionals: [{ id: 5, value: '1' }]`. Las tres partes estaban mal, verificado contra el Manual del Desarrollador v4.8 y contra el catálogo en vivo de ARCA:
+  1. **La leyenda no es un opcional**, es una clase de comprobante (códigos 51 a 54). Las validaciones 10017, 10061, 10063, 10217 y 10234 la tratan como clase, y el 10061 la identifica por número.
+  2. **El `id` 5 de `optionals` es otra cosa**: un código de excepción de la **RG 3668**, con valores `01` a `06` (validaciones 10086, 10088, 10089).
+  3. **`value: '1'` sería inválido igual**: el 10088 exige alfanumérico de **dos** caracteres.
+- La sección de `optionals` pasa a enumerar los ids reales que documenta el manual y a advertir que cada régimen tiene el suyo, con su formato propio. El ejemplo usa ahora el `id` 2 (Promoción Industrial, numérico de 8 dígitos).
+- La leyenda **"PAGO EN CBU INFORMADA"** de la misma RG queda documentada como **no implementada**: no figura en ninguna de las 202 páginas del manual, y los opcionales de CBU que sí documenta (`2101`, `27`) son exclusivos de MiPyME FCE (validaciones 10214-10216).
+
 ### 🐛 Dos mensajes de error negaban alícuotas de IVA que el SDK acepta
 
 - **Bugfix**: el JSDoc de `InvoiceItem.vatRate` y el hint del error *"falta vatRate"* nombraban cuatro alícuotas (`0, 10.5, 21, 27`). El **5%** (id 8) y el **2,5%** (id 9) están vigentes desde el 20/10/2014 y el SDK los acepta desde la v2.1.0: los textos habían quedado en la versión anterior. Quien facturaba con esas alícuotas leía —en el tooltip del editor y en el mensaje de error— que su valor no existía, exactamente el síntoma que la v2.1.0 había ido a corregir.
@@ -37,7 +51,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 174 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 176 tests unitarios).
 
 ### ✅ Cobertura y testing
 

@@ -15,7 +15,11 @@ export interface WsfeConfig extends ArcaConfig {
 }
 
 /**
- * Tipo de comprobante ARCA
+ * Tipo de comprobante ARCA (`CbteTipo`).
+ *
+ * Este enum es una selección, no el catálogo completo: ARCA informa 36 tipos y acá hay
+ * los de uso general. **La lista autoritativa la da `FEParamGetTiposCbte`**, consultable
+ * con {@link WsfeService.getInvoiceTypes}.
  */
 export enum InvoiceType {
     FACTURA_A = 1,
@@ -33,8 +37,49 @@ export enum InvoiceType {
     NOTA_CREDITO_C = 13,
     RECIBO_C = 15,
 
+    /**
+     * Factura A con leyenda "Operación Sujeta a Retención".
+     *
+     * Es la clase que el manual abrevia **ALEY** (ver la tabla de {@link VatCondition}).
+     * Junto con 52, 53 y 54 es el reemplazo de la Factura clase "M", disuelta por la
+     * **RG 5762/2025** — pero los códigos no son nuevos: ARCA los tiene vigentes desde
+     * el **22/05/2015**, verificado contra `FEParamGetTiposCbte` el 2026-09-27.
+     *
+     * @remarks **El SDK todavía no puede emitir este comprobante**: los métodos de
+     * emisión fijan internamente su `CbteTipo` y no hay uno genérico que reciba un
+     * `InvoiceType`. Lo que sí sirve hoy es **consultar**
+     * ({@link WsfeService.getInvoice}) y **asociar** ({@link AssociatedInvoice.type},
+     * para una Nota de Crédito que anule una Factura A con leyenda).
+     *
+     * @remarks **No se verificó por emisión real.** El CUIT de homologación del proyecto
+     * es monotributista y no puede emitir comprobantes clase A, así que la única prueba
+     * es que ARCA los lista en su catálogo. Por eso tampoco hay helper dedicado: un
+     * helper afirma que el camino funciona, y eso todavía no está probado.
+     *
+     * Disponible desde v2.2.0.
+     */
+    FACTURA_A_LEYENDA = 51,
+    /** Nota de Débito A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    NOTA_DEBITO_A_LEYENDA = 52,
+    /** Nota de Crédito A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    NOTA_CREDITO_A_LEYENDA = 53,
+    /** Recibo A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
+    RECIBO_A_LEYENDA = 54,
+
+    /**
+     * Tique A (Controlador Fiscal).
+     *
+     * @remarks **ARCA no lo lista en `FEParamGetTiposCbte`** (verificado el 2026-09-27:
+     * de los 15 valores de este enum, los únicos tres ausentes del catálogo son 81, 82
+     * y 83). Los Tique son de la **RG 3561/2013** (Controladores Fiscales), un régimen
+     * distinto del de la RG 4291/wsfev1, y `FECAESolicitar` los rechaza con el error
+     * **11001** desde un punto de venta Web Services. Para el caso general usá
+     * {@link InvoiceType.FACTURA_A}.
+     */
     TICKET_A = 81,
+    /** Tique B (Controlador Fiscal). Ver {@link InvoiceType.TICKET_A}. */
     TICKET_B = 82,
+    /** Tique C (Controlador Fiscal). Ver {@link InvoiceType.TICKET_A}. */
     TICKET_C = 83,
 }
 

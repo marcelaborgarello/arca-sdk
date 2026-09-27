@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { WsfeService } from '../../src/services/wsfe';
 import { callArcaApi } from '../../src/utils/network';
 import { InvoiceType, BillingConcept, TaxIdType, VatCondition, VAT_RATE_CODES, listVatRates } from '../../src/types/wsfe';
+import type { AssociatedInvoice } from '../../src/types/wsfe';
 import { ArcaValidationError } from '../../src/types/common';
 
 vi.mock('../../src/utils/network', () => ({
@@ -395,6 +396,40 @@ describe('WsfeService', () => {
       await expect(new WsfeService(BASE_CONFIG).getPointsOfSale())
         .rejects.toThrow('Token invalido');
     });
+  });
+});
+
+/**
+ * Los valores de `InvoiceType` contra el catálogo de ARCA.
+ *
+ * Es un test de transcripción: un enum mal tipeado compila igual y el error recién
+ * aparece cuando ARCA rechaza el comprobante. Los números salen de `FEParamGetTiposCbte`
+ * consultado el 2026-09-27 (la fuente autoritativa según el manual), no del PDF.
+ *
+ * El guard real —que ARCA siga listando estos tipos— vive en `tests/integration/`:
+ * esta suite mockea la red y no puede contradecir a ARCA.
+ */
+describe('InvoiceType — códigos de CbteTipo', () => {
+  // RG 5762/2025: reemplazo de la Factura clase "M". ARCA los tiene vigentes desde el
+  // 22/05/2015; la leyenda NO es un `optionals`, es una clase de comprobante.
+  it('los cuatro "A con leyenda" son 51, 52, 53 y 54', () => {
+    expect(InvoiceType.FACTURA_A_LEYENDA).toBe(51);
+    expect(InvoiceType.NOTA_DEBITO_A_LEYENDA).toBe(52);
+    expect(InvoiceType.NOTA_CREDITO_A_LEYENDA).toBe(53);
+    expect(InvoiceType.RECIBO_A_LEYENDA).toBe(54);
+  });
+
+  it('son usables donde el SDK acepta un InvoiceType', () => {
+    // No hay método público de emisión que reciba un tipo, así que estos dos son los
+    // usos reales que habilita el enum. Si alguna vez se agrega uno genérico, este test
+    // queda corto a propósito.
+    const asociado: AssociatedInvoice = {
+      type: InvoiceType.FACTURA_A_LEYENDA,
+      pointOfSale: 4,
+      invoiceNumber: 1234,
+    };
+
+    expect(asociado.type).toBe(51);
   });
 });
 
