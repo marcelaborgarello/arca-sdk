@@ -1,4 +1,4 @@
-# Publicar una versión
+﻿# Publicar una versión
 
 Checklist para publicar `arca-sdk` en npm.
 
@@ -7,8 +7,8 @@ Checklist para publicar `arca-sdk` en npm.
 ```bash
 bun run lint && bun run test && bun run build   # control local
 # subir la versión en package.json, commitear, y después:
-git tag -a v2.2.0 -m "v2.2.0"
-git push origin v2.2.0                          # ← esto arranca la publicación
+git tag -a v3.0.0 -m "v3.0.0"
+git push origin v3.0.0                          # ← esto arranca la publicación
 ```
 
 **Pushear el tag arranca la publicación; no la termina.** GitHub Actions corre `release.yml`,
@@ -100,7 +100,7 @@ bajó de npm se corresponde con el fuente que puede leer en GitHub. Con proceden
 Se verifica así:
 
 ```bash
-npm view arca-sdk@2.2.0 dist --json    # tiene que traer un campo `attestations`
+npm view arca-sdk@3.0.0 dist --json    # tiene que traer un campo `attestations`
 ```
 
 > `signatures` **no es** procedencia: es la firma del registry y la lleva todo paquete.
@@ -147,8 +147,8 @@ publicación. Queda guardada hasta que alguien la borre a mano.
 npm publish --dry-run    # no publica; lista los archivos. Deben ser 10.
 
 # 2. El tag, que es el que dispara todo
-git tag -a v2.2.0 -m "v2.2.0"
-git push origin v2.2.0
+git tag -a v3.0.0 -m "v3.0.0"
+git push origin v3.0.0
 ```
 
 Y después mirar la pestaña **Actions** del repo en GitHub, que es donde pasa. El workflow:
@@ -172,7 +172,7 @@ Ahí se vuelve pública.
 
 ```bash
 npm view arca-sdk version                  # confirmá que subió
-npm view arca-sdk@2.2.0 dist --json        # y que traiga `attestations`
+npm view arca-sdk@3.0.0 dist --json        # y que traiga `attestations`
 ```
 
 > **Una versión publicada en npm no se puede deshacer ni reemplazar.** Si subiste algo mal,
@@ -181,20 +181,20 @@ npm view arca-sdk@2.2.0 dist --json        # y que traiga `attestations`
 
 ### Los tags ya no son opcionales
 
-Antes eran un marcador y nada más. Ahora **el tag es el gatillo**: pushear `v2.2.0` es el
+Antes eran un marcador y nada más. Ahora **el tag es el gatillo**: pushear `v3.0.0` es el
 acto de publicar. Consecuencias prácticas:
 
 - **No pushees un tag de versión "para marcar" nada.** Va a intentar publicar.
 - El tag tiene que ir **después** del commit que sube la versión en `package.json`, no antes.
 - Si el tag y `package.json` no coinciden, el workflow **falla en el primer paso y no
-  publica**. Es la red a propósito: un `v2.2.0` con el `package.json` en 2.1.0 dejaría el tag
+  publica**. Es la red a propósito: un `v3.0.0` con el `package.json` en 2.1.0 dejaría el tag
   de git y la versión de npm apuntando a cosas distintas, y eso no se deshace.
 
 Si te equivocaste en el tag antes de que publique:
 
 ```bash
-git tag -d v2.2.0                  # borrar local
-git push origin :refs/tags/v2.2.0  # borrar en GitHub
+git tag -d v3.0.0                  # borrar local
+git push origin :refs/tags/v3.0.0  # borrar en GitHub
 ```
 
 Y si el workflow falló por otra razón y hay que reintentar sin mover el tag, se puede
@@ -205,7 +205,7 @@ relanzar a mano desde la pestaña Actions (el workflow declara `workflow_dispatc
 | Error | Qué significa en realidad |
 |---|---|
 | `El tag (X) no coincide con package.json (Y)` | Falló el primer paso del workflow, **no publicó nada**. Subí la versión en `package.json`, commiteá, borrá el tag y volvé a taggear. |
-| El workflow no arranca al pushear el tag | El tag no empieza con `v` (el trigger es `v*`), o se pusheó el commit sin el tag. `git push origin v2.2.0`, no sólo `git push`. |
+| El workflow no arranca al pushear el tag | El tag no empieza con `v` (el trigger es `v*`), o se pusheó el commit sin el tag. `git push origin v3.0.0`, no sólo `git push`. |
 | `E404 Not Found - PUT` / `'arca-sdk@X' does not exist in this registry` | **No es que el paquete no exista.** npm devuelve 404 en vez de 401/403 para no revelar si un paquete privado existe. Es **autenticación fallida**: casi siempre el Trusted Publisher no está cargado, o apunta a otro repo o a otro nombre de archivo de workflow. Revisar §2. |
 | `E403 ... Two-factor authentication or granular access token...` | El publish salió por el camino viejo (token) en vez de OIDC. Verificar que el workflow tenga `permissions: id-token: write` — sin eso no hay OIDC. |
 | El paquete subió pero sin `attestations` | Se publicó a mano desde una máquina, no por el CI. La procedencia sólo la genera el publish por OIDC. |

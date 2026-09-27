@@ -139,8 +139,6 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 | Método | Comprobante | Cuándo usarlo |
 |--------|-------------|---------------|
-| `issueSimpleReceipt()` ⚠️ | Ticket C | **Deprecado.** Ver nota abajo |
-| `issueReceipt()` ⚠️ | Ticket C + items | **Deprecado.** Ver nota abajo |
 | `issueInvoiceC()` | Factura C | Monotributistas a consumidor final / Empresas |
 | `issueInvoiceB()` | Factura B | Responsable Inscripto a consumidor final / Monotributo |
 | `issueInvoiceA()` | Factura A | Responsable Inscripto a Responsable Inscripto |
@@ -149,13 +147,15 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 | `issueReceiptA/B/C()` | Recibo | Comprobante de pago (misma emisión que una factura) |
 
 > [!WARNING]
-> **`issueSimpleReceipt()` e `issueReceipt()` están deprecados.** El comprobante
-> "Tique" (81/82/83) está regido por la RG 3561/2013 (Controladores Fiscales), una
-> resolución distinta de la RG 4291/wsfev1 que sigue el resto del SDK. `FECAESolicitar`
-> con `CbteTipo=83` se rechaza con error ARCA **11001** desde un punto de venta Web
-> Services estándar — el único tipo de punto de venta que un consumidor de este SDK
-> puede tener. Para el caso general (consumidor final, sin Controlador Fiscal
-> homologado) usá `issueInvoiceC()`.
+> **Los Tique se eliminaron en la v3.0.0.** Si venís de la v2.x, ver
+> ["Migrar a la v3.0.0"](#migrar-a-la-v300).
+>
+> El comprobante "Tique" (81/82/83) está regido por la **RG 3561/2013** (Controladores
+> Fiscales), una resolución distinta de la RG 4291/wsfev1 que sigue el resto del SDK.
+> **ARCA no lo lista en `FEParamGetTiposCbte`** y `FECAESolicitar` con `CbteTipo=83` lo
+> rechaza con el error **11001** desde un punto de venta Web Services — el único tipo de
+> punto de venta que un consumidor de este SDK puede tener. Para el caso general
+> (consumidor final, sin Controlador Fiscal homologado) usá `issueInvoiceC()`.
 
 ### ✅ Consultas disponibles
 
@@ -193,18 +193,21 @@ fuente autoritativa en vivo.
 
 ## Ejemplos
 
-### Ticket C con detalle de items ⚠️ (deprecado)
-
-> Ver la advertencia en "Tipos de comprobantes" más arriba — `issueReceipt()`
-> emite Tique C, que ARCA rechaza desde un punto de venta Web Services estándar. Este
-> ejemplo queda documentado solo para quien tenga un Controlador Fiscal homologado.
+### Factura C con varios items
 
 ```typescript
-const result = await wsfe.issueReceipt({
+import { TaxIdType, VatCondition } from 'arca-sdk';
+
+const result = await wsfe.issueInvoiceC({
   items: [
     { description: 'Café con leche',  quantity: 2, unitPrice: 750 },
     { description: 'Medialunas x4',   quantity: 1, unitPrice: 600 },
   ],
+  buyer: {
+    docType: TaxIdType.FINAL_CONSUMER,
+    docNumber: '0',
+    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+  },
 });
 
 console.log('Items en respuesta:', result.items?.length); // 2
@@ -574,6 +577,50 @@ ARCA distingue dos cosas que conviene no confundir:
 
 ### 🚚 Acerca de los Remitos
 > **¡Atención!** Este SDK implementa nativamente el servicio `WSFE` (Facturación Electrónica). Si tu negocio necesita emitir **Remitos Electrónicos Oficiales** para el traslado físico de mercaderías (Remitos Cárnicos, Azucareros, Harineros, etc.), tené en cuenta que la AFIP exige usar un webservice totalmente distinto llamado `WSREM` o similares. Estos servicios aún no están cubiertos por esta versión del SDK.
+
+---
+
+## Migrar a la v3.0.0
+
+**Un solo cambio incompatible, y sólo te afecta si emitías Tique.** Si nunca usaste
+`issueSimpleReceipt()`, `issueReceipt()` ni `InvoiceType.TICKET_*`, actualizá y listo.
+
+Se eliminaron:
+
+| Eliminado en v3.0.0 | Reemplazo |
+|---|---|
+| `wsfe.issueSimpleReceipt({ total })` | `wsfe.issueInvoiceC({ items, buyer })` |
+| `wsfe.issueReceipt({ items })` | `wsfe.issueInvoiceC({ items, buyer })` |
+| `InvoiceType.TICKET_A` / `TICKET_B` / `TICKET_C` | `InvoiceType.FACTURA_A` / `FACTURA_B` / `FACTURA_C` |
+
+**Por qué se borraron y no se dejaron deprecados.** Estaban `@deprecated` desde la v1.4.1,
+pero seguir ofreciéndolos era ofrecer algo que no funciona: **ARCA no lista los Tique en
+`FEParamGetTiposCbte`** (verificado el 27/09/2026 — de los quince tipos que el SDK
+declaraba, los únicos tres ausentes del catálogo eran ésos) y `FECAESolicitar` los rechaza
+con el error **11001**. No es una limitación del SDK ni de tu punto de venta: los Tique son
+de la **RG 3561/2013** (Controladores Fiscales) y no se emiten por este webservice.
+
+El cambio de `issueSimpleReceipt()` a `issueInvoiceC()` no es sólo de nombre: el método
+viejo tomaba un `total` y el nuevo toma `items`. Con un solo importe:
+
+```diff
+- const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
++ const cae = await wsfe.issueInvoiceC({
++   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
++   buyer: {
++     docType: TaxIdType.FINAL_CONSUMER,
++     docNumber: '0',
++     vatCondition: VatCondition.CONSUMIDOR_FINAL,
++   },
++ });
+```
+
+> **Aprovechá para informar `buyer.vatCondition`**, que no es opcional en la práctica:
+> homologación ya rechaza sin ese campo y producción lo hace desde el 01/12/2026 (RG 5616).
+
+**Si necesitás emitir tique de verdad**, no hay camino por `wsfev1`: hace falta un
+Controlador Fiscal homologado, o el régimen "Facturador" de la RG 5198/2022 —que usa otros
+códigos (109, 114) y todavía no se investigó si es alcanzable por webservice—.
 
 ---
 

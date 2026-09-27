@@ -73,7 +73,7 @@ Ya contemplado (no reportar como novedad):
 - **RG 5762/2025**: disolución de la Factura clase "M". Se reemplaza por los comprobantes
   **"A con leyenda 'Operación Sujeta a Retención'"**, que son una **clase propia** con sus
   propios `CbteTipo`: **51** (Factura), **52** (NDébito), **53** (NCrédito) y **54**
-  (Recibo). Están en `InvoiceType` desde la v2.2.0.
+  (Recibo). Están en `InvoiceType` desde la v3.0.0.
   > **No viajan por `optionals`.** Hasta el 27/09/2026 el README y este archivo decían que
   > sí, y era falso: el manual las trata como clase de comprobante (validaciones 10017,
   > 10061, 10063, 10217, 10234 hablan de *"Clase A y A con leyenda…"*) y ARCA las lista en
@@ -140,7 +140,17 @@ con `VALID_VAT_CONDITION_IDS`. Y cada código aplica sólo a ciertas clases de c
 
 ### Tique (81/82/83) vs. Factura: dos regímenes distintos, no dos formatos de lo mismo
 
-`InvoiceType.TICKET_A/B/C` (81/82/83) no son "una Factura con otro nombre" —
+> **ELIMINADOS DEL SDK EN LA v3.0.0.** Ya no existen `InvoiceType.TICKET_A/B/C` ni
+> `issueSimpleReceipt()` / `issueReceipt()`. Esta sección **se conserva entera** porque es
+> el razonamiento normativo que justifica la decisión, y porque la pregunta *"¿por qué el
+> SDK no emite tique?"* va a volver. **No reagregarlos** sin leer todo esto.
+>
+> Lo que cerró la discusión, además del rechazo 11001: **ARCA no los lista en
+> `FEParamGetTiposCbte`** (27/09/2026 — de los quince valores que tenía el enum, los
+> únicos tres ausentes del catálogo eran ésos). No es que ARCA los rechace desde cierto
+> punto de venta: **no existen en wsfev1**.
+
+Los Tique (81/82/83) no son "una Factura con otro nombre" —
 son la clase de comprobante "Tique", regida por la **RG 3561/2013
 (Controladores Fiscales)**, una resolución aparte de la RG 4291/wsfev1 que
 sigue el resto del SDK. El puente entre ambos regímenes es la **RG 4290/2018**:
@@ -176,12 +186,9 @@ Factura/NC/ND, no para Tique.
 ("no es un tipo de comprobante valido. Ver metodo FEParamGetTiposCbte") desde
 un punto de venta Web Services estándar — el único tipo de punto de venta que
 un consumidor del SDK puede tener. La misma llamada con `CbteTipo=11`
-(Factura C) se acepta sin problema. O sea: `issueSimpleReceipt()` e
-`issueReceipt()` (`src/services/wsfe.ts`), que hardcodean `TICKET_C`, no
-funcionan contra ARCA real para prácticamente nadie que use el SDK. No es un
-problema de elegibilidad por actividad económica (la duda original) — el tipo
-de comprobante en sí está fuera del alcance de un punto de venta que no sea
-Controlador Fiscal.
+(Factura C) se acepta sin problema. No es un problema de elegibilidad por
+actividad económica (la duda original) — el tipo de comprobante en sí está
+fuera del alcance de un punto de venta que no sea Controlador Fiscal.
 
 Existe un régimen distinto y posterior para tique 100% electrónico sin
 hardware — **RG 5198/2022** ("Facturador", régimen especial de emisión
@@ -190,14 +197,21 @@ electrónica de comprobantes originales) — pero usa otros códigos (109
 es alcanzable vía un webservice de integración general o solo vía la app
 propia de ARCA.
 
-**Resuelto a medias (v1.4.1)**: `issueSimpleReceipt()` e `issueReceipt()` quedaron
-marcados `@deprecated` y emiten un warning en runtime fuera de producción. Siguen
-funcionando igual que antes — la deprecación avisa, no cambia el comportamiento.
+**Resuelto (v3.0.0, 2026-09-27)**: `issueSimpleReceipt()`, `issueReceipt()` y
+`TICKET_A/B/C` **se eliminaron**. Estuvieron `@deprecated` con warning en runtime desde
+la v1.4.1; la deprecación avisaba pero el SDK seguía ofreciendo un comprobante imposible.
 
-Lo que **no** está decidido es el destino final: eliminarlos en el próximo major o
-cambiarlos para que emitan Factura C. Hacerlos emitir un comprobante distinto del que
-dice el nombre es peor que borrarlos, pero borrarlos rompe a terceros. Es un cambio
-de API pública: no se resuelve sin discutirlo primero.
+La decisión la tomó Marcela, y descartó la alternativa que estaba sobre la mesa —hacer
+que emitieran Factura C conservando el nombre—: **un método que emite algo distinto de lo
+que dice su nombre es peor que uno que no existe**, porque el error es silencioso. Borrar
+rompe la compilación, que es ruidoso y se arregla una vez.
+
+La migración está en el `CHANGELOG` de la v3.0.0 y en el README, sección "Migrar a la
+v3.0.0". Ojo que la firma cambia: `issueSimpleReceipt({ total })` → `issueInvoiceC({
+items, buyer })`.
+
+> **No confundir con `issueReceiptA/B/C()`**, que emiten **Recibo** (4, 9 y 15), son
+> comprobantes legítimos de wsfev1 y **no** se tocaron. El nombre engaña.
 
 ## Fechas: instante vs. fecha-calendario
 

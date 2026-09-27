@@ -30,15 +30,16 @@ const mockLastInvoiceXml = `<?xml version="1.0" encoding="UTF-8"?>
     <FECompUltimoAutorizadoResponse xmlns="http://ar.gov.afip.dif.FEV1/">
       <FECompUltimoAutorizadoResult>
         <PtoVta>4</PtoVta>
-        <CbteTipo>83</CbteTipo>
+        <CbteTipo>11</CbteTipo>
         <CbteNro>0</CbteNro>
       </FECompUltimoAutorizadoResult>
     </FECompUltimoAutorizadoResponse>
   </soapenv:Body>
 </soapenv:Envelope>`;
 
-// Respuesta exitosa de FECAESolicitar
-function buildMockCAEXml(type = 83): string {
+// Respuesta exitosa de FECAESolicitar. Default 11 = Factura C (hasta la v3.0.0 era 83,
+// Tique C, un comprobante que ARCA no acepta: los fixtures describían un mundo imposible).
+function buildMockCAEXml(type = 11): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -72,7 +73,7 @@ function buildMockCAEXml(type = 83): string {
 </soapenv:Envelope>`;
 }
 
-function mockCalls(caeType = 83): void {
+function mockCalls(caeType = 11): void {
   (callArcaApi as any)
     .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
     .mockResolvedValueOnce({ ok: true, text: async () => buildMockCAEXml(caeType) });
@@ -99,58 +100,40 @@ describe('WsfeService', () => {
     });
   });
 
-  describe('issueSimpleReceipt', () => {
-    it('should issue a Ticket C with only a total amount', async () => {
-      mockCalls(83);
+  // Los tests de `issueSimpleReceipt` e `issueReceipt` se borraron con los métodos en la
+  // v3.0.0. Emitían Tique C (83), que ARCA no lista en FEParamGetTiposCbte y rechaza con
+  // el error 11001: el fixture describía un CAE aprobado para un comprobante imposible.
+  // La cobertura de "emitir a consumidor final sin identificar" quedó en `issueInvoiceC`.
+
+  describe('issueInvoiceC a consumidor final sin identificar', () => {
+    it('emite con buyer por defecto y devuelve CAE, número y QR', async () => {
+      mockCalls(11);
       const wsfe = new WsfeService(BASE_CONFIG);
-      const result = await wsfe.issueSimpleReceipt({ total: 1500 });
+      const result = await wsfe.issueInvoiceC({
+        items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+      });
 
       expect(result.cae).toBe('75157992335329');
-      expect(result.invoiceType).toBe(83);
+      expect(result.invoiceType).toBe(11);
       expect(result.invoiceNumber).toBe(1);
       expect(result.result).toBe('A');
       expect(result.qrUrl).toContain('arca.gob.ar/fe/qr');
       expect(callArcaApi).toHaveBeenCalledTimes(2);
     });
 
-    // Deprecado: CbteTipo=83 lo rechaza ARCA (error 11001) desde un PtoVta
-    // Web Services estándar. Ver CLAUDE.md, "Tique (81/82/83) vs. Factura".
-    it('should warn that the method is deprecated', async () => {
-      mockCalls(83);
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const wsfe = new WsfeService(BASE_CONFIG);
-      await wsfe.issueSimpleReceipt({ total: 1500 });
-
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('issueSimpleReceipt() está deprecado'));
-      warnSpy.mockRestore();
-    });
-  });
-
-  describe('issueReceipt', () => {
-    it('should issue a Ticket C with items and return them in the response', async () => {
-      mockCalls(83);
+    it('devuelve los items en la respuesta', async () => {
+      mockCalls(11);
       const wsfe = new WsfeService(BASE_CONFIG);
       const items = [
         { description: 'Coca Cola', quantity: 2, unitPrice: 500 },
         { description: 'Pan lactal', quantity: 3, unitPrice: 250 },
       ];
-      const result = await wsfe.issueReceipt({ items });
+      const result = await wsfe.issueInvoiceC({ items });
 
-      expect(result.cae).toBeDefined();
+      // Hasta la v3.0.0 esto sólo se probaba a través de issueReceipt(), que agregaba
+      // `items` a mano sobre la respuesta. Era redundante: issueDocument() ya los pone.
       expect(result.items).toEqual(items);
       expect(result.items?.length).toBe(2);
-    });
-
-    // Deprecado: CbteTipo=83 lo rechaza ARCA (error 11001) desde un PtoVta
-    // Web Services estándar. Ver CLAUDE.md, "Tique (81/82/83) vs. Factura".
-    it('should warn that the method is deprecated', async () => {
-      mockCalls(83);
-      const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      const wsfe = new WsfeService(BASE_CONFIG);
-      await wsfe.issueReceipt({ items: [{ description: 'Café', quantity: 1, unitPrice: 500 }] });
-
-      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('issueReceipt() está deprecado'));
-      warnSpy.mockRestore();
     });
   });
 
@@ -297,10 +280,10 @@ describe('WsfeService', () => {
   describe('buyer identification validation (RG 5866/2026)', () => {
     it('should throw an ArcaValidationError when total is >= 10,000,000 and buyer is FINAL_CONSUMER/unidentified', async () => {
       const wsfe = new WsfeService(BASE_CONFIG);
-      
+
       // Con buyer omitido (que por defecto es consumidor final sin identificar)
-      await expect(wsfe.issueSimpleReceipt({
-        total: 10000000,
+      await expect(wsfe.issueInvoiceC({
+        items: [{ description: 'Servicio', quantity: 1, unitPrice: 10000000 }],
       })).rejects.toThrow('es obligatorio identificar al comprador');
 
       // Con buyer explícitamente como FINAL_CONSUMER y número 0
@@ -314,10 +297,10 @@ describe('WsfeService', () => {
     });
 
     it('should NOT throw when total is < 10,000,000 and buyer is unidentified', async () => {
-      mockCalls(83);
+      mockCalls(11);
       const wsfe = new WsfeService(BASE_CONFIG);
-      const result = await wsfe.issueSimpleReceipt({
-        total: 9999999.99,
+      const result = await wsfe.issueInvoiceC({
+        items: [{ description: 'Servicio', quantity: 1, unitPrice: 9999999.99 }],
       });
       expect(result.cae).toBeDefined();
     });

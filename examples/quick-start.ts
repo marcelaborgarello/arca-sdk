@@ -1,10 +1,10 @@
 /**
- * Quick Start — ARCA SDK v1.0.0
+ * Quick Start — arca-sdk
  *
  * Lo mínimo para estar operativo en minutos.
  */
 
-import { WsaaService, WsfeService } from '../src/index';
+import { WsaaService, WsfeService, TaxIdType, VatCondition } from '../src/index';
 
 // TODO: Reemplazá con tus certificados reales (del portal de ARCA)
 const CERT = `-----BEGIN CERTIFICATE-----
@@ -37,8 +37,16 @@ async function run() {
             pointOfSale: 4,  // Tu punto de venta dado de alta en ARCA
         });
 
-        // Emitir Ticket C con un monto total
-        const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
+        // Emitir Factura C a consumidor final
+        const cae = await wsfe.issueInvoiceC({
+            items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+                // Obligatorio en la práctica: homologación ya rechaza sin esto (10246).
+                vatCondition: VatCondition.CONSUMIDOR_FINAL,
+            },
+        });
         console.log('🧾 CAE:', cae.cae);
         console.log('🔗 QR:', cae.qrUrl);
 

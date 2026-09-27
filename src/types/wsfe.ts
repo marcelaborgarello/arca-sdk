@@ -55,7 +55,7 @@ export enum InvoiceType {
      * en su catálogo. Por eso tampoco hay helper dedicado: un helper afirma que el camino
      * funciona, y eso todavía no está probado.
      *
-     * Disponible desde v2.2.0.
+     * Disponible desde v3.0.0.
      */
     FACTURA_A_LEYENDA = 51,
     /** Nota de Débito A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
@@ -65,21 +65,13 @@ export enum InvoiceType {
     /** Recibo A con leyenda "Operación Sujeta a Retención". Ver {@link InvoiceType.FACTURA_A_LEYENDA}. */
     RECIBO_A_LEYENDA = 54,
 
-    /**
-     * Tique A (Controlador Fiscal).
-     *
-     * @remarks **ARCA no lo lista en `FEParamGetTiposCbte`** (verificado el 2026-09-27:
-     * de los 15 valores de este enum, los únicos tres ausentes del catálogo son 81, 82
-     * y 83). Los Tique son de la **RG 3561/2013** (Controladores Fiscales), un régimen
-     * distinto del de la RG 4291/wsfev1, y `FECAESolicitar` los rechaza con el error
-     * **11001** desde un punto de venta Web Services. Para el caso general usá
-     * {@link InvoiceType.FACTURA_A}.
-     */
-    TICKET_A = 81,
-    /** Tique B (Controlador Fiscal). Ver {@link InvoiceType.TICKET_A}. */
-    TICKET_B = 82,
-    /** Tique C (Controlador Fiscal). Ver {@link InvoiceType.TICKET_A}. */
-    TICKET_C = 83,
+    // Los Tique (81 Tique A, 82 Tique B, 83 Tique C) se **eliminaron en la v3.0.0**.
+    // ARCA no los lista en `FEParamGetTiposCbte` —verificado el 2026-09-27: de los quince
+    // valores que tenía este enum, los únicos tres ausentes del catálogo eran ésos— y
+    // `FECAESolicitar` los rechaza con el error 11001 desde un punto de venta Web
+    // Services. Son de la RG 3561/2013 (Controladores Fiscales), un régimen distinto del
+    // de la RG 4291/wsfev1. No se vuelven a agregar: para el caso general va Factura
+    // (1 / 6 / 11). Ver el CHANGELOG de la v3.0.0 para la migración.
 }
 
 /**

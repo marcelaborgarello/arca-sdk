@@ -1,12 +1,12 @@
 /**
- * Ejemplo completo: Facturación con ARCA SDK v1.0.0
+ * Ejemplo completo: Facturación con arca-sdk
  *
  * Muestra los tipos principales de comprobantes:
- * - Ticket C (simple y con items)
+ * - Factura C (a consumidor final, con uno o varios items)
  * - Factura B (con IVA discriminado)
  */
 
-import { WsaaService, WsfeService, TaxIdType } from '../src/index';
+import { WsaaService, WsfeService, TaxIdType, VatCondition } from '../src/index';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -49,15 +49,25 @@ async function main() {
     });
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // EJEMPLO 1: Ticket C simple (solo monto, sin detalle)
+    // EJEMPLO 1: Factura C a consumidor final (sin identificar)
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    console.log('📱 Ejemplo 1: Ticket C simple (solo total)\n');
+    // Hasta la v3.0.0 este ejemplo usaba issueSimpleReceipt(), que emitía Tique C (83) —
+    // un comprobante que ARCA no lista en FEParamGetTiposCbte y rechaza con el 11001.
+
+    console.log('📱 Ejemplo 1: Factura C a consumidor final\n');
 
     try {
-        const result = await wsfe.issueSimpleReceipt({ total: 3500 });
+        const result = await wsfe.issueInvoiceC({
+            items: [{ description: 'Producto', quantity: 1, unitPrice: 3500 }],
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+                vatCondition: VatCondition.CONSUMIDOR_FINAL,
+            },
+        });
 
-        console.log('✅ Ticket emitido:');
+        console.log('✅ Factura emitida:');
         console.log('   CAE:', result.cae);
         console.log('   Nro:', result.invoiceNumber);
         console.log('   Vencimiento CAE:', result.caeExpiry);
@@ -68,20 +78,25 @@ async function main() {
     }
 
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-    // EJEMPLO 2: Ticket C con detalle de items (local)
+    // EJEMPLO 2: Factura C con detalle de items
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-    console.log('🧾 Ejemplo 2: Ticket C con items (detalle local)\n');
+    console.log('🧾 Ejemplo 2: Factura C con varios items\n');
 
     try {
-        const result = await wsfe.issueReceipt({
+        const result = await wsfe.issueInvoiceC({
             items: [
                 { description: 'Coca Cola 2L', quantity: 2, unitPrice: 500 },
                 { description: 'Pan lactal', quantity: 3, unitPrice: 850 },
             ],
+            buyer: {
+                docType: TaxIdType.FINAL_CONSUMER,
+                docNumber: '0',
+                vatCondition: VatCondition.CONSUMIDOR_FINAL,
+            },
         });
 
-        console.log('✅ Ticket emitido:');
+        console.log('✅ Factura emitida:');
         console.log('   CAE:', result.cae);
         console.log('   Nro:', result.invoiceNumber);
         console.log('   Items:', result.items?.length);

@@ -4,7 +4,33 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [2.2.0] — Unreleased
+## [3.0.0] — Unreleased
+
+> Hay **un cambio incompatible**: se eliminaron los Tique. Ver abajo. Si nunca los usaste,
+> actualizar no te pide tocar nada. El resto de la versión es aditivo o corrección de bugs.
+>
+> **Lo más urgente sigue siendo otra cosa**: `CondicionIVAReceptorId` es obligatorio en
+> producción desde el **01/12/2026** y **homologación ya lo rechaza hoy**. Si emitís sin
+> `buyer.vatCondition`, ARCA no autoriza el comprobante.
+
+### 💥 Cambio incompatible: se eliminaron los Tique (81/82/83)
+
+Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos era ofrecer algo que **no funciona**.
+
+- **Eliminados**: `WsfeService.issueSimpleReceipt()`, `WsfeService.issueReceipt()` y los miembros `InvoiceType.TICKET_A` (81), `TICKET_B` (82) y `TICKET_C` (83).
+- **Migración**: los dos métodos se reemplazan por `issueInvoiceC()`. Ojo que la firma cambia — el viejo tomaba `total`, el nuevo toma `items`:
+  ```diff
+  - const cae = await wsfe.issueSimpleReceipt({ total: 1500 });
+  + const cae = await wsfe.issueInvoiceC({
+  +   items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+  +   buyer: { docType: TaxIdType.FINAL_CONSUMER, docNumber: '0', vatCondition: VatCondition.CONSUMIDOR_FINAL },
+  + });
+  ```
+  La tabla completa está en el README, sección "Migrar a la v3.0.0".
+- **Por qué, con la evidencia**: los Tique son de la **RG 3561/2013** (Controladores Fiscales), un régimen distinto del de la RG 4291/wsfev1 que sigue el resto del SDK. Hay dos pruebas independientes: (1) `FECAESolicitar` con `CbteTipo=83` se rechaza con el error **11001** desde un punto de venta Web Services —el único tipo que un consumidor del SDK puede tener— verificado el 28/08/2026; y (2) **ARCA no los lista en `FEParamGetTiposCbte`**, verificado el 27/09/2026: de los quince valores que tenía `InvoiceType`, los **únicos tres** ausentes del catálogo eran exactamente 81, 82 y 83. La segunda es la más fuerte: no es que ARCA los rechace desde cierto punto de venta, es que **no existen en este webservice**.
+- Los fixtures de la suite unitaria usaban `CbteTipo=83` por defecto: describían un CAE aprobado para un comprobante que ARCA nunca autoriza. Ahora usan 11 (Factura C).
+- **No confundir con `issueReceiptA/B/C()`**, que emiten **Recibo** (códigos 4, 9 y 15), son comprobantes legítimos de wsfev1 y **no** se tocaron. El nombre engaña.
+- Si necesitás emitir tique, no hay camino por `wsfev1`: hace falta un Controlador Fiscal homologado, o el régimen "Facturador" de la RG 5198/2022, que usa otros códigos (109, 114) y todavía no se investigó.
 
 ### ✨ `getPointsOfSale()` devuelve `[]` en vez de lanzar ante el error 602
 

@@ -84,7 +84,7 @@ describe('ARCA_ERROR_HINTS — códigos de IVA', () => {
      */
     describe('ALREADY_HAS_TA — el bloqueo no dura lo que dura el TA', () => {
         it('no dice que el bloqueo dure hasta que expire el TA', () => {
-            // Regresión: hasta la v2.2.0 el hint decía que ARCA no emite otro TA "hasta
+            // Regresión: hasta la v3.0.0 el hint decía que ARCA no emite otro TA "hasta
             // que expire (12 h)". Las 12 h son la vigencia del ticket; el bloqueo son
             // minutos. La confusión estaba en diez lugares del repo y hacía parecer que
             // equivocarse corriendo los tests de integración costaba un día.

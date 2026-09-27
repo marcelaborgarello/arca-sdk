@@ -17,7 +17,7 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     1003: 'El TRA (Ticket de Requerimiento de Acceso) tiene un formato inválido.',
     1005: 'El TRA ya expiró antes de ser presentado. Verificá la hora del sistema.',
     // Dos números distintos que es fácil confundir, y el SDK los confundió hasta la
-    // v2.2.0: el TA *vale* 12 h, pero el bloqueo para pedir otro dura mucho menos.
+    // v3.0.0: el TA *vale* 12 h, pero el bloqueo para pedir otro dura mucho menos.
     // Manual de WSAA cap. 10.6: el "lapso preventivo" es de 10 minutos en testing y 2 en
     // producción, y avisa que puede cambiar sin previo aviso. Medido en homologación el
     // 2026-09-26: se liberó entre los 9m32s y los 10m32s.

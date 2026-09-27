@@ -165,89 +165,6 @@ export class WsfeService {
     // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
     /**
-     * Emite un Ticket C simple (solo monto total, sin detalle de items).
-     *
-     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
-     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
-     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
-     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
-     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
-     * Fiscal) usá {@link issueInvoiceC}.
-     */
-    async issueSimpleReceipt(params: {
-        total: number;
-        concept?: BillingConcept;
-        date?: Date;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
-        if (process.env.NODE_ENV !== 'production') {
-            console.warn(
-                '[arca-sdk WARNING] issueSimpleReceipt() está deprecado: emite Tique C ' +
-                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
-                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
-                'Services estándar. Usá issueInvoiceC() para el caso general.'
-            );
-        }
-        return this.issueDocument({
-            type: InvoiceType.TICKET_C,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            total: params.total,
-            date: params.date,
-            buyer: {
-                docType: TaxIdType.FINAL_CONSUMER,
-                docNumber: '0',
-            },
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
-        });
-    }
-
-    /**
-     * Emite un Ticket C con detalle de items.
-     * Los items se guardan en la respuesta pero no se envían a ARCA.
-     *
-     * @deprecated El comprobante "Tique" (81/82/83) está regido por la RG 3561/2013
-     * (Controladores Fiscales), no por la RG 4291/wsfev1 que sigue el resto de este SDK.
-     * `FECAESolicitar` con `CbteTipo=83` rechaza con error ARCA 11001 desde un punto de
-     * venta Web Services estándar — el único tipo de punto de venta que un consumidor de
-     * este SDK puede tener. Para el caso general (consumidor final, sin Controlador
-     * Fiscal) usá {@link issueInvoiceC}.
-     */
-    async issueReceipt(params: {
-        items: InvoiceItem[];
-        concept?: BillingConcept;
-        date?: Date;
-        optionals?: InvoiceOptional[];
-        serviceDates?: ServiceDates;
-    }): Promise<CAEResponse> {
-        if (process.env.NODE_ENV !== 'production') {
-            console.warn(
-                '[arca-sdk WARNING] issueReceipt() está deprecado: emite Tique C ' +
-                '(CbteTipo=83), un comprobante regido por la RG 3561/2013 (Controladores ' +
-                'Fiscales) que ARCA rechaza (error 11001) desde un punto de venta Web ' +
-                'Services estándar. Usá issueInvoiceC() para el caso general.'
-            );
-        }
-        const total = round(calculateTotal(params.items));
-
-        const cae = await this.issueDocument({
-            type: InvoiceType.TICKET_C,
-            concept: params.concept || BillingConcept.PRODUCTS,
-            total,
-            date: params.date,
-            buyer: {
-                docType: TaxIdType.FINAL_CONSUMER,
-                docNumber: '0',
-            },
-            optionals: params.optionals,
-            serviceDates: params.serviceDates,
-        });
-
-        return { ...cae, items: params.items };
-    }
-
-    /**
      * Emite una Factura A (Responsable Inscripto a Responsable Inscripto, con IVA discriminado).
      * REQUIERE `vatRate` en todos los items.
      */
@@ -505,7 +422,7 @@ export class WsfeService {
      * homologación del proyecto no lista ninguno y sin embargo emite en el punto de
      * venta 1. Usá este método para mostrar opciones, no para validar.
      *
-     * @since 2.2.0 Antes lanzaba `ArcaError` en ese caso.
+     * @since 3.0.0 Antes lanzaba `ArcaError` en ese caso.
      */
     async getPointsOfSale(): Promise<PointOfSale[]> {
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>

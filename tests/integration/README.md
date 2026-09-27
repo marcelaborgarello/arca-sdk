@@ -53,7 +53,7 @@ modificados dinámicamente y sin aviso previo"*. Medido contra homologación rea
 2026-09-26: el bloqueo se levantó entre los 9m32s y los 10m32s del TA anterior.
 
 > **No confundir con las 12 h**, que es la **vigencia** del TA (`expirationTime`). Son
-> dos números distintos y hasta la v2.2.0 la documentación de este proyecto usaba el de
+> dos números distintos y hasta la v3.0.0 la documentación de este proyecto usaba el de
 > la vigencia para describir el bloqueo. Equivocarse acá cuesta 10 minutos, no un día.
 
 Por eso `helpers.ts` implementa un
