@@ -34,10 +34,10 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly } from '../utils/formatArcaDate';
-import { parseXml, escapeXml } from '../utils/xml';
+import { parseXml, escapeXml, parseObservations } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
 import { generateQRUrl } from '../utils/qr';
-import { getArcaHint } from '../constants/errors';
+import { getArcaHint, getHintForObservations } from '../constants/errors';
 
 /**
  * Servicio de Facturación Electrónica WSFE v1
@@ -1312,13 +1312,8 @@ export class WsfeService {
             throw new ArcaError('Respuesta WSFE incompleta: falta detalle del comprobante', 'PARSE_ERROR');
         }
 
-        const observations: string[] = [];
-        if (det.Observaciones) {
-            const obsArray = Array.isArray(det.Observaciones.Obs)
-                ? det.Observaciones.Obs
-                : [det.Observaciones.Obs];
-            obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
-        }
+        const observationDetails = parseObservations(det);
+        const observations = observationDetails.map(o => o.message);
 
         // ARCA procesó la solicitud y no autorizó el comprobante: no hay CAE y el
         // comprobante no existe. Devolverlo como si fuera un resultado válido hace que
@@ -1334,7 +1329,8 @@ export class WsfeService {
                     invoiceNumber: Number(det.CbteDesde),
                     result: det.Resultado,
                 },
-                this.hintForObservations(observations)
+                getHintForObservations(observationDetails),
+                observationDetails
             );
         }
 
@@ -1347,24 +1343,7 @@ export class WsfeService {
             caeExpiry: String(det.CAEFchVto),
             result: det.Resultado,
             observations: observations.length > 0 ? observations : undefined,
+            observationDetails: observationDetails.length > 0 ? observationDetails : undefined,
         };
-    }
-
-    /**
-     * Busca un hint para el motivo de rechazo.
-     *
-     * Las observaciones llegan con su código en `Obs.Code`, pero el parseo actual sólo
-     * conserva el mensaje, así que se reconocen por texto los casos más frecuentes.
-     */
-    private hintForObservations(observations: string[]): string | undefined {
-        const texto = observations.join(' ');
-
-        if (/Condicion Frente al IVA del receptor es obligatorio/i.test(texto)) {
-            return getArcaHint(10246);
-        }
-        if (/Condicion Frente al IVA del receptor/i.test(texto)) {
-            return getArcaHint(10245);
-        }
-        return undefined;
     }
 }

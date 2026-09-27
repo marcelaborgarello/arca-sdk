@@ -1,4 +1,4 @@
-# Changelog
+﻿# Changelog
 
 Todos los cambios notables de este proyecto se documentan en este archivo.
 
@@ -58,6 +58,16 @@ Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos er
 - **`IssueInvoiceRequest.optionals`**: daba como ejemplo *"Condición IVA receptor ID 1010"*, que es la forma vieja y hoy da rechazo **10242** — la misma que ya se había quitado del README.
 - **`IssueOptions.optionals`**: daba como ejemplo *"RG 5762/2025, leyendas de Factura A"*, que es el mecanismo inexistente corregido en esta misma versión.
 
+### 🐛 Los hints no llegaban cuando ARCA rechazaba un comprobante
+
+Es el arreglo que hace que el resto del trabajo de esta versión le sirva a alguien.
+
+- **Bugfix**: al parsear la respuesta, el SDK **descartaba `Obs.Code`** y guardaba sólo el mensaje. Como el diccionario de hints se busca por código, el hint de un rechazo se resolvía con **dos expresiones regulares sobre el texto** (los códigos 10245 y 10246). De los ~40 hints del diccionario, **sólo esos dos podían llegar por el canal de los rechazos** — que es justamente el que importa, porque es donde ARCA explica por qué no autorizó el comprobante. Cualquier otro rechazo llegaba con `hint: undefined`.
+- Ahora el código se conserva y el hint se busca por código, con el reconocimiento por texto como último recurso (una observación sin código igual da la pista del 10246, que va a ser el rechazo masivo del 01/12/2026).
+- **`CaeaService` no pasaba ningún hint.** Ni siquiera los dos por texto: construía el `ArcaRejectionError` sin ese argumento. Un rechazo de rendición informativa —que tiene **plazo fatal**— llegaba sin una sola pista. Ahora usa el mismo camino que `WsfeService`.
+- **Aditivo**: se agrega `observationDetails?: ArcaObservation[]` a `CAEResponse`, a `CAEARegInformativoResponse` y a `ArcaRejectionError`, con `{ code, message }` por observación. `observations` **sigue siendo `string[]`** y no cambia: es el mismo dato, sólo los mensajes. Se exporta el tipo `ArcaObservation`.
+- El parseo de `<Observaciones>` estaba **copiado** en `wsfe.ts` y en `caea.ts`, y las dos copias tiraban el código. Se unificó en `parseObservations()` (`utils/xml.ts`): arreglar una sola habría dejado la otra rota, que es lo que ya había pasado con `getVATCode`.
+
 ### ✨ `issueInvoiceC()` acepta `total` además de `items`
 
 - Para una venta de mostrador que no se detalla: `issueInvoiceC({ total: 1500 })`. Los dos campos son **excluyentes** —el tipo no deja mandar ambos ni ninguno— y con `items` el total se calcula como antes. Si se omite `buyer`, se asume consumidor final sin identificar. Aditivo: no cambia ninguna firma existente.
@@ -94,7 +104,7 @@ Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos er
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 181 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 194 tests unitarios).
 
 ### ✅ Cobertura y testing
 

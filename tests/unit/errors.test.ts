@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getArcaHint } from '../../src/constants/errors';
+import { getArcaHint, getHintForObservations } from '../../src/constants/errors';
 import { VAT_RATE_CODES } from '../../src/types/wsfe';
 
 /**
@@ -117,5 +117,72 @@ describe('ARCA_ERROR_HINTS — códigos de IVA', () => {
             // Quien recibiera un 10043 leía una respuesta sobre otro campo.
             expect(getArcaHint(10043)).not.toMatch(/al[ií]cuota/i);
         });
+    });
+});
+
+/**
+ * `getHintForObservations` — el puente entre un rechazo de ARCA y el diccionario.
+ *
+ * Por qué importa más que cualquier hint suelto: **las validaciones por comprobante llegan
+ * por `Observaciones`, no por `Errors`**. Hasta la v3.0.0 el parseo descartaba `Obs.Code` y
+ * esta búsqueda se hacía con dos expresiones regulares sobre el texto, así que de los ~40
+ * hints del diccionario sólo dos podían llegarle a alguien que recibiera un rechazo.
+ * Corregir un hint sin esto mejoraba el código para quien lo lee, no para quien lo usa.
+ */
+describe('getHintForObservations', () => {
+    it('encuentra el hint por código', () => {
+        // El caso que antes era imposible: el 10019 no lo matcheaba ningún regex.
+        const hint = getHintForObservations([
+            { code: 10019, message: 'Texto que no matchea ningún regex' },
+        ]);
+
+        expect(hint).toBe(getArcaHint(10019));
+    });
+
+    it('devuelve el primero que tenga hint, salteando los que no', () => {
+        // ARCA manda varias observaciones y no todas son accionables.
+        const hint = getHintForObservations([
+            { code: 99999, message: 'Código inexistente en el diccionario' },
+            { code: 10048, message: 'Otro' },
+        ]);
+
+        expect(hint).toBe(getArcaHint(10048));
+    });
+
+    it('cae al reconocimiento por texto si no hay código', () => {
+        // Una observación sin código igual tiene que dar la pista del 10246, que va a ser
+        // el rechazo masivo del 01/12/2026.
+        const hint = getHintForObservations([
+            {
+                code: NaN,
+                message: 'Campo Condicion Frente al IVA del receptor es obligatorio conforme ' +
+                    'a lo reglamentado por la Resolucion General Nro 5616.',
+            },
+        ]);
+
+        expect(hint).toBe(getArcaHint(10246));
+    });
+
+    it('no confunde el NaN con un código real', () => {
+        // `Number.isNaN` tiene que cortar antes de buscar: `ARCA_ERROR_HINTS[NaN]` es
+        // undefined igual, pero si el parseo alguna vez devolviera 0 en vez de NaN, buscar
+        // sin chequear traería el hint del código 0 si algún día existe.
+        expect(getHintForObservations([{ code: NaN, message: 'Sin nada reconocible' }]))
+            .toBeUndefined();
+    });
+
+    it('devuelve undefined cuando no reconoce nada', () => {
+        expect(getHintForObservations([{ code: 99999, message: 'Algo raro' }])).toBeUndefined();
+        expect(getHintForObservations([])).toBeUndefined();
+    });
+
+    it('acepta un texto de fallback aparte de los mensajes', () => {
+        // Lo usa quien tenga el texto del rechazo por otro lado que las observaciones.
+        const hint = getHintForObservations(
+            [],
+            'Campo Condicion Frente al IVA del receptor es obligatorio'
+        );
+
+        expect(hint).toBe(getArcaHint(10246));
     });
 });

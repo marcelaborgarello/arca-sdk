@@ -104,3 +104,47 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
 export function getArcaHint(code: string | number): string | undefined {
     return ARCA_ERROR_HINTS[code];
 }
+
+/**
+ * Busca un hint para un rechazo, a partir de las observaciones que devolvió ARCA.
+ *
+ * **Por código, que es lo que corresponde.** Hasta la v3.0.0 el SDK descartaba `Obs.Code`
+ * al parsear y esta búsqueda se hacía con dos expresiones regulares sobre el texto: de los
+ * ~40 hints del diccionario, sólo dos podían llegar por el canal de los rechazos. Y es el
+ * canal que más importa, porque es donde ARCA explica por qué no autorizó el comprobante.
+ *
+ * Se devuelve el hint de la **primera** observación que tenga uno. ARCA puede mandar
+ * varias y no todas son accionables.
+ *
+ * @param observations - Observaciones con código, de `parseObservations()`.
+ * @param fallbackText - Texto libre para el último recurso. Si ninguna observación trae un
+ *   código conocido —o ARCA no mandó código— se reconocen por texto los dos casos de la
+ *   RG 5616, que son los más frecuentes y los que motivaron el parche original.
+ *
+ * Disponible desde v3.0.0.
+ */
+export function getHintForObservations(
+    observations: ReadonlyArray<{ code: number; message: string }>,
+    fallbackText?: string
+): string | undefined {
+    for (const obs of observations) {
+        if (!Number.isNaN(obs.code)) {
+            const hint = getArcaHint(obs.code);
+            if (hint) return hint;
+        }
+    }
+
+    // Último recurso por texto. Se conserva porque una observación sin código —o con un
+    // código que el diccionario todavía no tiene— igual debería dar la pista del 10246,
+    // que va a ser el rechazo masivo del 01/12/2026.
+    const texto = fallbackText ?? observations.map(o => o.message).join(' ');
+
+    if (/Condicion Frente al IVA del receptor es obligatorio/i.test(texto)) {
+        return getArcaHint(10246);
+    }
+    if (/Condicion Frente al IVA del receptor/i.test(texto)) {
+        return getArcaHint(10245);
+    }
+
+    return undefined;
+}

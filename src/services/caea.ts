@@ -22,9 +22,9 @@ import {
     round,
 } from '../utils/calculations';
 import { formatArcaDateOnly, formatArcaTimestamp } from '../utils/formatArcaDate';
-import { parseXml, escapeXml } from '../utils/xml';
+import { parseXml, escapeXml, parseObservations } from '../utils/xml';
 import { callArcaApi } from '../utils/network';
-import { getArcaHint } from '../constants/errors';
+import { getArcaHint, getHintForObservations } from '../constants/errors';
 
 /**
  * Servicio de Código de Autorización Electrónico Anticipado (CAEA)
@@ -471,13 +471,8 @@ export class CaeaService {
             ? data.FeDetResp.FECAEDetResponse[0]
             : data.FeDetResp.FECAEDetResponse;
 
-        const observations: string[] = [];
-        if (det?.Observaciones) {
-            const obsArray = Array.isArray(det.Observaciones.Obs)
-                ? det.Observaciones.Obs
-                : [det.Observaciones.Obs];
-            obsArray.forEach((o: { Msg: string }) => observations.push(o.Msg));
-        }
+        const observationDetails = parseObservations(det);
+        const observations = observationDetails.map(o => o.message);
 
         // ARCA procesó la rendición y la rechazó: los comprobantes no quedaron
         // informados. Devolverlo como resultado normal hace que quien no mire `result`
@@ -492,7 +487,12 @@ export class CaeaService {
                     pointOfSale: Number(cab.PtoVta),
                     invoiceType: Number(cab.CbteTipo),
                     result: cab.Resultado,
-                }
+                },
+                // Hasta la v3.0.0 esta llamada no pasaba hint alguno: un rechazo de
+                // rendición informativa —que tiene plazo fatal— llegaba sin ninguna pista,
+                // ni siquiera las dos que `wsfe.ts` reconocía por texto.
+                getHintForObservations(observationDetails),
+                observationDetails
             );
         }
 
@@ -502,6 +502,7 @@ export class CaeaService {
             pointOfSale: Number(cab.PtoVta),
             invoiceType: Number(cab.CbteTipo),
             observations: observations.length > 0 ? observations : undefined,
+            observationDetails: observationDetails.length > 0 ? observationDetails : undefined,
         };
     }
 

@@ -54,11 +54,29 @@ export class ArcaValidationError extends ArcaError {
     }
 }
 /**
+ * Una observación de ARCA, con su código.
+ *
+ * ARCA devuelve las validaciones por comprobante en `Observaciones`, y cada una trae
+ * `Obs.Code` + `Obs.Msg`. **Hasta la v3.0.0 el SDK descartaba el código** y sólo guardaba
+ * el mensaje: como el diccionario de hints se busca por código, eso significaba que casi
+ * ningún hint llegaba por el canal de los rechazos, que es justamente donde más hace falta.
+ * Los dos únicos casos reconocidos se detectaban por expresión regular sobre el texto.
+ *
+ * Disponible desde v3.0.0.
+ */
+export interface ArcaObservation {
+    /** Código de la observación (`Obs.Code`). Ver el Manual del Desarrollador RG 4291. */
+    code: number;
+    /** Texto tal como lo devuelve ARCA (`Obs.Msg`). */
+    message: string;
+}
+
+/**
  * ARCA procesó el comprobante y lo **rechazó** (`Resultado = 'R'`).
  *
  * No es un error de red ni de validación local: la llamada salió bien y ARCA contestó
  * que no autoriza. El comprobante **no existe** y no tiene CAE; el motivo viene en
- * `observations`.
+ * `observations`, y con su código en `observationDetails`.
  *
  * @remarks Hasta la v1.x el SDK devolvía un `CAEResponse` con `result: 'R'` y `cae: ''`
  * en vez de lanzar, así que quien no chequeara `result` creía haber facturado. Se
@@ -73,7 +91,17 @@ export class ArcaRejectionError extends ArcaError {
         /** Motivos del rechazo, tal como los devuelve ARCA en `Observaciones`. */
         public observations: string[],
         details?: unknown,
-        hint?: string
+        hint?: string,
+        /**
+         * Los mismos motivos, con el código de cada uno.
+         *
+         * Es lo que hay que mirar para ramificar por código en vez de hacer regex sobre
+         * el texto. `observations` se conserva —es el mismo dato, sólo los mensajes— para
+         * no romper a quien ya lo usaba.
+         *
+         * Disponible desde v3.0.0.
+         */
+        public observationDetails?: ArcaObservation[]
     ) {
         super(message, 'REJECTED', details, hint);
         this.name = 'ArcaRejectionError';

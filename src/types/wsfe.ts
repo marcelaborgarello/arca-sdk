@@ -1,4 +1,4 @@
-import type { ArcaConfig } from './common';
+import type { ArcaConfig, ArcaObservation } from './common';
 import type { LoginTicket } from './wsaa';
 import type { ArcaDateInput } from '../utils/formatArcaDate';
 
@@ -492,8 +492,21 @@ export interface CAEResponse {
     caeExpiry: string;
     /** Resultado (A = Aprobado, R = Rechazado) */
     result: 'A' | 'R';
-    /** Observaciones de ARCA */
+    /**
+     * Observaciones de ARCA, sólo los mensajes.
+     *
+     * Un comprobante puede salir **aprobado con observaciones**: eso no es un rechazo y no
+     * lanza. Para ramificar por código usá {@link CAEResponse.observationDetails}.
+     */
     observations?: string[];
+    /**
+     * Las mismas observaciones, con el código de cada una (`Obs.Code`).
+     *
+     * Disponible desde v3.0.0: hasta entonces el SDK descartaba el código al parsear, así
+     * que quien quisiera distinguir una observación de otra tenía que hacer expresiones
+     * regulares sobre el texto.
+     */
+    observationDetails?: ArcaObservation[];
     /** Items (se retornan si fueron proveídos en el request) */
     items?: InvoiceItem[];
     /** Desglose IVA (solo para Factura A/B) */

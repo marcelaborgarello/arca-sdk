@@ -1,4 +1,4 @@
-<div align="center">
+﻿<div align="center">
 
 # 🇦🇷 arca-sdk
 
@@ -539,8 +539,14 @@ try {
     // ARCA procesó la solicitud y NO autorizó el comprobante.
     // No hay CAE: el comprobante no existe.
     console.error('Rechazado:', error.message);
-    console.error('Motivos:', error.observations);
+    console.error('Motivos:', error.observations);          // string[]
     console.log('Hint:', error.hint);
+
+    // Con el código de cada observación, para ramificar sin hacer regex sobre el texto
+    for (const obs of error.observationDetails ?? []) {
+      if (obs.code === 10246) redirigirAFormularioDeCondicionIVA();
+      console.error(`  [${obs.code}] ${obs.message}`);
+    }
   } else if (error instanceof ArcaAuthError) {
     // Token expirado, certificado inválido, etc.
     console.error('Auth error:', error.message);
@@ -567,7 +573,13 @@ ARCA distingue dos cosas que conviene no confundir:
 |---|---|---|
 | `Errors` en la respuesta | La llamada no se pudo procesar (auth, parámetros mal) | `ArcaError` |
 | `Resultado = 'R'` | Se procesó bien y ARCA **no autorizó** el comprobante | `ArcaRejectionError` |
-| `Resultado = 'A'` con observaciones | **Autorizado**, con advertencias | Se devuelve normal, en `observations` |
+| `Resultado = 'A'` con observaciones | **Autorizado**, con advertencias | Se devuelve normal, en `observations` y `observationDetails` |
+
+> **Los códigos de observación están disponibles desde la v3.0.0.** Hasta entonces el SDK
+> descartaba `Obs.Code` al parsear, así que el `hint` de un rechazo se resolvía con dos
+> expresiones regulares sobre el texto y **casi ningún hint del diccionario llegaba por este
+> canal**. Si tu código hacía regex sobre `observations` para saber qué pasó, ahora podés
+> mirar `observationDetails[].code`.
 
 > **Cambio en la v2.0.0**: hasta la v1.x un rechazo se devolvía como un `CAEResponse`
 > con `result: 'R'` y `cae: ''` en vez de lanzar. Quien no inspeccionara `result`
@@ -667,7 +679,7 @@ import type {
 } from 'arca-sdk';
 
 // Tipos de respuesta
-import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus, InvoiceOptional } from 'arca-sdk';
+import type { CAEResponse, InvoiceDetails, PointOfSale, ServiceStatus, InvoiceOptional, ArcaObservation } from 'arca-sdk';
 import type { TaxpayerResponse, Taxpayer, Address, Activity, TaxRecord } from 'arca-sdk';
 
 // Catálogos (FEParamGet*)
@@ -739,7 +751,7 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 181 tests:
+14 archivos, 194 tests:
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
