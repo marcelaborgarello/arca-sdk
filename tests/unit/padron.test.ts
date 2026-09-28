@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { PadronService } from '../../src/services/padron';
 import { callArcaApi } from '../../src/utils/network';
 import { WsaaService } from '../../src/auth/wsaa';
+import { ArcaError } from '../../src/types/common';
+import { ARCA_ERROR_HINTS } from '../../src/constants/errors';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -162,6 +164,43 @@ describe('PadronService (A13)', () => {
     const result = await service.getTaxpayer('20111111112');
     expect(result.taxpayer).toBeDefined();
     expect(result.taxpayer?.vatCondition).toBe(6); // RESPONSABLE_MONOTRIBUTO
+  });
+
+  /**
+   * El hint del padrón, que hasta la v3.0.0 no le llegaba a nadie.
+   *
+   * `PADRON_ERROR` y `CUIT_NOT_FOUND` estaban escritos en el diccionario desde siempre, y
+   * **`padron.ts` no llamaba a `getArcaHint` en ninguna línea**: eran dos textos que ningún
+   * camino del código podía entregar. Es el peor tipo de documentación muerta, porque desde
+   * afuera es indistinguible de una que funciona.
+   *
+   * De los dos, sólo `PADRON_ERROR` se cableó. El `CUIT_NOT_FOUND` se borró: su texto
+   * repetía el mensaje de error con otras palabras en vez de agregarle una acción.
+   *
+   * **Lo que falta es más grande que estos dos.** El anexo 5.3 del *Manual Consulta a Padrón
+   * – Alcance 13 v1.4* documenta **siete** mensajes de error y el SDK no reconoce ninguno.
+   * Cuatro son accionables y no pueden llegar hoy, porque `getTaxpayer()` devuelve los
+   * errores por valor y `TaxpayerResponse` no tiene un campo `hint`.
+   */
+  describe('el hint del padrón', () => {
+    it('llega cuando la respuesta no tiene Body', async () => {
+      // Una respuesta sin Body es casi siempre el servicio de homologación caído, que es
+      // exactamente lo que dice el hint. Sin él, quien integra revisa su CUIT.
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => '<?xml version="1.0" encoding="UTF-8"?><algo>no es un sobre SOAP</algo>',
+      });
+
+      try {
+        await service.getTaxpayer('20111111112');
+        expect.unreachable('getTaxpayer() debía lanzar');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArcaError);
+        expect((error as ArcaError).code).toBe('PADRON_ERROR');
+        expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+        expect((error as ArcaError).hint).toBeDefined();
+      }
+    });
   });
 });
 

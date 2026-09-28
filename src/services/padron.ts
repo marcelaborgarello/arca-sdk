@@ -1,5 +1,6 @@
 import { WsaaService } from '../auth/wsaa';
 import { getPadronEndpoint } from '../constants/endpoints';
+import { getArcaHint } from '../constants/errors';
 import { ArcaNetworkError, ArcaError } from '../types/common';
 import type {
     TaxpayerServiceConfig,
@@ -107,7 +108,16 @@ export class PadronService {
 
         const body = result.Envelope?.Body;
         if (!body) {
-            throw new ArcaError('Respuesta del Padrón inválida: Body no encontrado', 'PADRON_ERROR');
+            // Hasta la v3.0.0 `padron.ts` no llamaba a `getArcaHint` en ninguna línea, así
+            // que el hint de `PADRON_ERROR` —escrito y correcto— no le llegaba nunca a
+            // nadie. Es el caso en que más sirve: una respuesta sin Body es casi siempre el
+            // servicio de homologación caído, no un problema de quien integra.
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: Body no encontrado',
+                'PADRON_ERROR',
+                { xml },
+                getArcaHint('PADRON_ERROR')
+            );
         }
 
         const response = body.getPersonaResponse?.personaReturn;
