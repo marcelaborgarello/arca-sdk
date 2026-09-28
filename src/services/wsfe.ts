@@ -505,7 +505,17 @@ export class WsfeService {
             // de la lista vacía silenciosa (ver getActivities en la v2.1.0).
             if (String(error?.Code) === '602') return [];
 
-            throw new ArcaError(`Error ARCA: ${error?.Msg || 'Error desconocido'}`, 'ARCA_ERROR', data.Errors);
+            // Hasta la v3.0.0 éste era el único throw de `ArcaError` del SDK que no pasaba
+            // el hint, y se notaba: los dos códigos que ARCA devuelve acá —el 10005 y el
+            // 11002, punto de venta no dado de alta y no habilitado en este WS— son
+            // justamente los que explican el error más común de configuración.
+            const code = error?.Code || 'UNKNOWN';
+            throw new ArcaError(
+                `Error ARCA: ${error?.Msg || 'Error desconocido'}`,
+                'ARCA_ERROR',
+                data.Errors,
+                getArcaHint(code)
+            );
         }
 
         const raw = data.ResultGet?.PtoVenta;

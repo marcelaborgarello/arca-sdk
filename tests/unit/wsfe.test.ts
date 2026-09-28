@@ -3,7 +3,8 @@ import { WsfeService } from '../../src/services/wsfe';
 import { callArcaApi } from '../../src/utils/network';
 import { InvoiceType, BillingConcept, TaxIdType, VatCondition, VAT_RATE_CODES, listVatRates } from '../../src/types/wsfe';
 import type { AssociatedInvoice } from '../../src/types/wsfe';
-import { ArcaValidationError } from '../../src/types/common';
+import { ArcaError, ArcaValidationError } from '../../src/types/common';
+import { ARCA_ERROR_HINTS } from '../../src/constants/errors';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -456,6 +457,32 @@ describe('WsfeService', () => {
 
       await expect(new WsfeService(BASE_CONFIG).getPointsOfSale())
         .rejects.toThrow('Token invalido');
+    });
+
+    // Hasta la v3.0.0 éste era el **único** throw de `ArcaError` del SDK que no pasaba el
+    // hint. Se nota justo acá: los códigos que ARCA devuelve en este método son el 10005 y
+    // el 11002 —punto de venta no dado de alta, no habilitado en este WS—, o sea el error
+    // de configuración más común de todos, y llegaba sin una sola pista.
+    it('pasa el hint del código que devolvió ARCA', async () => {
+      mockPtosVenta('<Errors><Err><Code>10005</Code><Msg>El punto de venta debe estar dado de alta</Msg></Err></Errors>');
+
+      try {
+        await new WsfeService(BASE_CONFIG).getPointsOfSale();
+        expect.unreachable('getPointsOfSale() debía lanzar');
+      } catch (error) {
+        expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS[10005]);
+      }
+    });
+
+    it('no inventa un hint si el código no está en el diccionario', async () => {
+      mockPtosVenta('<Errors><Err><Code>99999</Code><Msg>Algo raro</Msg></Err></Errors>');
+
+      try {
+        await new WsfeService(BASE_CONFIG).getPointsOfSale();
+        expect.unreachable('getPointsOfSale() debía lanzar');
+      } catch (error) {
+        expect((error as ArcaError).hint).toBeUndefined();
+      }
     });
   });
 });
