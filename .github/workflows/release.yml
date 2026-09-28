@@ -72,5 +72,7 @@ jobs:
 
       # `prepublishOnly` vuelve a correr build + test: es la última red antes de subir
       # algo irreversible. npm genera las provenance attestations solo, sin --provenance.
+      # Se usa `npm stage publish` porque el Trusted Publisher en npmjs.com está configurado
+      # con permisos de Staged Publishing (requiere aprobación posterior en npmjs.com).
       - name: Publicar
-        run: npm publish
+        run: npm stage publish
