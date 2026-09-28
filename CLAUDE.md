@@ -66,6 +66,67 @@ a las fechas de vigencia.
 > versión y fecha de revisión. Quedarse con la primera que aparece en el buscador es
 > cómo se pierde un cambio de vigencia.
 
+### Pero wsfev1 no es el único manual, y esta sección lo dio por sentado
+
+Hasta el 27/09/2026 acá estaba **sólo el de wsfev1**, y eso hizo perder tiempo de verdad:
+la trampa del TA con la lista de relaciones congelada se buscó durante meses en ese PDF y
+**está documentada en el de Padrón A13**, que nunca se había leído. El SDK habla con cuatro
+servicios y cada uno tiene su manual:
+
+| Servicio | Manual | URL (verificadas el 27/09/2026) |
+|---|---|---|
+| **wsfev1** (facturación, CAEA) | *RG 4291 – Proyecto FE v4.8*, 202 pág. | `arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf` |
+| **WSAA** (autenticación) | *WSAA Manual del Desarrollador*, publicación 20.2.19, 35 pág. | `arca.gob.ar/ws/WSAA/WSAAmanualDev.pdf` |
+| **Padrón A13** (`padron.ts`) | *Manual Consulta a Padrón – Alcance 13 – V.1.4*, 25 pág. | `arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf` |
+| **WSASS** (autorizar servicios en homologación) | *Manual del Usuario del WSASS*, publicación 19.10.1, 19 pág. | `arca.gob.ar/ws/WSASS/WSASS_manual.pdf` |
+
+Los cuatro se pueden leer con `pdf-parse`. **El de WSASS también**: hasta el 27/09/2026 las notas
+internas del proyecto decían que era un PDF escaneado sin texto extraíble, y es falso — salen 19
+páginas de texto, índice incluido, y tiene un capítulo de FAQ que nunca se leyó.
+
+**Cuál consultar según la duda**, que es lo que más tiempo hace perder:
+
+| Si buscás… | Está en |
+|---|---|
+| Códigos de validación de comprobantes (10xxx, 1xxx, 8xx) | wsfev1, tablas de validaciones |
+| Errores de infraestructura 500-602 | wsfev1, **p. 21** |
+| La tabla de `CondicionIVAReceptorId` y sus clases | wsfev1, **p. 202** (última página) |
+| Errores de autenticación | WSAA, **cap. 10** — por texto, no hay códigos numéricos |
+| El lapso en que ARCA no emite otro TA | WSAA, **cap. 10.6** |
+| Errores del padrón (siete, con texto exacto) | A13, **anexo 5.3** |
+| Que el token trae congelada la lista de relaciones | **A13**, en la descripción de `cuitRepresentada`. **No está en el de wsfev1** |
+
+> **Ojo con el dominio del manual de A13**: la URL que circula es la de
+> `afip.gob.ar/ws/ws-padron-a13/…` y **ya no funciona** — falla el handshake TLS, no es un
+> 404. Acá, a diferencia de wsfev1, los dos dominios que responden dan el **mismo archivo**:
+> no hay que comparar versiones.
+
+### El padrón A13 está implementado a medias, y el manual lo dice
+
+`padron.ts` implementa **uno** de los cuatro métodos que documenta el manual. No es una
+decisión tomada: es que el manual no se había leído.
+
+| Método | Qué hace | Estado |
+|---|---|---|
+| `getPersona` | CUIT → datos, domicilios, impuestos | ✅ es `getTaxpayer()` |
+| `dummy` | verifica si el servicio está vivo | ❌ |
+| `getIdPersonaListByDocumento` | DNI → lista de CUITs asociadas | ❌ |
+| `getPersonaV2` | ídem `getPersona` **pero permite consultar una clave INACTIVA** | ❌ |
+
+Dos consecuencias que conviene tener presentes antes de tocar `padron.ts`:
+
+- **Hoy el SDK no puede consultar los datos de un contribuyente inactivo.** Con `getPersona`
+  una clave inactiva devuelve error y nada más; `getPersonaV2` existe exactamente para eso, y
+  es justo el caso en que más importa mirar antes de facturarle a alguien — un receptor
+  inactivo hace que wsfev1 rechace con el **10247**.
+- **El anexo 5.3 documenta siete mensajes de error y el SDK no reconoce ninguno.** El
+  diccionario de `errors.ts` sólo tiene `PADRON_ERROR`, que es un código interno. Hacerlos
+  llegar pide un canal que no existe: `getTaxpayer()` informa los errores **por valor de
+  retorno** (`{ taxpayer?, error? }`), no lanzando, y `TaxpayerResponse` no tiene campo `hint`.
+- Y un detalle que confunde: `padron.ts` chequea `response.errorConstancia`, un campo que
+  **no existe en A13** (cero menciones en las 25 páginas). Viene del servicio de Constancia
+  de Inscripción.
+
 Ya contemplado (no reportar como novedad):
 
 - **RG 5866/2026** (01/07/2026): unificó y abrogó el régimen de factura electrónica.
@@ -332,7 +393,11 @@ Tres cosas que muerden:
   relaciones del momento en que se emitió: si delegás un CUIT en WSASS y reusás el TA
   cacheado, wsfev1 devuelve *"ValidacionDeToken: No aparecio CUIT en lista de
   relaciones"* (error 600). Hay que borrar `.ta-cache.json` y pedir uno nuevo.
-  No está documentado en ningún manual de ARCA.
+  > **Sí está documentado, y hasta el 27/09/2026 acá decía que no.** Está en el **manual de
+  > Padrón A13**, en la descripción de `cuitRepresentada` de sus tres métodos, textual:
+  > *"Debe coincidir con alguna de las CUITS listadas en la sección **relations** del token
+  > enviado"*. No está en el manual de wsfev1 —que es donde se buscó— ni en el de WSAA. Es el
+  > caso testigo de por qué esta sección ahora lista los cuatro manuales y no uno.
 
 > **Se puede probar clase A aunque el CUIT del proyecto sea monotributista.** Delegando
 > en WSASS a un CUIT Responsable Inscripto de prueba (`30000000007` sirve). El

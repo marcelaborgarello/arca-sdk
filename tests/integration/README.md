@@ -106,8 +106,15 @@ comprobantes A. Ojo con dos cosas:
 
 ### La delegación tiene que existir ANTES de pedir el TA
 
-Es el detalle que no está documentado en ningún manual de ARCA y cuesta media hora
-entenderlo.
+Es el detalle que cuesta media hora entenderlo, y que **está documentado en el manual que
+nadie mira**: el de [Padrón A13](https://arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf),
+en la descripción del parámetro `cuitRepresentada` de sus tres métodos:
+
+> *Debe coincidir con alguna de las CUITS listadas en la sección **relations** del token
+> enviado.*
+
+No está en el manual de wsfev1 ni en el de WSAA, que son los dos donde uno lo busca. Hasta el
+27/09/2026 acá decía que no estaba documentado en ninguno.
 
 **El TA trae congelada la lista de relaciones del momento en que se emitió.** Si creás la
 delegación en WSASS y reusás un TA anterior —el que cachea `.ta-cache.json`, por
