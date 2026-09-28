@@ -16,6 +16,38 @@ TypeScript nativo · API limpia en inglés · Tokens automáticos · QR oficial 
 
 ---
 
+## ⚠️ Revisión en curso — 27/09/2026
+
+> [!IMPORTANT]
+> **Este README describe la v3.0.0, que todavía no está publicada**: npm sigue sirviendo la
+> **2.1.0**. Si instalás hoy, te llega esa.
+
+Estamos auditando **cada afirmación normativa de esta documentación contra los manuales oficiales
+de ARCA** —los cuatro, no sólo el de facturación— y corrigiendo lo que no coincide. Aparecieron
+once afirmaciones falsas sin buscarlas sistemáticamente: hints de error que describían otro código,
+una tabla de condiciones de IVA con cinco filas mal transcriptas, y una advertencia que decía que
+algo *"no está documentado en ningún manual"* cuando sí lo está. Buscándolas van a aparecer más.
+
+**Qué está verificado contra ARCA de verdad**, o sea con un CAE real en la mano:
+
+| | Estado |
+|---|---|
+| **Factura C** — `issueInvoiceC()` | ✅ Producción y homologación |
+| **Nota de Crédito C** — `issueCreditNoteC()` | ✅ Producción |
+| **Factura A** con IVA discriminado — `issueInvoiceA()` | ✅ Homologación — **una sola alícuota, el 21%** |
+| Notas de Crédito **A y B**, Notas de Débito, Recibos | ❌ **Nunca se emitió ninguno** |
+| Las otras cinco alícuotas (0, 2,5, 5, 10,5 y 27%) | ❌ Nunca pasaron por ARCA |
+| Otros tributos (`taxes`) | ❌ Nunca llegó uno a ARCA |
+| **CAEA** (contingencia) | ❌ Sin verificar, entero |
+
+Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
+prueban que el SDK hace lo que creemos, no que ARCA lo acepte. Ya pasó una vez que un comprobante
+entero fuera imposible de emitir con la suite en verde, así que preferimos decirlo.
+
+**Si vas a usar algo de esa lista, probalo contra homologación antes de producción.**
+
+---
+
 ## ¿Por qué arca-sdk?
 
 La mayoría de las librerías de AFIP/ARCA para Node.js son:
@@ -128,12 +160,18 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 ### ✅ Servicios soportados
 
-| Servicio | Descripción | Estado |
-|----------|-------------|--------|
-| **WSAA** | Autenticación y Autorización | ✅ Completo |
-| **WSFE v1** | Facturación Electrónica (A, B, C) | ✅ Completo |
-| **Padrón A13** | Consulta de datos de contribuyentes | ✅ Completo |
-| **CAEA** | Contingencia: solicitud, consulta y rendición informativa | ⚠️ Implementado, sin verificar contra homologación |
+| Servicio | Descripción | Estado | Manual oficial |
+|----------|-------------|--------|----------------|
+| **WSAA** | Autenticación y Autorización | ✅ Completo | [WSAA](https://www.arca.gob.ar/ws/WSAA/WSAAmanualDev.pdf) |
+| **WSFE v1** | Facturación Electrónica (A, B, C) | ✅ Completo | [RG 4291 v4.8](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) |
+| **Padrón A13** | Consulta de datos de contribuyentes | ⚠️ Un método de los cuatro del manual | [Padrón A13 v1.4](https://arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf) |
+| **CAEA** | Contingencia: solicitud, consulta y rendición informativa | ⚠️ Implementado, sin verificar contra homologación | [RG 4291 v4.8](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) |
+
+> **Padrón A13**: `getTaxpayer()` implementa `getPersona`, que es la consulta por CUIT. El
+> manual documenta otros tres métodos que el SDK todavía no expone: `dummy` (estado del
+> servicio), `getIdPersonaListByDocumento` (DNI → las CUITs asociadas) y `getPersonaV2`, que es
+> el único que permite consultar una clave en estado **INACTIVA**. Si necesitás alguno,
+> [abrí un issue](https://github.com/marcelaborgarello/arca-sdk/issues).
 
 ### ✅ Tipos de comprobantes
 
@@ -520,6 +558,43 @@ Sobre el código **13 (Monotributista Social)**: figura como válido en la tabla
 
 ---
 
+## 📚 Manuales oficiales de ARCA
+
+Si tenés una duda sobre qué espera ARCA, la respuesta está en un PDF suyo y no en este README.
+El SDK habla con cuatro servicios y **cada uno tiene su propio manual**:
+
+| Manual | Qué cubre | Páginas |
+|---|---|---|
+| **[RG 4291 – Proyecto FE v4.8](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf)** | `wsfev1`: facturación, CAEA, todos los códigos de validación y los catálogos `FEParamGet*` | 202 |
+| **[WSAA Manual del Desarrollador](https://www.arca.gob.ar/ws/WSAA/WSAAmanualDev.pdf)** | Autenticación: el TRA, la firma CMS, el ciclo de vida del ticket | 35 |
+| **[Consulta a Padrón – Alcance 13 v1.4](https://arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf)** | El servicio de Padrón: sus cuatro métodos y sus mensajes de error | 25 |
+| **[WSASS Manual del Usuario](https://www.arca.gob.ar/ws/WSASS/WSASS_manual.pdf)** | Cómo autorizar un servicio para tu certificado **en homologación** | 19 |
+
+**Cuál abrir según la duda** — esta tabla existe porque buscar en el manual equivocado es lo que
+más tiempo hace perder:
+
+| Si buscás… | Está en |
+|---|---|
+| Qué significa un código de rechazo (`10xxx`, `1xxx`, `8xx`) | RG 4291, tablas de validaciones |
+| Los errores `500` a `602` | RG 4291, **p. 21** |
+| Qué condición de IVA del receptor va en cada clase de comprobante | RG 4291, **última página** |
+| La lista real de comprobantes, alícuotas, monedas o tributos | No está en el PDF: la dan los métodos `FEParamGet*`. Ver "Catálogos de referencia" |
+| Por qué WSAA rechaza tu login | WSAA, **cap. 10** — son nueve casos, documentados por su texto: WSAA no devuelve códigos numéricos |
+| Cuánto tiempo ARCA no te emite otro ticket teniendo uno vigente | WSAA, **cap. 10.6** (10 min en homologación, 2 en producción) |
+| Los mensajes de error del Padrón | Padrón A13, **anexo 5.3** |
+| Por qué tu token no sirve para la CUIT que acabás de delegar | Padrón A13, en la descripción de `cuitRepresentada`: el token trae **congelada** la lista de relaciones del momento en que se emitió |
+
+> [!TIP]
+> **Verificá la versión del manual que abrís.** ARCA publica el de `wsfev1` en varias URLs y
+> **no siempre tienen la misma versión**: la de arriba es la v4.8, y hubo semanas en que otra URL
+> servía la v4.7 mientras la página índice anunciaba "V. 4.7" con la v4.8 ya publicada. La portada
+> trae número de versión y fecha de revisión — es lo primero que conviene mirar.
+>
+> El de Padrón A13 tiene el problema inverso: la URL que más circula es la del dominio viejo
+> (`afip.gob.ar/ws/ws-padron-a13/…`) y **ya no responde**. La de arriba sí.
+
+---
+
 ### Manejo de errores
 
 Todos los errores son instancias tipadas de `ArcaError`, con un campo `hint` que te dice qué hacer:
@@ -751,15 +826,15 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 194 tests:
+14 archivos, 265 tests:
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
 | WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
 | WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB`, `issueReceiptA`, `issueCreditNoteC`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, hints de alícuota |
 | CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen`, las seis alícuotas de IVA en el XML |
-| Errores | `errors.test.ts` | Diccionario de hints por código de ARCA — **sólo** los de IVA (10019, 10043); los otros ~38 no tienen cobertura |
-| Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA |
+| Errores | `errors.test.ts` | El diccionario de hints: **47 de sus 48 entradas** tienen test de su texto, contra el manual que corresponde. Incluye los nueve faults de WSAA, que se reconocen por texto porque WSAA no devuelve códigos numéricos |
+| Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA, el hint del servicio caído |
 | XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD en los dos builders, escapado, Tributos, moneda extranjera, rechazos |
 | XML / TRA | `xml.test.ts` | Construcción del TRA y sus márgenes de tiempo, parsing de WSAA, validación de CUIT |
 | Fechas | `formatArcaDate.test.ts` | Fecha-calendario vs. instante, conversión a UTC-3, `yyyymmddhhmmss` |
