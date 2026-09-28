@@ -608,11 +608,17 @@ te dice qué hacer:
 import {
   ArcaError, ArcaAuthError, ArcaValidationError,
   ArcaNetworkError, ArcaRejectionError,
+  TaxIdType, VatCondition,
 } from 'arca-sdk';
 
 try {
   const result = await wsfe.issueInvoiceC({
     items: [{ description: 'Producto', quantity: 1, unitPrice: 1500 }],
+    buyer: {
+      docType: TaxIdType.FINAL_CONSUMER,
+      docNumber: '0',
+      vatCondition: VatCondition.CONSUMIDOR_FINAL,   // RG 5616 — sin esto, rechazo 10246
+    },
   });
 } catch (error) {
   if (error instanceof ArcaRejectionError) {
@@ -845,14 +851,16 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 265 tests:
+14 archivos, 266 tests — es lo que corre `bun run test`. **No incluye
+`tests/integration/wsfe.integration.test.ts`**: `vitest.config.ts` limita la corrida a
+`tests/unit/**`, y la integración va aparte con `bun run test:integration`.
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
 | WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
-| WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB`, `issueReceiptA`, `issueCreditNoteC`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, hints de alícuota |
+| WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB`, `issueReceiptA`, `issueCreditNoteC`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, el 96 compartido de `TaxIdType`, hints de alícuota |
 | CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen`, las seis alícuotas de IVA en el XML |
-| Errores | `errors.test.ts` | El diccionario de hints: **47 de sus 48 entradas** tienen test de su texto, contra el manual que corresponde. Incluye los nueve faults de WSAA, que se reconocen por texto porque WSAA no devuelve códigos numéricos |
+| Errores | `errors.test.ts` | El diccionario de hints: **47 de sus 48 entradas** están cubiertas — en 40 se verifica el **texto** contra el manual que corresponde, y en los ocho faults de WSAA restantes, que el `faultstring` llegue al hint (WSAA no devuelve códigos numéricos, así que se reconocen por texto). La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
 | Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA, el hint del servicio caído |
 | XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD en los dos builders, escapado, Tributos, moneda extranjera, rechazos |
 | XML / TRA | `xml.test.ts` | Construcción del TRA y sus márgenes de tiempo, parsing de WSAA, validación de CUIT |
@@ -878,6 +886,29 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 - [ ] Soporte WSCT (Turismo)
 - [ ] Método `consultar()` para servicios adicionales del Padrón
 - [ ] Opción de exportar a PDF (recibo y factura)
+
+---
+
+## Contribuciones
+
+El desarrollo es **asistido por agentes de IA** —principalmente
+[Claude Code](https://www.anthropic.com/claude-code) y [Devin](https://devin.ai)— con
+revisión humana de Marcela Borgarello antes de cada merge. Se dice acá porque queda en el
+historial y conviene que quien lea el código sepa cómo se escribió:
+
+- **Los commits lo declaran.** Cada uno lleva al agente como autor o como
+  `Co-Authored-By:`, así que `git log` alcanza para saber qué tocó cada quien. Los del bot
+  de Devin van firmados como `Devin AI <…devin-ai-integration[bot]@users.noreply.github.com>`.
+- **Nada entra por confianza en el agente.** Las afirmaciones normativas se verifican
+  contra los manuales de ARCA —con página citada en el comentario o en el commit— y todo
+  PR pasa el CI (`lint` → `build` → `test`) antes de mergearse. Los números que aparecen en
+  esta documentación salen de correr la suite, no de estimarlos.
+- **Lo no verificado se marca como tal.** Cuando algo no se pudo comprobar contra el
+  manual o contra homologación, el comentario lo dice en vez de afirmarlo.
+
+Las contribuciones externas son bienvenidas, con agente o sin agente. Si usás uno,
+[`CLAUDE.md`](CLAUDE.md) tiene el contexto normativo del proyecto y las convenciones que
+conviene pasarle.
 
 ---
 
