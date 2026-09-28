@@ -15,11 +15,16 @@ import { VAT_RATE_CODES } from '../../src/types/wsfe';
  * quedar congelado —o directamente colgado del código equivocado— sin que nada se ponga
  * en rojo. Fue exactamente lo que pasó con la alícuota de IVA.
  *
- * **Alcance, y conviene tenerlo claro**: está cubierto el texto de los códigos de IVA
- * (10019, 10043), el de `ALREADY_HAS_TA`, los **once** que hasta la v3.0.0 describían otro
- * código, y la búsqueda de `getHintForObservations`. El resto del diccionario sigue sin
- * cobertura de su texto: que este archivo exista no significa que el diccionario esté
- * probado.
+ * **Alcance, y conviene tenerlo claro**: están cubiertas **47 de las 48** entradas del
+ * diccionario —lo asevera el test de cobertura del final—, pero no todas de la misma
+ * manera. En **39** se verifica el **texto** contra el manual que corresponde: los códigos
+ * de IVA (10019, 10043), `ALREADY_HAS_TA`, el 10283 y el 1527 del tributo ID 13, los trece
+ * que hasta la v3.0.0 describían otro código, los seis que no tenían hint y los quince
+ * fijados del v4.8. De los **ocho** faults de WSAA que quedan se verifica el **ruteo** —que
+ * el `faultstring` llegue al hint—, no lo que dicen. Y se cubre la búsqueda de
+ * `getHintForObservations`.
+ *
+ * La única entrada sin cubrir acá es `PADRON_ERROR`, que se prueba en `padron.test.ts`.
  */
 
 /**

@@ -14,8 +14,8 @@
  * - Los de **WSAA** no tienen número. Su manual (publicación 20.2.19) no trae tabla de
  *   códigos: devuelve SOAP Faults y documenta nueve errores por su texto en el cap. 10. Por
  *   eso tienen clave de texto y se resuelven con {@link getWsaaHint}.
- * - `PADRON_ERROR` y `CUIT_NOT_FOUND` no son códigos de ARCA: son códigos internos de este
- *   SDK.
+ * - `PADRON_ERROR` no es un código de ARCA: es el único código interno de este SDK que
+ *   queda en la tabla — el otro, `CUIT_NOT_FOUND`, se borró en la v3.0.0.
  *
  * Los hints se buscan por código —{@link getArcaHint}— y, en un rechazo, con
  * {@link getHintForObservations}. Si tocás un texto de acá, el test que lo cubre está en
