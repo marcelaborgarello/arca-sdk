@@ -147,19 +147,28 @@ export interface InvoiceItem {
  *
  * | Código | Descripción                          | Clases        |
  * |--------|--------------------------------------|---------------|
- * | 1      | IVA Responsable Inscripto            | A/ALEY, 49    |
- * | 4      | IVA Sujeto Exento                    | A/ALEY, 49    |
+ * | 1      | IVA Responsable Inscripto            | A/ALEY, C     |
+ * | 4      | IVA Sujeto Exento                    | B, C          |
  * | 5      | Consumidor Final                     | B, C, 49      |
- * | 6      | Responsable Monotributo              | A/ALEY, 49    |
+ * | 6      | Responsable Monotributo              | A/ALEY, C     |
  * | 7      | Sujeto No Categorizado               | B, C          |
  * | 8      | Proveedor del Exterior               | B, C          |
  * | 9      | Cliente del Exterior                 | B, C          |
  * | 10     | IVA Liberado – Ley N° 19.640         | B, C          |
- * | 13     | Monotributista Social                | A/ALEY, 49    |
+ * | 13     | Monotributista Social                | A/ALEY, C     |
  * | 15     | IVA No Alcanzado                     | B, C          |
- * | 16     | Monotributo Trab. Indep. Promovido   | A/ALEY, 49    |
+ * | 16     | Monotributo Trab. Indep. Promovido   | A/ALEY, C     |
  *
  * ALEY = "A con leyenda 'operación sujeta a retención'" (RG 5762/2025).
+ * La columna **49** es el Comprobante de Compra de Bienes Usados, y la única condición
+ * que lo admite es Consumidor Final: se le emite a un particular que vende algo usado.
+ *
+ * @remarks Hasta la v3.0.0 esta tabla tenía **cinco filas mal** —la 1, 4, 6, 13 y 16—
+ * porque se leyó la columna `C` como la `49`. La tabla del manual (v4.8, p. 202) marca
+ * las clases con una `X` por celda, y el texto extraído del PDF las devuelve sin columna:
+ * se reconstruyó con las coordenadas X de cada celda. Dos comprobaciones que cierran:
+ * las **once** condiciones tienen `X` en la columna `C` —en clase C no hay IVA que
+ * discriminar, así que las admite todas— y la columna `49` la tiene sólo la fila 5.
  *
  * @remarks A partir del **01/12/2026** informar este campo es obligatorio
  * (Manual v4.8, RG 5616): omitirlo pasa a rechazar con el código 10246 / 826.
@@ -598,9 +607,16 @@ export interface VatConditionEntry extends CatalogEntry {
     /**
      * Clases de comprobante en las que ARCA admite esta condición (ej. `'A/ALEY/C'`).
      *
-     * **Puede variar según el emisor**: el servicio devuelve las combinaciones válidas
-     * para el CUIT autenticado, y no coinciden necesariamente con la tabla del manual.
-     * Por eso esta información no está hardcodeada en el SDK.
+     * **La autoridad es el servicio, no la copia local.** Este campo llega tal como lo
+     * devuelve ARCA en `Cmp_Clase`, y por eso la relación no está hardcodeada: la tabla
+     * del manual es una foto, y una copia escrita a mano se desactualiza en silencio el
+     * día que ARCA cambia una fila.
+     *
+     * @remarks **No varía según el emisor**, aunque hasta la v3.0.0 este JSDoc lo
+     * afirmaba. Medido el 27/09/2026: el servicio devuelve las mismas once filas, una
+     * por una, para un CUIT monotributista y para uno Responsable Inscripto —los dos
+     * extremos, uno que sólo emite C y otro que emite A—. Son dos CUITs, no un censo,
+     * pero alcanzan para no seguir afirmando lo contrario.
      */
     invoiceClass?: string;
 }

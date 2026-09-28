@@ -603,9 +603,15 @@ export class WsfeService {
     /**
      * Condiciones de IVA del receptor admitidas (`FEParamGetCondicionIvaReceptor`).
      *
-     * **La lista depende del emisor autenticado**: ARCA devuelve las combinaciones
-     * válidas para ese CUIT, y las clases de comprobante que informa no coinciden
-     * necesariamente con la tabla del manual. Por eso el SDK no las hardcodea.
+     * Devuelve las once condiciones del catálogo con la clase de comprobante en que
+     * aplican (`invoiceClass`). **Es la fuente autoritativa**: el enum
+     * {@link VatCondition} es una copia local para validar sin salir a la red, y una
+     * copia se desactualiza el día que ARCA cambia una fila.
+     *
+     * @remarks **La lista no depende del emisor**, aunque hasta la v3.0.0 este JSDoc y
+     * el README lo afirmaban. Medido el 27/09/2026 contra homologación: fila por fila,
+     * el servicio devuelve lo mismo para un CUIT monotributista y para uno Responsable
+     * Inscripto. No filtra por quién pregunta.
      */
     async getVatConditions(): Promise<VatConditionEntry[]> {
         const raw = await this.callParamMethod('FEParamGetCondicionIvaReceptor');

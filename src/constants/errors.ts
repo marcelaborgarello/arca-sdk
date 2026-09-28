@@ -35,9 +35,14 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
         'reintentá en unos minutos.',
     502: 'Error interno de base de datos de ARCA — Autorizador CAE / Régimen CAEA, transacción activa. ' +
         'Es del lado de ARCA: reintentá en unos minutos.',
-    // El error que aparece al delegar un CUIT en WSASS y reusar un TA cacheado. No está
-    // documentado en ningún manual de ARCA: el TA trae congelada la lista de relaciones del
-    // momento en que se emitió, así que una delegación nueva no viaja en un token viejo.
+    // El error que aparece al delegar un CUIT en WSASS y reusar un TA cacheado: el TA trae
+    // congelada la lista de relaciones del momento en que se emitió, así que una delegación
+    // nueva no viaja en un token viejo.
+    //
+    // **Sí está documentado**, y no en el manual donde uno lo busca: está en el de Padrón
+    // A13, en la descripción de `cuitRepresentada` de sus tres métodos — "debe coincidir con
+    // alguna de las CUITS listadas en la sección relations del token enviado". No está en el
+    // de wsfev1 ni en el de WSAA.
     600: 'No se corresponden token y firma, o el usuario no está autorizado a realizar esta operación. ' +
         'Si acabás de crear una delegación en WSASS, el TA cacheado no la conoce: borralo y pedí uno nuevo.',
     601: 'La CUIT representada no está incluida en el token. Pedí un TA nuevo para el CUIT que viaja ' +

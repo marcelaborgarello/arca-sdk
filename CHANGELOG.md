@@ -4,7 +4,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
-## [3.0.0] — Unreleased
+## [3.0.0] — 2026-09-28
 
 > Hay **un cambio incompatible**: se eliminaron los Tique. Ver abajo. Si nunca los usaste,
 > actualizar no te pide tocar nada. El resto de la versión es aditivo o corrección de bugs.
@@ -37,6 +37,41 @@ Estaban `@deprecated` desde la v1.4.1. Se borran porque seguir ofreciéndolos er
 ### 🐛 `getActivities()` devolvía siempre una lista vacía
 
 - **Bugfix crítico**: El método consultaba el elemento XML `ActividadTipo`, pero ARCA devuelve `ActividadesTipo` (en plural). Al no encontrar la clave, el método retornaba silenciosamente `[]`. Corregido y asegurado con tests de integración que exigen que ningún catálogo de ARCA retorne listas vacías ni campos `undefined`.
+
+### 🧹 Se quita `zod` de las dependencias
+
+- Estaba declarada en `dependencies` y **no se usaba en ninguna línea**: cero imports en todo `src/`. Cada consumidor se la descargaba al instalar el SDK, para nada. `fast-xml-parser` y `node-forge` sí se usan y se mantienen. No hay cambio de API: `zod` nunca apareció en un tipo ni en una firma pública.
+
+### 📖 La tabla de condición de IVA del JSDoc tenía cinco filas mal transcriptas
+
+- **Corrección de documentación** en el JSDoc de `VatCondition`: las filas **1** (IVA Responsable Inscripto), **4** (IVA Sujeto Exento), **6** (Responsable Monotributo), **13** (Monotributista Social) y **16** (Monotributo Trab. Indep. Promovido) declaraban clases de comprobante equivocadas. Quien transcribió la tabla de la última página del manual **leyó la columna `C` como la columna `49`**.
+- Lo correcto, verificado contra el manual v4.8 p. 202: la 1, 6, 13 y 16 son **A/ALEY y C**; la 4 es **B y C**. La tabla marca las celdas con una `X` y el texto extraído del PDF las devuelve sin columna, así que se reconstruyó con las **coordenadas X** de cada celda.
+- Dos comprobaciones que cierran la lectura: las **once** condiciones tienen `X` en la columna `C` —en clase C no hay IVA que discriminar, así que las admite todas— y la columna **49** (Comprobante de Compra de Bienes Usados) la tiene **sólo** Consumidor Final, que es lo correcto porque ese comprobante se le emite a un particular.
+- No cambia ninguna validación: `VALID_VAT_CONDITION_IDS` valida el código, no la combinación con la clase. Esa combinación la valida ARCA con el código 10243 (CAE) / 824 (CAEA).
+
+### 🐛 El diccionario de hints describía otro código en 13 de sus 40 entradas
+
+Es la reparación más grande de esta versión, y la que vuelve útil al resto: desde que el SDK conserva `Obs.Code` (ver más abajo), estos textos **sí le llegan al usuario en un rechazo**. Antes eran casi todos texto muerto. Verificado uno por uno contra el *Manual del Desarrollador RG 4291 v4.8* —idéntico al v4.7 en todos ellos— y contra el *WSAA Manual del Desarrollador* 20.2.19.
+
+El patrón era siempre el mismo: **el texto describía el error que uno espera de ese número, no el que ARCA le asignó.**
+
+- **Errores de infraestructura (p. 21)**: el **501** y el **502** son errores internos de base de datos de ARCA, y decían *"certificado expirado"* y *"el TA es inválido, hacé login de nuevo"* — mandaban a revisar el certificado por un problema del lado de ARCA. El **600** (no se corresponden token y firma) decía *"no se pudo autorizar el comprobante, revisá observations"*, que describe un rechazo, y en el 600 no hay comprobante. El **601** (la CUIT representada no está en el token) decía *"el comprobante ya fue autorizado"*: quien lo recibiera iba a buscar un problema de numeración que no existe. El **602** ahora dice lo que es.
+- **Validaciones de comprobante**: el **10016** (`CbteDesde` debe ser el último autorizado + 1) decía que el CUIT receptor no existía en el padrón, que es el **10238**. El **10039** (`MonCotiz` debe ser 1 con `MonId = PES`) estaba **literalmente al revés**: ese texto es del 10038. El **10044** (`ImpOpEx` no puede ser negativo) decía que el IVA no cuadraba, que son el **10023** y el **10051**. El **10048** (`ImpTotal` es la suma de los importes) y el **10049** (fechas de servicio con Concepto 2 o 3) culpaban al punto de venta, que son el **10005** y el **11002**.
+- **El 11001** arrancaba diciendo *"no es válido para este punto de venta"*, que es el significado del **11002** — y contradecía al README, que dice correctamente que el rechazo de los Tique **no** es una limitación del punto de venta.
+- **Seis códigos no tenían hint y su texto estaba colgado del número equivocado**, así que al corregir los de arriba se habría perdido: **10005** y **11002** (punto de venta), **10023** y **10051** (los dos descuadres de IVA, que son distintos entre sí), y **10067** y **1425**, que eran la mitad que le faltaba a la regla del tributo ID 13.
+  > Esa regla son cuatro códigos y **sólo uno rechaza, al revés de lo que uno supondría**: el excluyente es el **10067** (`ImpTrib = 0`), no el 10283 (`ImpTrib > 0`). Se determina por el encabezado de cada tabla del manual, que es lo único que las distingue — las excluyentes dicen *"Código de error"* y las no excluyentes *"Código de Observ."*.
+
+**WSAA no tiene códigos numéricos, y el diccionario tenía cinco inventados.**
+
+- Se **eliminan** las entradas `503`, `1000`, `1001`, `1003` y `1005`. No existen en ninguna fuente de ARCA: su manual no trae tabla de códigos, devuelve SOAP Faults y documenta **nueve** errores por su texto en el cap. 10.
+- Se agregan los **ocho que faltaban**, con clave de texto, resueltos por `getWsaaHint()` contra la tabla `WSAA_FAULT_PATTERNS`. Hasta ahora el TA vigente era el único fault con hint: los otros ocho llegaban con `hint: undefined`, que es el peor momento para no decir nada.
+- El regex del TA vigente dejó de estar escrito a mano dentro de `wsaa.ts` y pasó a ser una fila más de esa tabla: el patrón que encuentra un hint y el texto del hint se desincronizan si viven en archivos distintos.
+
+**Y dos entradas muertas.** `CUIT_NOT_FOUND` se elimina: su texto repetía el mensaje de error con otras palabras en vez de agregarle una acción, no se usaba en ninguna línea, y encima el mensaje real de ARCA es otro (*"La Clave (CUIT/CUIL) consultada es inexistente"*, anexo 5.3 del manual de Padrón A13). `PADRON_ERROR` estaba escrito desde siempre y **ningún camino del código podía entregarlo**, porque `padron.ts` no llamaba a `getArcaHint()` en ninguna línea; ahora el `throw` de la respuesta sin sobre SOAP lo pasa.
+
+**`getPointsOfSale()` era el único `throw` de `ArcaError` del SDK que no pasaba el hint.** Extraía el error de ARCA pero descartaba su código — y justo ahí los códigos que ARCA devuelve son el **10005** y el **11002**, o sea el error de configuración más común que existe.
+
+**Ningún cambio de comportamiento y ninguna firma pública tocada**: `ARCA_ERROR_HINTS` y `getArcaHint` no se exportan desde `src/index.ts`.
 
 ### 🐛 El hint del código 10043 explicaba un error que no es
 
@@ -104,15 +139,15 @@ Es el arreglo que hace que el resto del trabajo de esta versión le sirva a algu
 - **README**: Se corrigió el ejemplo de `optionals` que enseñaba a enviar la condición de IVA del receptor como ID 1010 con valor `'2'` (el 2 no existe en el catálogo de ARCA y causaba rechazo 10242). Se documentó el uso del campo nativo `buyer.vatCondition`.
 - Se incorporó `buyer.vatCondition` en el Quick Start y en los ejemplos de emisión (Facturas A/B/C, Nota de Crédito y QR) ya que ARCA homologación rechaza los comprobantes que no lo informan (código 10246).
 - Se documentó el servicio CAEA (contingencia) con su estado actual y se agregaron las tablas de referencia para los diez métodos de catálogo `FEParamGet*`.
-- Sincronización completa de la suite de tests documentada (14 archivos, 194 tests unitarios).
+- Sincronización completa de la suite de tests documentada (14 archivos, 265 tests unitarios).
 
 ### ✅ Cobertura y testing
 
-- **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (76.85% de cobertura total).
-- **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 22 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
+- **`test:coverage`**: Se configuró `@vitest/coverage-v8` acotando la medición a `src/` (**78.08%** de cobertura de sentencias, medida el 28/09/2026).
+- **Suite unitaria de WSAA**: Nueva suite `tests/unit/wsaa.test.ts` con 23 tests que cubren exhaustivamente el ciclo de vida del ticket (memoria → storage → red), márgenes de expiración y tolerancia a fallas de persistencia.
 - **El IVA discriminado corrió por primera vez contra ARCA real.** Hasta el 27/09/2026 el array `<Iva>`, `ImpIVA` y `AlicIva` nunca habían pasado por homologación: el CUIT de prueba del proyecto es monotributista y se creía que eso impedía emitir clase A. **Es falso** — delegando en WSASS a un CUIT Responsable Inscripto de prueba se emite sin cambiar una línea de código, porque el certificado identifica al *sistema cliente* y el CUIT emisor viaja aparte en `<Auth><Cuit>`. Se autorizó una Factura A con IVA discriminado. La receta quedó en `tests/integration/README.md`.
   > **Alcance declarado**: corrió **una sola alícuota, el 21%**. Las otras cinco de `VAT_RATE_CODES` (0, 2,5, 5, 10,5 y 27%) siguen sin haber pasado por ARCA — y el 5% y el 2,5% son justamente las que el SDK rechazaba por error hasta la v2.1.0.
-- **Suite del diccionario de errores**: Nueva suite `tests/unit/errors.test.ts` con 8 tests. Un hint no lo mira ni el compilador ni ningún otro test, así que puede quedar congelado —o colgado del código equivocado— sin que nada se ponga en rojo: es exactamente lo que pasó con el 10043. El test exige que el hint del 10019 siga nombrando todas las alícuotas de `VAT_RATE_CODES`. **Alcance declarado: cubre sólo los dos códigos de IVA**; los otros ~38 hints del diccionario siguen sin cobertura.
+- **Suite del diccionario de errores**: Nueva suite `tests/unit/errors.test.ts` con **84 tests**. Un hint no lo mira ni el compilador ni ningún otro test, así que puede quedar congelado —o colgado del código equivocado— sin que nada se ponga en rojo: es exactamente lo que pasó con el 10043. **Cobertura: 47 de las 48 entradas** del diccionario tienen test de su texto, contra 2 de 40 al empezar. Cada caso lleva las dos mitades —que diga lo que dice el manual y que **no** vuelva el significado viejo—, porque sin la segunda, agregar una frase correcta arriba del texto equivocado dejaría el test en verde.
 
 ---
 
@@ -131,11 +166,12 @@ Los enums de este SDK son una copia local del catálogo de ARCA: dan autocomplet
 | `getInvoiceTypes()` | `FEParamGetTiposCbte` | La lista real de comprobantes emitibles. Es la consulta que habría evitado el episodio del error 11001 con los Tique. |
 | `getVatRates()` | `FEParamGetTiposIva` | Alícuotas vigentes |
 | `getTaxTypes()` | `FEParamGetTiposTributos` | Tributos para `taxes`, incluido el 13 que exige el código 10283 |
-| `getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Condiciones de IVA admitidas **para el emisor autenticado** |
+| `getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Las condiciones de IVA del receptor y la clase de comprobante en que aplican |
 | `getExchangeRate()` | `FEParamGetCotizacion` | Cotización oficial — usala en vez de fijar `exchangeRate` a mano |
 | `getDocumentTypes()`, `getCurrencies()`, `getOptionalTypes()`, `getConceptTypes()`, `getActivities()` | varios | Resto de los catálogos |
 
-- **`getVatConditions()` informa la clase de comprobante** (`invoiceClass`) y **la lista depende del emisor**: ARCA devuelve las combinaciones válidas para ese CUIT, que no coinciden necesariamente con la tabla del manual. Por eso esa información no está hardcodeada.
+- **`getVatConditions()` informa la clase de comprobante** (`invoiceClass`), y es la fuente autoritativa: por eso esa relación no está hardcodeada en el SDK. La tabla del manual es una foto, y una copia escrita a mano se desactualiza en silencio.
+  > **Corregido el 28/09/2026.** Esta entrada decía además que *"la lista depende del emisor: ARCA devuelve las combinaciones válidas para ese CUIT"*. **No depende del emisor**: medido contra homologación el 27/09/2026, el servicio devuelve las mismas once filas, una por una, para un CUIT monotributista y para uno Responsable Inscripto — los dos extremos. Se corrige acá además de en la versión nueva porque el `CHANGELOG` viaja dentro del paquete npm.
 - La suite de integración compara los catálogos vivos contra los enums locales: si ARCA agrega un valor, los tests se ponen en rojo en vez de que el SDK lo rechace en silencio.
 
 ## [2.0.0] — 2026-09-25

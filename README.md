@@ -16,17 +16,17 @@ TypeScript nativo · API limpia en inglés · Tokens automáticos · QR oficial 
 
 ---
 
-## ⚠️ Revisión en curso — 27/09/2026
+## ⚠️ Qué está verificado contra ARCA y qué no — 28/09/2026
 
-> [!IMPORTANT]
-> **Este README describe la v3.0.0, que todavía no está publicada**: npm sigue sirviendo la
-> **2.1.0**. Si instalás hoy, te llega esa.
+Este README describe la **v3.0.0**, que es la que sirve npm.
 
-Estamos auditando **cada afirmación normativa de esta documentación contra los manuales oficiales
+Venimos auditando **cada afirmación normativa de esta documentación contra los manuales oficiales
 de ARCA** —los cuatro, no sólo el de facturación— y corrigiendo lo que no coincide. Aparecieron
-once afirmaciones falsas sin buscarlas sistemáticamente: hints de error que describían otro código,
-una tabla de condiciones de IVA con cinco filas mal transcriptas, y una advertencia que decía que
-algo *"no está documentado en ningún manual"* cuando sí lo está. Buscándolas van a aparecer más.
+más de veinte afirmaciones falsas sin buscarlas sistemáticamente: hints de error que describían
+otro código, una tabla de condiciones de IVA con cinco filas mal transcriptas, y una advertencia
+que decía que algo *"no está documentado en ningún manual"* cuando sí lo está. Buscándolas van a
+aparecer más, así que la tabla de abajo es lo que conviene leer antes de confiar en una parte del
+SDK que no hayas probado.
 
 **Qué está verificado contra ARCA de verdad**, o sea con un CAE real en la mano:
 
@@ -215,7 +215,7 @@ fuente autoritativa en vivo.
 | `wsfe.getInvoiceTypes()` | `FEParamGetTiposCbte` | La lista real de comprobantes emitibles |
 | `wsfe.getVatRates()` | `FEParamGetTiposIva` | Alícuotas de IVA vigentes |
 | `wsfe.getTaxTypes()` | `FEParamGetTiposTributos` | Tributos para `taxes` |
-| `wsfe.getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Condiciones de IVA admitidas **para el emisor autenticado**, con la clase de comprobante en que aplican |
+| `wsfe.getVatConditions()` | `FEParamGetCondicionIvaReceptor` | Las condiciones de IVA del receptor, con la clase de comprobante en que aplican |
 | `wsfe.getExchangeRate(moneda, fecha?)` | `FEParamGetCotizacion` | Cotización oficial — usala en vez de fijar `exchangeRate` a mano |
 | `wsfe.getDocumentTypes()` | `FEParamGetTiposDoc` | Tipos de documento del receptor |
 | `wsfe.getCurrencies()` | `FEParamGetTiposMonedas` | Monedas |
@@ -223,9 +223,13 @@ fuente autoritativa en vivo.
 | `wsfe.getOptionalTypes()` | `FEParamGetTiposOpcional` | Ids válidos para `optionals` |
 | `wsfe.getActivities()` | `FEParamGetActividades` | Actividades económicas del emisor |
 
-> **`getVatConditions()` depende del emisor**: ARCA devuelve las combinaciones válidas para
-> ese CUIT, que no coinciden necesariamente con la tabla del manual. Por eso esa relación
-> no está hardcodeada en el SDK.
+> **`getVatConditions()` es la fuente autoritativa**, y por eso la relación entre condición y
+> clase de comprobante no está hardcodeada: la tabla del manual es una foto, y una copia
+> escrita a mano se desactualiza en silencio.
+>
+> **No depende del emisor**, aunque este README lo afirmó hasta la v3.0.0. Medido el
+> 27/09/2026: el servicio devuelve las mismas once filas, una por una, para un CUIT
+> monotributista y para uno Responsable Inscripto.
 
 ---
 
@@ -554,7 +558,7 @@ El SDK detecta automáticamente si el contribuyente tiene activos los impuestos 
 
 Sobre el código **13 (Monotributista Social)**: figura como válido en la tabla "Condición Frente al IVA del receptor" del [Manual del Desarrollador RG 4291](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) (última página) y lo devuelve el método `FEParamGetCondicionIvaReceptor`. Está disponible en el enum `VatCondition`, pero **no verificamos su comportamiento en producción**: si tu caso lo requiere, probalo contra homologación antes de usarlo.
 
-> Podés consultar el catálogo vigente para tu CUIT con `wsfe.getVatConditions()`, que devuelve los códigos admitidos y en qué clases de comprobante aplican.
+> Podés consultar el catálogo vigente con `wsfe.getVatConditions()`, que devuelve los once códigos y en qué clases de comprobante aplican. Es la fuente autoritativa: el enum es una copia local.
 
 ---
 
@@ -597,7 +601,8 @@ más tiempo hace perder:
 
 ### Manejo de errores
 
-Todos los errores son instancias tipadas de `ArcaError`, con un campo `hint` que te dice qué hacer:
+Todos los errores son instancias tipadas de `ArcaError`, y la mayoría traen un campo `hint` que
+te dice qué hacer:
 
 ```typescript
 import {
@@ -623,11 +628,15 @@ try {
       console.error(`  [${obs.code}] ${obs.message}`);
     }
   } else if (error instanceof ArcaAuthError) {
-    // Token expirado, certificado inválido, etc.
+    // WSAA rechazó el login. El hint sale de los nueve casos que documenta su manual
+    // (cap. 10), reconocidos por el texto del fault: WSAA no devuelve códigos numéricos.
     console.error('Auth error:', error.message);
-    console.log('Hint:', error.hint); // → "El certificado puede haber expirado..."
+    console.log('Hint:', error.hint);
+    // → "Ya existe un TA vigente para este CUIT y servicio y ARCA no emite otro por unos
+    //    minutos (...). Guardá el ticket entre ejecuciones pasando un `storage` ..."
   } else if (error instanceof ArcaValidationError) {
-    // Datos inválidos antes de llamar a ARCA
+    // Datos inválidos antes de llamar a ARCA. Ojo: acá el hint viaja en `details.hint`,
+    // no en `error.hint` — ver la nota de abajo.
     console.error('Validation:', error.message, error.details);
   } else if (error instanceof ArcaNetworkError) {
     // Timeout, error HTTP
@@ -639,6 +648,16 @@ try {
   }
 }
 ```
+
+> [!NOTE]
+> **`ArcaValidationError` y `ArcaNetworkError` no pueblan `error.hint`**: su constructor no lo
+> recibe, así que ese campo es siempre `undefined` en esos dos. Cuando hay una pista —y en las
+> validaciones locales casi siempre la hay— viaja en **`error.details.hint`**. Los que sí usan
+> `error.hint` son `ArcaError`, `ArcaAuthError` y `ArcaRejectionError`.
+>
+> Es una inconsistencia de la API, no una decisión: se unifica en una próxima versión, porque
+> empezar a poblar `error.hint` donde hoy hay `undefined` es un cambio de comportamiento y va
+> anunciado.
 
 #### Rechazo ≠ error
 
