@@ -889,6 +889,29 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ---
 
+## Contribuciones
+
+El desarrollo es **asistido por agentes de IA** —principalmente
+[Claude Code](https://www.anthropic.com/claude-code) y [Devin](https://devin.ai)— con
+revisión humana de Marcela Borgarello antes de cada merge. Se dice acá porque queda en el
+historial y conviene que quien lea el código sepa cómo se escribió:
+
+- **Los commits lo declaran.** Cada uno lleva al agente como autor o como
+  `Co-Authored-By:`, así que `git log` alcanza para saber qué tocó cada quien. Los del bot
+  de Devin van firmados como `Devin AI <…devin-ai-integration[bot]@users.noreply.github.com>`.
+- **Nada entra por confianza en el agente.** Las afirmaciones normativas se verifican
+  contra los manuales de ARCA —con página citada en el comentario o en el commit— y todo
+  PR pasa el CI (`lint` → `build` → `test`) antes de mergearse. Los números que aparecen en
+  esta documentación salen de correr la suite, no de estimarlos.
+- **Lo no verificado se marca como tal.** Cuando algo no se pudo comprobar contra el
+  manual o contra homologación, el comentario lo dice en vez de afirmarlo.
+
+Las contribuciones externas son bienvenidas, con agente o sin agente. Si usás uno,
+[`CLAUDE.md`](CLAUDE.md) tiene el contexto normativo del proyecto y las convenciones que
+conviene pasarle.
+
+---
+
 ## Licencia
 
 MIT © [Marcela Borgarello](https://github.com/marcelaborgarello)
