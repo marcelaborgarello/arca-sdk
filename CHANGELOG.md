@@ -11,6 +11,11 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 - El `try` de esa sección llamaba a `issueInvoiceC()` **sin `buyer`**, o sea sin `vatCondition`: exactamente el comprobante que homologación rechaza hoy con la observación **10246** y que el README, tres secciones más arriba, marca como imposible de emitir. El ejemplo va sobre cómo manejar errores, así que lo último que conviene es que la emisión que lo encabeza sea una de las que fallan por un motivo distinto del que ilustra. Ahora informa `buyer` con `vatCondition`, y el bloque importa `TaxIdType` y `VatCondition`, que usaba sin declarar.
 - **`TaxIdType.NATIONAL_POLICE_ID` queda `@deprecated`**. Vale 96, igual que `DNI`, y dos miembros con el mismo valor no conviven en un enum de TypeScript: el reverse-mapping guarda el último declarado, así que `TaxIdType[96]` es `'DNI'` y este nombre **no se recupera nunca** a partir del número. Quien loguee o serialice `TaxIdType[docType]` ve `'DNI'` aunque haya pasado el otro. Encima la equivalencia no tiene fuente: la nota del miembro citaba una *"Tabla 13 del catálogo ARCA"* que no aparece en ninguno de los cuatro manuales —cero menciones en las 202 páginas del v4.8— y la fuente autoritativa de los tipos de documento es `FEParamGetTiposDoc`, en vivo con `getDocumentTypes()`. **No cambia ningún valor ni ninguna firma**: quitarlo rompe la compilación de quien lo importe, así que se elimina en la próxima major. Hay un test que fija cuál de los dos nombres gana el 96, porque reordenar los miembros parece cosmético y no lo es.
 
+### 📖 Dos docstrings que describían un estado anterior del código
+
+- La cabecera de `errors.ts` decía que `PADRON_ERROR` **y `CUIT_NOT_FOUND`** son los códigos internos del SDK. `CUIT_NOT_FOUND` se borró en la v3.0.0: queda uno solo.
+- El docstring de alcance de `errors.test.ts` decía que está cubierto *"el texto de los códigos de IVA (10019, 10043), el de `ALREADY_HAS_TA`, los once que hasta la v3.0.0 describían otro código"* y que *"el resto del diccionario sigue sin cobertura"*. Eso describe el archivo **antes** de las tablas que se le agregaron en la v3.0.0: hoy cubre 47 de las 48 entradas —el texto en 39, el ruteo en los ocho faults de WSAA—, y hay un test al final que lo asevera. Quien leyera el encabezado para decidir si agregar cobertura concluía lo contrario de lo que pasa.
+
 ### 📖 El README no decía que el desarrollo es asistido por agentes
 
 - Nueva sección **"Contribuciones"**: el desarrollo lo hacen agentes de IA (Claude Code y Devin) con revisión humana antes de cada merge, y eso no estaba dicho en ninguna parte salvo en el `git log`. Deja explícito cómo se firman los commits, que las afirmaciones normativas se verifican contra los manuales y que todo PR pasa el CI antes de mergearse, y que lo no verificado se marca como tal en vez de afirmarse.
@@ -18,7 +23,7 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 ### 📖 Conteo de tests del README
 
 - La sección "Tests disponibles" pasa a **14 archivos, 266 tests** (el test nuevo del 96) y aclara lo que no decía: es lo que corre `bun run test`, y **no incluye** `tests/integration/wsfe.integration.test.ts` — `vitest.config.ts` limita la corrida a `tests/unit/**`.
-- La fila de `errors.test.ts` decía que las 47 entradas cubiertas *"tienen test de su texto"*. Son 47 cubiertas, sí, pero el texto se verifica en **40**: los ocho faults de WSAA restantes se cubren por su ruteo —que el `faultstring` llegue al hint—, no por lo que dicen. El número no cambia; sí lo que se afirma de él.
+- La fila de `errors.test.ts` decía que las 47 entradas cubiertas *"tienen test de su texto"*. Son 47 cubiertas, sí, pero el texto se verifica en **39**: los ocho faults de WSAA restantes se cubren por su ruteo —que el `faultstring` llegue al hint—, no por lo que dicen. El número no cambia; sí lo que se afirma de él. *(La primera versión de esta línea decía 40, y no cerraba con el 47: 39 + 8.)*
 
 ---
 
