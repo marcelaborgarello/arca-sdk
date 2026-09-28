@@ -272,7 +272,10 @@ describe('WsaaService.login', () => {
     });
 
     describe('errores de WSAA', () => {
-        // El faultstring no trae código de error, así que el hint se decide por texto.
+        // El faultstring no trae código de error, así que el hint se decide por texto. Los
+        // nueve casos que documenta el cap. 10 del manual de WSAA están en
+        // `WSAA_FAULT_PATTERNS` y se prueban uno por uno en `errors.test.ts`. Lo que se
+        // prueba acá es el **cableado**: que el hint llegue hasta el `ArcaAuthError`.
         it('debe agregar el hint de TA vigente ante "ya posee un TA valido"', async () => {
             mockNetworkFault('El CEE ya posee un TA valido para el acceso al WSN solicitado');
             const wsaa = new WsaaService(BASE_CONFIG);
@@ -304,6 +307,21 @@ describe('WsaaService.login', () => {
             }
         });
 
+        // Hasta la v3.0.0 el TA vigente era el **único** fault con hint: los otros ocho que
+        // documenta el manual llegaban con `hint: undefined`, que es el peor momento para no
+        // decir nada — WSAA es donde se traba todo el mundo la primera vez.
+        it('debe agregar el hint del servicio sin autorizar', async () => {
+            mockNetworkFault('Computador no autorizado a acceder al servicio');
+            const wsaa = new WsaaService(BASE_CONFIG);
+
+            try {
+                await wsaa.login();
+                expect.unreachable('login() debía lanzar');
+            } catch (error) {
+                expect((error as ArcaAuthError).hint).toBe(ARCA_ERROR_HINTS.SERVICE_NOT_AUTHORIZED);
+            }
+        });
+
         it('debe usar el faultstring de ARCA como mensaje de error', async () => {
             mockNetworkFault('El certificado no esta vigente');
             const wsaa = new WsaaService(BASE_CONFIG);
@@ -313,7 +331,8 @@ describe('WsaaService.login', () => {
                 expect.unreachable('login() debía lanzar');
             } catch (error) {
                 expect((error as Error).message).toContain('El certificado no esta vigente');
-                // Sólo el TA vigente tiene hint; los demás faults no deben inventar uno.
+                // Este faultstring **no** es ninguno de los nueve del manual, y por eso no
+                // lleva hint: el SDK no le inventa uno a un error que ARCA no documentó.
                 expect((error as ArcaAuthError).hint).toBeUndefined();
             }
         });

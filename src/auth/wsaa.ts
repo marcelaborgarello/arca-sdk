@@ -5,7 +5,7 @@ import { buildTRA, parseWsaaResponse, validateCUIT } from '../utils/xml';
 import { validateCertificate, validatePrivateKey, signCMS } from '../utils/crypto';
 import { TicketManager } from './ticket';
 import { callArcaApi } from '../utils/network';
-import { getArcaHint } from '../constants/errors';
+import { getWsaaHint } from '../constants/errors';
 import { XMLParser } from 'fast-xml-parser';
 
 /**
@@ -172,17 +172,16 @@ export class WsaaService {
                 // Ignorar error de parseo si no es XML válido
             }
 
-            // Teniendo un TA vigente, ARCA se niega a emitir otro durante un lapso
-            // preventivo de minutos (ver el hint ALREADY_HAS_TA). Sin persistencia, cada
-            // proceso nuevo vuelve a pedir uno y queda trabado.
-            // El faultstring no trae código, así que se detecta por texto.
+            // WSAA no devuelve códigos numéricos: el fault trae `faultstring` y nada más,
+            // así que el hint se busca por texto. Los nueve casos que documenta el cap. 10
+            // de su manual están en `WSAA_FAULT_PATTERNS` (`constants/errors.ts`), con el
+            // detalle de qué tan firme es cada patrón.
             //
-            // Hoy ARCA escribe "valido" sin tilde, pero es prosa de un mensaje de error,
-            // no un código: puede corregirse en cualquier deploy. Se aceptan las dos
-            // grafías para que el hint no desaparezca en silencio por una tilde.
-            const hint = /ya posee un TA v[aá]lido/i.test(faultString)
-                ? getArcaHint('ALREADY_HAS_TA')
-                : undefined;
+            // Hasta la v3.0.0 acá había un solo regex escrito a mano —el del TA vigente— y
+            // los otros ocho errores llegaban sin ninguna pista. Que la tabla viva en
+            // `errors.ts` es a propósito: el texto del hint y el patrón que lo encuentra se
+            // desincronizan si están en archivos distintos.
+            const hint = getWsaaHint(faultString);
 
             throw new ArcaAuthError(
                 errorMessage,
