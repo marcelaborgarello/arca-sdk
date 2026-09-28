@@ -522,6 +522,22 @@ describe('InvoiceType — códigos de CbteTipo', () => {
 });
 
 /**
+ * `TaxIdType.NATIONAL_POLICE_ID` y `TaxIdType.DNI` valen los dos **96**, y eso tiene una
+ * consecuencia que no se ve leyendo el enum: el reverse-mapping de TypeScript guarda el
+ * **último** miembro declarado, así que `TaxIdType[96]` es `'DNI'` y el otro nombre no se
+ * recupera nunca a partir del número.
+ *
+ * El test fija cuál de los dos gana. Reordenar los miembros —algo que parece cosmético—
+ * cambiaría en silencio lo que ve quien loguee o serialice `TaxIdType[docType]`.
+ */
+describe('TaxIdType — el 96 lo comparten dos nombres', () => {
+  it('el reverse-mapping del 96 resuelve a DNI, no al alias', () => {
+    expect(TaxIdType.NATIONAL_POLICE_ID).toBe(TaxIdType.DNI);
+    expect(TaxIdType[96]).toBe('DNI');
+  });
+});
+
+/**
  * Los dos hints de alícuota de `WsfeService`.
  *
  * Por qué existen estos tests: un hint no lo mira ni el compilador ni ningún otro test.

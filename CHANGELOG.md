@@ -4,6 +4,20 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ---
 
+## [Sin publicar]
+
+### 📖 El ejemplo de "Manejo de errores" del README enseñaba lo que el propio README declara rechazado
+
+- El `try` de esa sección llamaba a `issueInvoiceC()` **sin `buyer`**, o sea sin `vatCondition`: exactamente el comprobante que homologación rechaza hoy con la observación **10246** y que el README, tres secciones más arriba, marca como imposible de emitir. El ejemplo va sobre cómo manejar errores, así que lo último que conviene es que la emisión que lo encabeza sea una de las que fallan por un motivo distinto del que ilustra. Ahora informa `buyer` con `vatCondition`, y el bloque importa `TaxIdType` y `VatCondition`, que usaba sin declarar.
+- **`TaxIdType.NATIONAL_POLICE_ID` queda `@deprecated`**. Vale 96, igual que `DNI`, y dos miembros con el mismo valor no conviven en un enum de TypeScript: el reverse-mapping guarda el último declarado, así que `TaxIdType[96]` es `'DNI'` y este nombre **no se recupera nunca** a partir del número. Quien loguee o serialice `TaxIdType[docType]` ve `'DNI'` aunque haya pasado el otro. Encima la equivalencia no tiene fuente: la nota del miembro citaba una *"Tabla 13 del catálogo ARCA"* que no aparece en ninguno de los cuatro manuales —cero menciones en las 202 páginas del v4.8— y la fuente autoritativa de los tipos de documento es `FEParamGetTiposDoc`, en vivo con `getDocumentTypes()`. **No cambia ningún valor ni ninguna firma**: quitarlo rompe la compilación de quien lo importe, así que se elimina en la próxima major. Hay un test que fija cuál de los dos nombres gana el 96, porque reordenar los miembros parece cosmético y no lo es.
+
+### 📖 Conteo de tests del README
+
+- La sección "Tests disponibles" pasa a **14 archivos, 266 tests** (el test nuevo del 96) y aclara lo que no decía: es lo que corre `bun run test`, y **no incluye** `tests/integration/wsfe.integration.test.ts` — `vitest.config.ts` limita la corrida a `tests/unit/**`.
+- La fila de `errors.test.ts` decía que las 47 entradas cubiertas *"tienen test de su texto"*. Son 47 cubiertas, sí, pero el texto se verifica en **40**: los ocho faults de WSAA restantes se cubren por su ruteo —que el `faultstring` llegue al hint—, no por lo que dicen. El número no cambia; sí lo que se afirma de él.
+
+---
+
 ## [3.0.0] — 2026-09-28
 
 > Hay **un cambio incompatible**: se eliminaron los Tique. Ver abajo. Si nunca los usaste,

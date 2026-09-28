@@ -108,8 +108,19 @@ export enum TaxIdType {
     PASSPORT = 94,
     BUENOS_AIRES_ID = 95,
     /**
-     * @note AFIP usa el código 96 para ambos. En la práctica, DNI es el más utilizado.
-     * Fuente: Tabla 13 del catálogo ARCA — ambos valores son 96 en el catálogo oficial.
+     * Alias de {@link TaxIdType.DNI}: los dos valen **96**.
+     *
+     * @deprecated Usar `DNI`. Dos miembros con el mismo valor no conviven en un enum de
+     * TypeScript: el reverse-mapping guarda el **último** declarado, así que
+     * `TaxIdType[96]` es `'DNI'` y este nombre no se recupera nunca a partir del número.
+     * Quien loguee o serialice `TaxIdType[docType]` va a ver `'DNI'` aunque haya pasado
+     * `NATIONAL_POLICE_ID`.
+     *
+     * Y la equivalencia en sí no está verificada: la nota que traía este miembro citaba
+     * una "Tabla 13 del catálogo ARCA" que no aparece en ninguno de los cuatro manuales.
+     * La fuente autoritativa de los tipos de documento es `FEParamGetTiposDoc`, en vivo:
+     * `wsfe.getDocumentTypes()`. Se conserva por compatibilidad —quitarlo rompe la
+     * compilación de quien lo importe— y se elimina en la próxima major.
      */
     NATIONAL_POLICE_ID = 96,
     DNI = 96,
