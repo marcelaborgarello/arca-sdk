@@ -124,7 +124,7 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 ---
 
-## ⚠️ Qué está verificado contra ARCA y qué no — 28/09/2026
+## ⚠️ Qué está verificado contra ARCA y qué no — 01/10/2026
 
 Este SDK habla con un ente recaudador: un comprobante mal emitido no es un bug de UI, es una
 factura real con un número real gastado. Por eso respondemos acá, explícitamente, la pregunta
@@ -140,11 +140,13 @@ Este README describe la **v3.0.0**, que es la que sirve npm.
 | | Estado |
 |---|---|
 | **Factura C** — `issueInvoiceC()` | ✅ Producción y homologación |
-| **Nota de Crédito C** — `issueCreditNoteC()` | ✅ Producción |
-| **Factura A** con IVA discriminado — `issueInvoiceA()` | ✅ Homologación — **una sola alícuota, el 21%** |
-| Notas de Crédito **A y B**, Notas de Débito, Recibos | ❌ **Nunca se emitió ninguno** |
-| Las otras cinco alícuotas (0, 2,5, 5, 10,5 y 27%) | ❌ Nunca pasaron por ARCA |
-| Otros tributos (`taxes`) | ❌ Nunca llegó uno a ARCA |
+| **Factura A** con IVA discriminado — `issueInvoiceA()` | ✅ Homologación — **las seis alícuotas** |
+| **Factura B** con IVA discriminado — `issueInvoiceB()` | ✅ Homologación |
+| **Notas de Crédito A/B/C** — `issueCreditNoteA/B/C()` | ✅ Homologación (la C también en producción) |
+| **Notas de Débito A/B/C** — `issueDebitNoteA/B/C()` | ✅ Homologación |
+| **Recibos A/B/C** — `issueReceiptA/B/C()` | ✅ Homologación |
+| Otros tributos (`taxes`) | ✅ Homologación (Factura B, receptor Sujeto No Categorizado) |
+| Moneda extranjera (`currency`/`exchangeRate`) | ✅ Homologación (Factura C en USD) |
 | **CAEA** (contingencia) | ❌ Sin verificar, entero |
 
 Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
@@ -853,14 +855,14 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 266 tests — es lo que corre `bun run test`. **No incluye
+14 archivos, 278 tests — es lo que corre `bun run test`. **No incluye
 `tests/integration/wsfe.integration.test.ts`**: `vitest.config.ts` limita la corrida a
 `tests/unit/**`, y la integración va aparte con `bun run test:integration`.
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
 | WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
-| WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB`, `issueReceiptA`, `issueCreditNoteC`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, el 96 compartido de `TaxIdType`, hints de alícuota |
+| WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB/C`, `issueCreditNoteC`, `issueDebitNoteA/B/C`, `issueReceiptA/B/C`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, el 96 compartido de `TaxIdType`, hints de alícuota. `issueInvoiceA` e `issueCreditNoteA/B` se cubren en `request-xml.test.ts`, no acá |
 | CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen`, las seis alícuotas de IVA en el XML |
 | Errores | `errors.test.ts` | El diccionario de hints: **47 de sus 48 entradas** están cubiertas — en 39 se verifica el **texto** contra el manual que corresponde, y en los ocho faults de WSAA restantes, que el `faultstring` llegue al hint (WSAA no devuelve códigos numéricos, así que se reconocen por texto). La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
 | Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA, el hint del servicio caído |
@@ -883,7 +885,6 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 ## Roadmap
 
 - [ ] Comprobantes de Seguros de Caución (Manual v4.7, códigos 10273-10282)
-- [ ] Verificación en homologación de comprobantes clase B con receptor Sujeto No Categorizado (Manual v4.7, código 10283)
 - [ ] Soporte WSMTXCA (Factura de Crédito Electrónica MiPyME)
 - [ ] Soporte WSCT (Turismo)
 - [ ] Método `consultar()` para servicios adicionales del Padrón
