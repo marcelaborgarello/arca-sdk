@@ -6,6 +6,10 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 📖 El README abría con la lista de lo que no funciona, antes de decir para qué sirve el SDK
+
+- La sección "Qué está verificado contra ARCA y qué no" era lo segundo que veía cualquiera que abriera el README, antes del pitch, de la instalación y del Quick Start. El contenido era correcto —sigue siéndolo, no cambia ningún dato de la tabla—, pero el orden hacía que la primera impresión fuera "mirá todo lo que no se probó" en vez de "esto es serio, y esto es lo que hay que chequear antes de confiar". Se movió después del Quick Start, y se le agregó una frase que explica el porqué (el SDK habla con un ente recaudador, un comprobante mal emitido no es un bug de UI) en vez de abrir directamente con el conteo de afirmaciones falsas encontradas.
+
 ### 📖 El ejemplo de "Manejo de errores" del README enseñaba lo que el propio README declara rechazado
 
 - El `try` de esa sección llamaba a `issueInvoiceC()` **sin `buyer`**, o sea sin `vatCondition`: exactamente el comprobante que homologación rechaza hoy con la observación **10246** y que el README, tres secciones más arriba, marca como imposible de emitir. El ejemplo va sobre cómo manejar errores, así que lo último que conviene es que la emisión que lo encabeza sea una de las que fallan por un motivo distinto del que ilustra. Ahora informa `buyer` con `vatCondition`, y el bloque importa `TaxIdType` y `VatCondition`, que usaba sin declarar.

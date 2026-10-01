@@ -16,38 +16,6 @@ TypeScript nativo · API limpia en inglés · Tokens automáticos · QR oficial 
 
 ---
 
-## ⚠️ Qué está verificado contra ARCA y qué no — 28/09/2026
-
-Este README describe la **v3.0.0**, que es la que sirve npm.
-
-Venimos auditando **cada afirmación normativa de esta documentación contra los manuales oficiales
-de ARCA** —los cuatro, no sólo el de facturación— y corrigiendo lo que no coincide. Aparecieron
-más de veinte afirmaciones falsas sin buscarlas sistemáticamente: hints de error que describían
-otro código, una tabla de condiciones de IVA con cinco filas mal transcriptas, y una advertencia
-que decía que algo *"no está documentado en ningún manual"* cuando sí lo está. Buscándolas van a
-aparecer más, así que la tabla de abajo es lo que conviene leer antes de confiar en una parte del
-SDK que no hayas probado.
-
-**Qué está verificado contra ARCA de verdad**, o sea con un CAE real en la mano:
-
-| | Estado |
-|---|---|
-| **Factura C** — `issueInvoiceC()` | ✅ Producción y homologación |
-| **Nota de Crédito C** — `issueCreditNoteC()` | ✅ Producción |
-| **Factura A** con IVA discriminado — `issueInvoiceA()` | ✅ Homologación — **una sola alícuota, el 21%** |
-| Notas de Crédito **A y B**, Notas de Débito, Recibos | ❌ **Nunca se emitió ninguno** |
-| Las otras cinco alícuotas (0, 2,5, 5, 10,5 y 27%) | ❌ Nunca pasaron por ARCA |
-| Otros tributos (`taxes`) | ❌ Nunca llegó uno a ARCA |
-| **CAEA** (contingencia) | ❌ Sin verificar, entero |
-
-Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
-prueban que el SDK hace lo que creemos, no que ARCA lo acepte. Ya pasó una vez que un comprobante
-entero fuera imposible de emitir con la suite en verde, así que preferimos decirlo.
-
-**Si vas a usar algo de esa lista, probalo contra homologación antes de producción.**
-
----
-
 ## ¿Por qué arca-sdk?
 
 La mayoría de las librerías de AFIP/ARCA para Node.js son:
@@ -153,6 +121,40 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 > `ArcaRejectionError`. Detalle en "Normativas ARCA 2026", punto 0.
 
 > Los certificados se obtienen en el [portal de ARCA](https://auth.afip.gob.ar/contribuyente_/login.xhtml) (CLAVE FISCAL nivel 3+).
+
+---
+
+## ⚠️ Qué está verificado contra ARCA y qué no — 28/09/2026
+
+Este SDK habla con un ente recaudador: un comprobante mal emitido no es un bug de UI, es una
+factura real con un número real gastado. Por eso respondemos acá, explícitamente, la pregunta
+que de todos modos te vas a hacer antes de poner esto en producción — **qué pasó por un CAE
+real de ARCA y qué sólo tiene tests unitarios contra una red mockeada** — en vez de que la
+descubras en el peor momento. (El por qué de este nivel de detalle, incluido cómo se desarrolla
+este SDK, está en "Contribuciones", al final.)
+
+Este README describe la **v3.0.0**, que es la que sirve npm.
+
+**Qué está verificado contra ARCA de verdad**, o sea con un CAE real en la mano:
+
+| | Estado |
+|---|---|
+| **Factura C** — `issueInvoiceC()` | ✅ Producción y homologación |
+| **Nota de Crédito C** — `issueCreditNoteC()` | ✅ Producción |
+| **Factura A** con IVA discriminado — `issueInvoiceA()` | ✅ Homologación — **una sola alícuota, el 21%** |
+| Notas de Crédito **A y B**, Notas de Débito, Recibos | ❌ **Nunca se emitió ninguno** |
+| Las otras cinco alícuotas (0, 2,5, 5, 10,5 y 27%) | ❌ Nunca pasaron por ARCA |
+| Otros tributos (`taxes`) | ❌ Nunca llegó uno a ARCA |
+| **CAEA** (contingencia) | ❌ Sin verificar, entero |
+
+Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
+prueban que el SDK hace lo que creemos, no que ARCA lo acepte. **Si vas a usar algo de esa
+lista, probalo contra homologación antes de producción.**
+
+> Venimos auditando cada afirmación normativa de esta documentación contra los cuatro manuales
+> oficiales de ARCA, no sólo el de facturación, y corrigiendo lo que no coincide — aparecieron
+> más de veinte así sin buscarlas sistemáticamente. Si encontrás una que no coincide,
+> [abrí un issue](https://github.com/marcelaborgarello/arca-sdk/issues).
 
 ---
 
