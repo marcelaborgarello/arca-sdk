@@ -261,6 +261,64 @@ describe('WsfeService', () => {
     });
   });
 
+  describe('issueReceiptB', () => {
+    it('should throw if items are missing vatRate', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueReceiptB({
+        items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000 }], // no vatRate
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+      })).rejects.toThrow('vatRate');
+    });
+
+    it('should issue a Recibo B with VAT breakdown', async () => {
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockResolvedValueOnce({ ok: true, text: async () => buildMockCAEXml(9) });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueReceiptB({
+        items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000, vatRate: 21 }],
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+      });
+
+      expect(result.cae).toBeDefined();
+      expect(result.invoiceType).toBe(9);
+      expect(result.vat).toBeDefined();
+      expect(result.vat?.[0].rate).toBe(21);
+    });
+  });
+
+  describe('issueReceiptC', () => {
+    it('should issue a Recibo C without VAT breakdown', async () => {
+      mockCalls(15);
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueReceiptC({
+        items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000 }],
+      });
+
+      expect(result.cae).toBeDefined();
+      expect(result.invoiceType).toBe(15);
+      expect(result.vat).toBeUndefined();
+    });
+
+    it('asume consumidor final sin identificar si no se pasa buyer', async () => {
+      let capturedXml = '';
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockImplementationOnce((_url: string, options: any) => {
+          capturedXml = options.body;
+          return Promise.resolve({ ok: true, text: async () => buildMockCAEXml(15) });
+        });
+
+      await new WsfeService(BASE_CONFIG).issueReceiptC({
+        items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000 }],
+      });
+
+      expect(capturedXml).toContain('<ar:DocTipo>99</ar:DocTipo>');
+      expect(capturedXml).toContain('<ar:DocNro>0</ar:DocNro>');
+    });
+  });
+
   describe('issueCreditNoteC', () => {
     it('should throw if associated invoices are missing', async () => {
       const wsfe = new WsfeService(BASE_CONFIG);
@@ -287,6 +345,107 @@ describe('WsfeService', () => {
 
       expect(result.cae).toBeDefined();
       expect(result.invoiceType).toBe(13);
+    });
+  });
+
+  describe('issueDebitNoteA', () => {
+    it('should throw if items are missing vatRate', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueDebitNoteA({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500 }], // no vatRate
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [{ type: InvoiceType.FACTURA_A, pointOfSale: 4, invoiceNumber: 10 }],
+      })).rejects.toThrow('vatRate');
+    });
+
+    it('should throw if associated invoices are missing', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueDebitNoteA({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500, vatRate: 21 }],
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [], // Empty
+      })).rejects.toThrow('requieren al menos un comprobante asociado');
+    });
+
+    it('should issue a Nota de Débito A with VAT breakdown and associated invoice', async () => {
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockResolvedValueOnce({ ok: true, text: async () => buildMockCAEXml(2) });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueDebitNoteA({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500, vatRate: 21 }],
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [{ type: InvoiceType.FACTURA_A, pointOfSale: 4, invoiceNumber: 10 }],
+      });
+
+      expect(result.cae).toBeDefined();
+      expect(result.invoiceType).toBe(2);
+      expect(result.vat).toBeDefined();
+      expect(result.vat?.[0].rate).toBe(21);
+    });
+  });
+
+  describe('issueDebitNoteB', () => {
+    it('should throw if items are missing vatRate', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueDebitNoteB({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500 }], // no vatRate
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [{ type: InvoiceType.FACTURA_B, pointOfSale: 4, invoiceNumber: 10 }],
+      })).rejects.toThrow('vatRate');
+    });
+
+    it('should throw if associated invoices are missing', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueDebitNoteB({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500, vatRate: 21 }],
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [], // Empty
+      })).rejects.toThrow('requieren al menos un comprobante asociado');
+    });
+
+    it('should issue a Nota de Débito B with VAT breakdown and associated invoice', async () => {
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockResolvedValueOnce({ ok: true, text: async () => buildMockCAEXml(7) });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueDebitNoteB({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500, vatRate: 21 }],
+        buyer: { docType: TaxIdType.CUIT, docNumber: '20987654321' },
+        associatedInvoices: [{ type: InvoiceType.FACTURA_B, pointOfSale: 4, invoiceNumber: 10 }],
+      });
+
+      expect(result.cae).toBeDefined();
+      expect(result.invoiceType).toBe(7);
+      expect(result.vat).toBeDefined();
+      expect(result.vat?.[0].rate).toBe(21);
+    });
+  });
+
+  describe('issueDebitNoteC', () => {
+    it('should throw if associated invoices are missing', async () => {
+      const wsfe = new WsfeService(BASE_CONFIG);
+      await expect(wsfe.issueDebitNoteC({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500 }],
+        associatedInvoices: [], // Empty
+      })).rejects.toThrow('requieren al menos un comprobante asociado');
+    });
+
+    it('should issue a Nota de Débito C with associated invoice', async () => {
+      (callArcaApi as any)
+        .mockResolvedValueOnce({ ok: true, text: async () => mockLastInvoiceXml })
+        .mockResolvedValueOnce({ ok: true, text: async () => buildMockCAEXml(12) });
+
+      const wsfe = new WsfeService(BASE_CONFIG);
+      const result = await wsfe.issueDebitNoteC({
+        items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 500 }],
+        associatedInvoices: [{ type: InvoiceType.FACTURA_C, pointOfSale: 4, invoiceNumber: 15 }],
+      });
+
+      expect(result.cae).toBeDefined();
+      expect(result.invoiceType).toBe(12);
     });
   });
 

@@ -405,11 +405,12 @@ Tres cosas que muerden:
 > emisor viaja en `<Auth><Cuit>` (`config.cuit`). Verificado el 27/09/2026 con una
 > Factura A autorizada. La receta completa está en `tests/integration/README.md`.
 > Con eso, el IVA discriminado (el array `<Iva>`, `ImpIVA`, `AlicIva`) **corrió por
-> primera vez contra ARCA real**, cosa que hasta ese día no había pasado nunca. Pero
-> ojo con el alcance: corrió **una sola alícuota, el 21%**. Las otras cinco de
-> `VAT_RATE_CODES` —0, 2,5, 5, 10,5 y 27%— siguen sin haber pasado por ARCA, y el **5%
-> y el 2,5% son justamente los que el SDK rechazaba por error hasta la v2.1.0**. El
-> agujero se angostó, no se cerró.
+> primera vez contra ARCA real**, cosa que hasta ese día no había pasado nunca —aunque
+> esa primera corrida fue una sola alícuota, el 21%—. **Cerrado el 2026-10-01**: las
+> seis alícuotas de `VAT_RATE_CODES` (0, 2,5, 5, 10,5, 21 y 27%) corrieron contra
+> homologación en `tests/integration/wsfe.integration.test.ts` y ARCA autorizó las
+> seis, incluyendo el **5% y el 2,5%**, que son justamente los que el SDK rechazaba
+> por error hasta la v2.1.0. El agujero está cerrado.
 
 **Regla de diseño**: ningún tipo de comprobante entra al enum público ni recibe helper
 dedicado sin una corrida verde ahí. La lista autoritativa la da `FEParamGetTiposCbte`.

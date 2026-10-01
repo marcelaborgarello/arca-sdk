@@ -41,13 +41,27 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
     });
 
     function makeService(): WsfeService {
+        return makeServiceAs(config!.cuit);
+    }
+
+    /**
+     * El proyecto es monotributista y no puede emitir clase A/B con su propio CUIT.
+     * El certificado identifica al **sistema cliente**, no al contribuyente — el CUIT
+     * emisor viaja aparte en `<Auth><Cuit>` — así que alcanza con reusar el mismo
+     * `ticket` y cambiar el `cuit` del `WsfeService`. Ver `tests/integration/README.md`,
+     * sección "Probar comprobantes clase A siendo monotributista".
+     */
+    function makeServiceAs(cuit: string): WsfeService {
         return new WsfeService({
             environment: 'homologacion',
-            cuit: config!.cuit,
+            cuit,
             ticket,
             pointOfSale: config!.pointOfSale,
         });
     }
+
+    /** CUIT de prueba RI, delegado en WSASS. Ver el README de esta carpeta. */
+    const CUIT_CLASE_A = '30000000007';
 
     it('responde FEDummy con los tres servidores OK', async () => {
         const status = await WsfeService.checkStatus('homologacion');
@@ -351,6 +365,312 @@ describe.skipIf(!config)('WSFE contra ARCA homologación', () => {
                 expect(entrada!.description).toMatch(/leyenda/i);
                 expect(entrada!.description).toMatch(/retenci[oó]n/i);
             }
+        });
+    });
+
+    /**
+     * Factura A con IVA discriminado, las seis alícuotas de `VAT_RATE_CODES`.
+     *
+     * El 21% corrió a mano el 2026-09-27 (CAE 86390929393429, ver `historial.md`). Las
+     * otras cinco **nunca pasaron por ARCA real** — el 5% (id 8) y el 2,5% (id 9) son
+     * justamente las que el SDK rechazaba por error hasta la v2.1.0, así que ese bug
+     * seguía sin verificar del lado de ARCA para las dos alícuotas que lo motivaron.
+     */
+    describe('Factura A con IVA discriminado (CUIT de prueba delegado)', () => {
+        it.each(Object.keys(VAT_RATE_CODES).map(Number))(
+            'emite con %s%% de IVA y ARCA lo autoriza',
+            async (rate) => {
+                const cae = await makeServiceAs(CUIT_CLASE_A).issueInvoiceA({
+                    items: [{ description: 'Servicio de prueba', quantity: 1, unitPrice: 1000, vatRate: rate }],
+                    buyer: {
+                        docType: TaxIdType.CUIT,
+                        docNumber: '20111111112',
+                        vatCondition: VatCondition.IVA_RESPONSABLE_INSCRIPTO,
+                    },
+                });
+
+                expect(cae.result).toBe('A');
+                expect(cae.cae).toMatch(/^\d{14}$/);
+                expect(cae.vat?.[0].rate).toBe(rate);
+            }
+        );
+    });
+
+    /**
+     * NC/ND de verdad, asociadas a una Factura C recién emitida — no a un número
+     * inventado. Hoy la suite sólo prueba NC/ND contra `callArcaApi` mockeado.
+     */
+    describe('Notas de Crédito y Débito C — ciclo completo contra una Factura C real', () => {
+        it('emite una Nota de Crédito C asociada a una Factura C real', async () => {
+            const wsfe = makeService();
+            const factura = await wsfe.issueInvoiceC({
+                items: [{ description: 'Para anular con NC', quantity: 1, unitPrice: 500 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+            });
+
+            const notaCredito = await wsfe.issueCreditNoteC({
+                items: [{ description: 'Anulación total', quantity: 1, unitPrice: 500 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_C,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaCredito.result).toBe('A');
+            expect(notaCredito.cae).toMatch(/^\d{14}$/);
+            expect(notaCredito.invoiceType).toBe(InvoiceType.NOTA_CREDITO_C);
+        });
+
+        it('emite una Nota de Débito C asociada a una Factura C real', async () => {
+            const wsfe = makeService();
+            const factura = await wsfe.issueInvoiceC({
+                items: [{ description: 'Para debitar con ND', quantity: 1, unitPrice: 300 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+            });
+
+            const notaDebito = await wsfe.issueDebitNoteC({
+                items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 50 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_C,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaDebito.result).toBe('A');
+            expect(notaDebito.cae).toMatch(/^\d{14}$/);
+            expect(notaDebito.invoiceType).toBe(InvoiceType.NOTA_DEBITO_C);
+        });
+    });
+
+    /**
+     * NC/ND clase A y B, con el CUIT delegado — igual que Factura A/B, exigen IVA
+     * discriminado. Cada una emite primero la Factura real que van a asociar, en vez
+     * de referenciar un número inventado.
+     */
+    describe('Notas de Crédito y Débito A/B — ciclo completo contra una Factura A/B real', () => {
+        const buyerRI = {
+            docType: TaxIdType.CUIT,
+            docNumber: '20111111112',
+            vatCondition: VatCondition.IVA_RESPONSABLE_INSCRIPTO,
+        };
+
+        it('emite una Nota de Crédito A asociada a una Factura A real', async () => {
+            const wsfe = makeServiceAs(CUIT_CLASE_A);
+            const factura = await wsfe.issueInvoiceA({
+                items: [{ description: 'Para anular con NC', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: buyerRI,
+            });
+
+            const notaCredito = await wsfe.issueCreditNoteA({
+                items: [{ description: 'Anulación total', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: buyerRI,
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_A,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaCredito.result).toBe('A');
+            expect(notaCredito.cae).toMatch(/^\d{14}$/);
+            expect(notaCredito.invoiceType).toBe(InvoiceType.NOTA_CREDITO_A);
+        });
+
+        it('emite una Nota de Débito A asociada a una Factura A real', async () => {
+            const wsfe = makeServiceAs(CUIT_CLASE_A);
+            const factura = await wsfe.issueInvoiceA({
+                items: [{ description: 'Para debitar con ND', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: buyerRI,
+            });
+
+            const notaDebito = await wsfe.issueDebitNoteA({
+                items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 100, vatRate: 21 }],
+                buyer: buyerRI,
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_A,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaDebito.result).toBe('A');
+            expect(notaDebito.cae).toMatch(/^\d{14}$/);
+            expect(notaDebito.invoiceType).toBe(InvoiceType.NOTA_DEBITO_A);
+        });
+
+        it('emite una Nota de Crédito B asociada a una Factura B real', async () => {
+            const wsfe = makeServiceAs(CUIT_CLASE_A);
+            const factura = await wsfe.issueInvoiceB({
+                items: [{ description: 'Para anular con NC', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: { ...buyerRI, vatCondition: VatCondition.CONSUMIDOR_FINAL },
+            });
+
+            const notaCredito = await wsfe.issueCreditNoteB({
+                items: [{ description: 'Anulación total', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: { ...buyerRI, vatCondition: VatCondition.CONSUMIDOR_FINAL },
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_B,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaCredito.result).toBe('A');
+            expect(notaCredito.cae).toMatch(/^\d{14}$/);
+            expect(notaCredito.invoiceType).toBe(InvoiceType.NOTA_CREDITO_B);
+        });
+
+        it('emite una Nota de Débito B asociada a una Factura B real', async () => {
+            const wsfe = makeServiceAs(CUIT_CLASE_A);
+            const factura = await wsfe.issueInvoiceB({
+                items: [{ description: 'Para debitar con ND', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: { ...buyerRI, vatCondition: VatCondition.CONSUMIDOR_FINAL },
+            });
+
+            const notaDebito = await wsfe.issueDebitNoteB({
+                items: [{ description: 'Interés por mora', quantity: 1, unitPrice: 100, vatRate: 21 }],
+                buyer: { ...buyerRI, vatCondition: VatCondition.CONSUMIDOR_FINAL },
+                associatedInvoices: [{
+                    type: InvoiceType.FACTURA_B,
+                    pointOfSale: config!.pointOfSale,
+                    invoiceNumber: factura.invoiceNumber,
+                }],
+            });
+
+            expect(notaDebito.result).toBe('A');
+            expect(notaDebito.cae).toMatch(/^\d{14}$/);
+            expect(notaDebito.invoiceType).toBe(InvoiceType.NOTA_DEBITO_B);
+        });
+    });
+
+    /**
+     * Tributos (`taxes`) end-to-end, con la combinación exacta que exige el código
+     * 10283 (Manual v4.7): Factura B, receptor Sujeto No Categorizado (`DocTipo` 80,
+     * `DocNro` 23000000000), tributo ID 13. La infraestructura (`taxes`) existía desde
+     * la v2.0.0 pero nunca se probó contra ARCA real — y de paso cierra el pendiente
+     * normativo "Clase B con receptor Sujeto No Categorizado" de `pendientes.md`.
+     */
+    describe('Tributos (taxes) end-to-end', () => {
+        it('emite una Factura B a Sujeto No Categorizado con el tributo 13 y ARCA la autoriza', async () => {
+            const cae = await makeServiceAs(CUIT_CLASE_A).issueInvoiceB({
+                items: [{ description: 'Producto con percepción', quantity: 1, unitPrice: 1000, vatRate: 21 }],
+                buyer: {
+                    docType: TaxIdType.CUIT,
+                    docNumber: '23000000000',
+                    vatCondition: VatCondition.SUJETO_NO_CATEGORIZADO,
+                },
+                taxes: [{
+                    id: 13,
+                    description: 'Percepción de IVA No Categorizado',
+                    taxBase: 1000,
+                    rate: 10.5,
+                    amount: 105,
+                }],
+            });
+
+            expect(cae.result).toBe('A');
+            expect(cae.cae).toMatch(/^\d{14}$/);
+        });
+    });
+
+    /**
+     * Moneda extranjera end-to-end, con la cotización real que da `getExchangeRate`.
+     * El array `<Tributos>` y la moneda extranjera se agregaron en v2.0.0 y nunca
+     * habían corrido juntos contra ARCA.
+     */
+    describe('Moneda extranjera end-to-end', () => {
+        it('emite una Factura C en dólares con la cotización real de ARCA', async () => {
+            const wsfe = makeService();
+            const cotizacion = await wsfe.getExchangeRate('DOL');
+
+            const cae = await wsfe.issueInvoiceC({
+                items: [{ description: 'Servicio en dólares', quantity: 1, unitPrice: 10 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+                currency: 'DOL',
+                exchangeRate: cotizacion.rate,
+            });
+
+            expect(cae.result).toBe('A');
+            expect(cae.cae).toMatch(/^\d{14}$/);
+        });
+    });
+
+    /**
+     * Recibos A/B/C (códigos 4, 9, 15) — **nunca habían corrido contra ARCA**, a pesar
+     * de tener test unitario desde antes de hoy. Están en el catálogo (verificado el
+     * 2026-09-27: `Recibos A`, `Recibos B`, `Recibo C` entre los 36 tipos), así que no
+     * es el caso del Tique — pero un catálogo que lista el tipo no garantiza que ESTE
+     * punto de venta lo acepte, que es justo lo que pasó con el 11001. Recibo A/B usan
+     * el CUIT delegado porque, como Factura A/B, exigen discriminar IVA.
+     */
+    describe('Recibos A/B/C end-to-end', () => {
+        it('emite un Recibo A con IVA discriminado y ARCA lo autoriza', async () => {
+            const cae = await makeServiceAs(CUIT_CLASE_A).issueReceiptA({
+                items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000, vatRate: 21 }],
+                buyer: {
+                    docType: TaxIdType.CUIT,
+                    docNumber: '20111111112',
+                    vatCondition: VatCondition.IVA_RESPONSABLE_INSCRIPTO,
+                },
+            });
+
+            expect(cae.result).toBe('A');
+            expect(cae.cae).toMatch(/^\d{14}$/);
+            expect(cae.invoiceType).toBe(InvoiceType.RECIBO_A);
+        });
+
+        it('emite un Recibo B con IVA discriminado y ARCA lo autoriza', async () => {
+            const cae = await makeServiceAs(CUIT_CLASE_A).issueReceiptB({
+                items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000, vatRate: 21 }],
+                buyer: {
+                    docType: TaxIdType.CUIT,
+                    docNumber: '20111111112',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+            });
+
+            expect(cae.result).toBe('A');
+            expect(cae.cae).toMatch(/^\d{14}$/);
+            expect(cae.invoiceType).toBe(InvoiceType.RECIBO_B);
+        });
+
+        it('emite un Recibo C y ARCA lo autoriza', async () => {
+            const cae = await makeService().issueReceiptC({
+                items: [{ description: 'Pago parcial', quantity: 1, unitPrice: 10000 }],
+                buyer: {
+                    docType: TaxIdType.FINAL_CONSUMER,
+                    docNumber: '0',
+                    vatCondition: VatCondition.CONSUMIDOR_FINAL,
+                },
+            });
+
+            expect(cae.result).toBe('A');
+            expect(cae.cae).toMatch(/^\d{14}$/);
+            expect(cae.invoiceType).toBe(InvoiceType.RECIBO_C);
         });
     });
 
