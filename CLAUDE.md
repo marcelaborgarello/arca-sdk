@@ -169,8 +169,8 @@ Ya contemplado (no reportar como novedad):
   Contingencia y `CbteFchHsGen` es obligatorio.
 - **Manual v4.5**: Tipo de documento receptor `31 - FCI CNV` (entidades financieras)
   implementado en `TaxIdType.FCI_CNV` (hasta 4 dígitos, código 10271).
-- **Manual v4.7**: Otros tributos (`taxes` → array `<Tributos>` e `ImpTrib` dinámico)
-  implementado en ambos builders desde v2.0.0.
+- **Otros tributos** (`taxes` → array `<Tributos>` e `ImpTrib` dinámico): parte del esquema
+  base (validaciones 10024, 10042, 10046), implementado en ambos builders desde v2.0.0.
 - **Catálogos `FEParamGet*` (v2.1.0)**: diez métodos en `WsfeService` para consultar
   fuentes autoritativas en vivo (`getInvoiceTypes`, `getVatRates`, `getExchangeRate`, etc.).
 - **Alícuotas de IVA**: `VAT_RATE_CODES` contempla las seis alícuotas oficiales
@@ -178,14 +178,14 @@ Ya contemplado (no reportar como novedad):
 - **`getPointsOfSale()`**: Devuelve `[]` cuando ARCA responde 602 (`Sin Resultados`).
 - Migración de endpoints `*.afip.gob.ar` → `*.arca.gob.ar` y QR en
   `https://www.arca.gob.ar/fe/qr/?p=...`.
+- **Manual v4.7**: comprobantes clase B con receptor **Sujeto No Categorizado** (código
+  10283 / tributo ID 13). Corrida verde contra homologación el 2026-10-01: Factura B a
+  `DocTipo` 80, `DocNro` `23000000000`, con el tributo ID 13 — ver `historial.md`.
 
 **Vigente y todavía NO implementado**:
 
 - **Manual v4.7 (01/09/2026)**: comprobantes de **Seguros de Caución** — códigos de
   validación 10273 a **10282** (son diez, no nueve), más la modificación del 10054.
-- **Manual v4.7**: Verificación en homologación de comprobantes clase B con receptor
-  **Sujeto No Categorizado** (código 10283 / tributo ID 13). La infraestructura técnica
-  (`taxes`) ya existe, falta prueba de emisión real con CUIT 23000000000.
 
 ### `VatCondition` no es el catálogo de `CondicionIVAReceptorId`
 

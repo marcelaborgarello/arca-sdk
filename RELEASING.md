@@ -46,8 +46,10 @@ bun run test:integration
 ```
 
 Actualizar `CHANGELOG.md` (en español, agrupado por tipo de cambio, citando la RG o la
-versión del manual que motiva cada entrada) y subir la versión en `package.json` según
-semver: campo opcional nuevo = minor, cambio de firma = major.
+versión del manual que motiva cada entrada), **reemplazar el encabezado `## [Sin
+publicar]` por `## [X.Y.Z] — YYYY-MM-DD`** (formato de las entradas ya publicadas), y
+subir la versión en `package.json` según semver: campo opcional nuevo = minor, cambio de
+firma = major.
 
 ### Trampa: finales de línea
 

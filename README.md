@@ -188,17 +188,6 @@ lista, probalo contra homologación antes de producción.**
 | `issueDebitNoteA/B/C()` | Nota de Débito | Cobro extra/Penalidad (Requiere asociar la factura original) |
 | `issueReceiptA/B/C()` | Recibo | Comprobante de pago (misma emisión que una factura) |
 
-> [!WARNING]
-> **Los Tique se eliminaron en la v3.0.0.** Si venís de la v2.x, ver
-> ["Migrar a la v3.0.0"](#migrar-a-la-v300).
->
-> El comprobante "Tique" (81/82/83) está regido por la **RG 3561/2013** (Controladores
-> Fiscales), una resolución distinta de la RG 4291/wsfev1 que sigue el resto del SDK.
-> **ARCA no lo lista en `FEParamGetTiposCbte`** y `FECAESolicitar` con `CbteTipo=83` lo
-> rechaza con el error **11001** desde un punto de venta Web Services — el único tipo de
-> punto de venta que un consumidor de este SDK puede tener. Para el caso general
-> (consumidor final, sin Controlador Fiscal homologado) usá `issueInvoiceC()`.
-
 ### ✅ Consultas disponibles
 
 | Método | Descripción |
