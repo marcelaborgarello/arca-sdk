@@ -124,7 +124,7 @@ console.log('QR:', result.qrUrl);             // 'https://www.arca.gob.ar/fe/qr/
 
 ---
 
-## ⚠️ Qué está verificado contra ARCA y qué no — 01/10/2026
+## ⚠️ Qué está verificado contra ARCA y qué no — 02/10/2026
 
 Este SDK habla con un ente recaudador: un comprobante mal emitido no es un bug de UI, es una
 factura real con un número real gastado. Por eso respondemos acá, explícitamente, la pregunta
@@ -148,10 +148,23 @@ Este README describe la **v3.0.0**, que es la que sirve npm.
 | Otros tributos (`taxes`) | ✅ Homologación (Factura B, receptor Sujeto No Categorizado) |
 | Moneda extranjera (`currency`/`exchangeRate`) | ✅ Homologación (Factura C en USD) |
 | **CAEA** (contingencia) | ❌ Sin verificar, entero |
+| **Padrón A13** — `padron.getTaxpayer()` | ✅ Homologación — ver nota |
 
 Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
 prueban que el SDK hace lo que creemos, no que ARCA lo acepte. **Si vas a usar algo de esa
 lista, probalo contra homologación antes de producción.**
+
+> **Padrón A13, nota aparte (02/10/2026)**: hasta ayer el endpoint de homologación
+> (`PADRON_A13_ENDPOINTS.homologacion`) apuntaba a un dominio **sin registro DNS** —
+> cualquier llamada a `getTaxpayer()` en homologación tiraba error de red, siempre. Se
+> corrigió (ver `CHANGELOG`) y de paso se encontró un segundo bug: A13 devuelve sus
+> faults de negocio con HTTP 500, y el SDK los descartaba sin leerlos. Los dos están
+> arreglados y confirmados contra homologación real — incluidos dos de los seis
+> mensajes de error que ahora trae `hint`. **Lo que no se pudo verificar todavía**: una
+> respuesta **exitosa** con datos de un contribuyente real, porque el dataset de
+> homologación de A13 es sintético (no espeja el padrón real — un CUIT real típicamente
+> da "inexistente" ahí) y, al momento de escribir esto, el backend de ARCA homologación
+> tiene una falla de infraestructura propia (`ORA-03150`) que no depende del SDK.
 
 > Venimos auditando cada afirmación normativa de esta documentación contra los cuatro manuales
 > oficiales de ARCA, no sólo el de facturación, y corrigiendo lo que no coincide — aparecieron
@@ -357,13 +370,20 @@ const padron = new PadronService({
   key:  fs.readFileSync('key.pem',  'utf-8'),
 });
 
-const { taxpayer, error } = await padron.getTaxpayer('30111111118');
+const { taxpayer, error, hint } = await padron.getTaxpayer('30111111118');
 if (taxpayer) {
   const name = taxpayer.companyName || `${taxpayer.firstName} ${taxpayer.lastName}`;
   console.log('Nombre:', name);
   console.log('Provincia:', taxpayer.addresses[0]?.province);
   console.log('¿IVA?:', taxpayer.isVATRegistered);
   console.log('¿Mono?:', taxpayer.isMonotax);
+} else {
+  // getTaxpayer() informa errores por valor, no lanza (es el único método del SDK
+  // que funciona así). `hint` sólo viene poblado para los mensajes que documenta el
+  // anexo 5.3 del manual de A13 — p. ej. avisa si la clave está INACTIVA, el caso
+  // que más conviene mirar antes de facturarle a alguien.
+  console.log('Error:', error);
+  if (hint) console.log('Hint:', hint);
 }
 ```
 
@@ -658,6 +678,13 @@ try {
 > empezar a poblar `error.hint` donde hoy hay `undefined` es un cambio de comportamiento y va
 > anunciado.
 
+> [!NOTE]
+> **`padron.getTaxpayer()` no entra en este `try/catch`.** Es el único método del SDK que
+> informa por **valor de retorno** en vez de lanzar: `{ taxpayer?, error?, hint? }`. El `hint`
+> ahí sólo se completa para los faults que documenta el anexo 5.3 del manual de A13 — ver el
+> ejemplo en "Consulta de Padrón A13", más arriba. La única excepción real de `getTaxpayer()`
+> es `ArcaError` con código `PADRON_ERROR`, cuando la respuesta ni siquiera trae un sobre SOAP.
+
 #### Rechazo ≠ error
 
 ARCA distingue dos cosas que conviene no confundir:
@@ -844,17 +871,19 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-14 archivos, 278 tests — es lo que corre `bun run test`. **No incluye
-`tests/integration/wsfe.integration.test.ts`**: `vitest.config.ts` limita la corrida a
-`tests/unit/**`, y la integración va aparte con `bun run test:integration`.
+15 archivos, 294 tests — es lo que corre `bun run test`. **No incluye
+`tests/integration/`** (ni `wsfe.integration.test.ts` ni `padron.integration.test.ts`):
+`vitest.config.ts` limita la corrida a `tests/unit/**`, y la integración va aparte con
+`bun run test:integration`.
 
 | Suite | Archivo | Qué cubre |
 |-------|---------|-----------|
 | WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
 | WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB/C`, `issueCreditNoteC`, `issueDebitNoteA/B/C`, `issueReceiptA/B/C`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, el 96 compartido de `TaxIdType`, hints de alícuota. `issueInvoiceA` e `issueCreditNoteA/B` se cubren en `request-xml.test.ts`, no acá |
 | CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen`, las seis alícuotas de IVA en el XML |
-| Errores | `errors.test.ts` | El diccionario de hints: **47 de sus 48 entradas** están cubiertas — en 39 se verifica el **texto** contra el manual que corresponde, y en los ocho faults de WSAA restantes, que el `faultstring` llegue al hint (WSAA no devuelve códigos numéricos, así que se reconocen por texto). La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
-| Padrón | `padron.test.ts` | Parsing de respuesta, CUIT not found, condición IVA, el hint del servicio caído |
+| Errores | `errors.test.ts` | El diccionario de hints: **53 de sus 54 entradas** están cubiertas — en 39 se verifica el **texto** contra el manual que corresponde, y en los catorce faults de WSAA (8) y Padrón A13 (6) restantes, que el `faultstring` llegue al hint (ninguno de los dos servicios devuelve códigos numéricos, así que se reconocen por texto). La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
+| Padrón | `padron.test.ts` | Parsing de respuesta, condición IVA, el hint de un fault reconocido del anexo 5.3 (y que uno no documentado no inventa hint) — los dos con HTTP 500 real, no con `ok: true` —, y que un 500 sin sobre SOAP real siga degradando a `PADRON_ERROR` |
+| Endpoints | `endpoints.test.ts` | Que homologación de WSAA/WSFE/A13 siga en `afip.gov.ar` y producción en `arca.gob.ar` — regresión del endpoint de A13 que no resolvía por DNS (ver la nota de Padrón A13 más arriba, en "Qué está verificado") |
 | XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD en los dos builders, escapado, Tributos, moneda extranjera, rechazos |
 | XML / TRA | `xml.test.ts` | Construcción del TRA y sus márgenes de tiempo, parsing de WSAA, validación de CUIT |
 | Fechas | `formatArcaDate.test.ts` | Fecha-calendario vs. instante, conversión a UTC-3, `yyyymmddhhmmss` |

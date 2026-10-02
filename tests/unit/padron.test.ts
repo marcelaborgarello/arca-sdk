@@ -167,20 +167,20 @@ describe('PadronService (A13)', () => {
   });
 
   /**
-   * El hint del padrón, que hasta la v3.0.0 no le llegaba a nadie.
+   * El hint del padrón. Hasta la v3.0.0 no le llegaba a nadie: `PADRON_ERROR` y
+   * `CUIT_NOT_FOUND` estaban escritos en el diccionario desde siempre y `padron.ts` no
+   * llamaba a `getArcaHint` en ninguna línea. El `CUIT_NOT_FOUND` se borró en la v3.0.0
+   * (repetía el mensaje de error con otras palabras); `PADRON_ERROR` se cableó ahí mismo.
    *
-   * `PADRON_ERROR` y `CUIT_NOT_FOUND` estaban escritos en el diccionario desde siempre, y
-   * **`padron.ts` no llamaba a `getArcaHint` en ninguna línea**: eran dos textos que ningún
-   * camino del código podía entregar. Es el peor tipo de documentación muerta, porque desde
-   * afuera es indistinguible de una que funciona.
-   *
-   * De los dos, sólo `PADRON_ERROR` se cableó. El `CUIT_NOT_FOUND` se borró: su texto
-   * repetía el mensaje de error con otras palabras en vez de agregarle una acción.
-   *
-   * **Lo que falta es más grande que estos dos.** El anexo 5.3 del *Manual Consulta a Padrón
-   * – Alcance 13 v1.4* documenta **siete** mensajes de error y el SDK no reconoce ninguno.
-   * Cuatro son accionables y no pueden llegar hoy, porque `getTaxpayer()` devuelve los
-   * errores por valor y `TaxpayerResponse` no tiene un campo `hint`.
+   * **Desde la v3.1.0 (2026-10-01/02)**: el anexo 5.3 del *Manual Consulta a Padrón –
+   * Alcance 13 v1.4* documenta siete mensajes y el SDK reconoce **seis** —el séptimo,
+   * "clave inexistente", queda sin hint a propósito, el mensaje ya dice todo—, vía
+   * `TaxpayerResponse.hint` y `getPadronHint()` (`constants/errors.ts`). Confirmado
+   * contra homologación real que llegan por SOAP `Fault`, envuelto en **HTTP 500**: el
+   * primer intento de cablear esto (2026-10-01) tenía el hint bien escrito pero
+   * `getTaxpayer()` lanzaba antes de leer el body para cualquier `!response.ok`, así que
+   * nunca se disparaba contra ARCA real — sólo acá, donde el mock de entonces usaba
+   * `ok: true` sin querer. Los dos tests de abajo ya reflejan el `ok: false` real.
    */
   describe('el hint del padrón', () => {
     it('llega cuando la respuesta no tiene Body', async () => {
