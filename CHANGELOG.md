@@ -6,6 +6,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 🐛 El endpoint de homologación de Padrón A13 no resolvía por DNS
+
+- `PADRON_A13_ENDPOINTS.homologacion` (`constants/endpoints.ts`) apuntaba a `awshomo.arca.gob.ar`, un dominio **sin registro DNS**: cualquier llamada a `getTaxpayer()` en homologación terminaba en `ArcaNetworkError`, siempre. Verificado que no es un problema de red local: `arca.gob.ar`, `wsaahomo.afip.gov.ar`, `wswhomo.afip.gov.ar` y `aws.arca.gob.ar` (el endpoint de **producción** de A13) resuelven todos sin problema.
+- **No es una regresión de esta versión**: el mismo dominio roto está en `arca-sdk@2.1.0`, publicado en npm. Nunca se había detectado porque no existía `tests/integration/padron.integration.test.ts` (agregado en este cambio) y porque en producción el endpoint correcto (`aws.arca.gob.ar`) sí resuelve — cualquiera que facture de verdad nunca pasa por el roto.
+- El patrón correcto es el mismo que ya usan WSAA y WSFE: homologación se queda en `afip.gov.ar` y sólo producción migra a `arca.gob.ar`. El fix apunta homologación a `awshomo.afip.gov.ar`, confirmado respondiendo SOAP Faults reales.
+- Se agregó `tests/unit/endpoints.test.ts` (regresión del valor) y `tests/integration/padron.integration.test.ts` (no existía ninguna suite de integración para A13).
+
 ### ✨ Padrón A13: `TaxpayerResponse` gana un `hint` para los faults que documenta el manual
 
 - `getTaxpayer()` devolvía el `faultstring` de ARCA pelado cuando el servicio contestaba con un SOAP `Fault`, sin ninguna sugerencia de qué hacer — a diferencia de WSFE, CAEA y WSAA, que sí tienen diccionario de hints. El anexo 5.3 del *Manual Consulta a Padrón – Alcance 13 v1.4* documenta siete mensajes por su texto (A13 tampoco tiene códigos numéricos, como WSAA); seis son accionables.
