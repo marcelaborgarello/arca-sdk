@@ -1,6 +1,6 @@
 import { WsaaService } from '../auth/wsaa';
 import { getPadronEndpoint } from '../constants/endpoints';
-import { getArcaHint } from '../constants/errors';
+import { getArcaHint, getPadronHint } from '../constants/errors';
 import { ArcaNetworkError, ArcaError } from '../types/common';
 import type {
     TaxpayerServiceConfig,
@@ -124,7 +124,8 @@ export class PadronService {
         if (!response) {
             const fault = body.Fault;
             if (fault) {
-                return { error: fault.faultstring || 'Error desconocido en ARCA' };
+                const faultString = fault.faultstring || 'Error desconocido en ARCA';
+                return { error: faultString, hint: getPadronHint(faultString) };
             }
             return { error: 'No se encontraron datos para el CUIT informado' };
         }

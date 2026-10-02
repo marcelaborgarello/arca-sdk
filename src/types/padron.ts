@@ -83,4 +83,11 @@ export interface Taxpayer {
 export interface TaxpayerResponse {
     taxpayer?: Taxpayer;
     error?: string;
+    /**
+     * Sugerencia de qué hacer ante `error`, cuando el SDK reconoce el mensaje. Sólo se
+     * completa para los faults de ARCA documentados en el anexo 5.3 del *Manual Consulta a
+     * Padrón – Alcance 13 v1.4* (ver `getPadronHint()` en `constants/errors.ts`); un `error`
+     * sin `hint` no es un bug, es un mensaje que el manual no describe.
+     */
+    hint?: string;
 }

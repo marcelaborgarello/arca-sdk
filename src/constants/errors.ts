@@ -272,6 +272,40 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
     // existe: `getTaxpayer()` devuelve los errores por valor y `TaxpayerResponse` no tiene
     // dónde poner un hint. Es un bloque de trabajo propio, no una entrada más de esta tabla.
     PADRON_ERROR: 'El servicio de Padrón suele ser inestable en homologación. Reintentá en unos minutos.',
+
+    // === Padrón A13 — faults del anexo 5.3 ===
+    //
+    // Seis de los siete mensajes que documenta el anexo 5.3 del *Manual Consulta a Padrón –
+    // Alcance 13 v1.4*. El séptimo —"La Clave (CUIT/CUIL) consultada es inexistente"— queda
+    // afuera a propósito: el mensaje ya dice todo lo que hay que saber, y ponerle un hint
+    // sería repetirlo con otras palabras — el mismo motivo por el que se borró
+    // `CUIT_NOT_FOUND` en la v3.0.0.
+    //
+    // **Igual que WSAA, por texto y no por código**: A13 tampoco tiene tabla de códigos
+    // numéricos, así que se resuelven con `getPadronHint()`, calcado de `getWsaaHint()`.
+    //
+    // **A diferencia de WSAA, ninguno de los seis está verificado contra ARCA real todavía.**
+    // Salen entrecomillados del manual; que lleguen por un SOAP `Fault` (que es donde
+    // `padron.ts` los busca) es una suposición por simetría con WSAA, no un hecho probado.
+    // Provocarlos contra homologación es el ítem que sigue en `pendientes.md`.
+    PADRON_INVALID_ID: 'El CUIT/CUIL consultado tiene más de 11 dígitos. Revisá el valor que le pasás a ' +
+        'getTaxpayer() (Manual Consulta a Padrón A13 v1.4, anexo 5.3).',
+    // El más valioso de los seis: tiene consecuencia cruzada con wsfev1. Si usás esta CUIT
+    // como receptor, FECAESolicitar la rechaza después con el 10247 — avisarlo acá evita
+    // quemar un número de comprobante.
+    PADRON_INACTIVE: 'La clave fiscal del CUIT/CUIL consultado está INACTIVA. Si pensás usarlo como receptor, ' +
+        'ojo: wsfev1 lo va a rechazar con el 10247 (excluyente salvo en Notas de Crédito). Conviene chequear ' +
+        'esto antes de facturar, no después (Manual A13 v1.4, anexo 5.3).',
+    PADRON_INVALID_TOKEN: 'El par token/sign no es válido para este servicio. Verificá que el TA se haya pedido ' +
+        'para ws_sr_padron_a13 y no para otro servicio (Manual A13 v1.4, anexo 5.3).',
+    PADRON_MISSING_CUIT_REPRESENTADA: 'Falta informar cuitRepresentada en la consulta (Manual A13 v1.4, ' +
+        'anexo 5.3).',
+    // El equivalente exacto del 600/601 de wsfev1, pero del lado del padrón: el TA trae
+    // congelada la lista de relaciones del momento en que se emitió.
+    PADRON_CUIT_NOT_IN_RELATIONS: 'La CUIT representada no está en la lista de relaciones del token. Es la ' +
+        'misma trampa que el 600/601 de wsfev1: si acabás de delegar en WSASS, el TA cacheado no la conoce — ' +
+        'borralo y pedí uno nuevo (Manual A13 v1.4, descripción de cuitRepresentada).',
+    PADRON_MISSING_TOKEN_SIGN: 'Falta el token o el sign en la consulta (Manual A13 v1.4, anexo 5.3).',
 };
 
 /**
@@ -333,6 +367,53 @@ export function getWsaaHint(faultString: string | undefined | null): string | un
     if (!faultString) return undefined;
 
     for (const { pattern, key } of WSAA_FAULT_PATTERNS) {
+        if (pattern.test(faultString)) return getArcaHint(key);
+    }
+
+    return undefined;
+}
+
+/**
+ * Los seis faults de Padrón A13 que documenta el anexo 5.3 de su manual, con el patrón que
+ * los reconoce en el `faultstring` de un SOAP `Fault`.
+ *
+ * Mismo diseño que {@link WSAA_FAULT_PATTERNS}: A13 tampoco tiene códigos numéricos, así que
+ * se identifican por el texto. El séptimo mensaje del anexo —clave inexistente— no está acá
+ * a propósito: no es accionable, ver el comentario de `PADRON_INVALID_ID` y vecinos en
+ * {@link ARCA_ERROR_HINTS}.
+ *
+ * **Ninguno de los seis está verificado contra ARCA real todavía** (a diferencia de
+ * `ALREADY_HAS_TA` en WSAA_FAULT_PATTERNS, que sí lo está). Que lleguen por `Fault` es una
+ * suposición por simetría con WSAA. Si al provocarlos contra homologación aparecen por otro
+ * canal, esta tabla hay que revisarla, no sólo completarla.
+ *
+ * Si ninguno matchea, el hint queda `undefined`. Degrada, no rompe.
+ *
+ * Disponible desde v3.1.0.
+ */
+export const PADRON_MESSAGE_PATTERNS: ReadonlyArray<{ pattern: RegExp; key: string }> = [
+    { pattern: /Id de la persona no es v[aá]lido/i, key: 'PADRON_INVALID_ID' },
+    { pattern: /se encuentra INACTIVA/i, key: 'PADRON_INACTIVE' },
+    { pattern: /par token\/sign inv[aá]lido/i, key: 'PADRON_INVALID_TOKEN' },
+    { pattern: /Debe enviar la CUIT representada/i, key: 'PADRON_MISSING_CUIT_REPRESENTADA' },
+    { pattern: /no le permite actuar en representaci[oó]n/i, key: 'PADRON_CUIT_NOT_IN_RELATIONS' },
+    { pattern: /Falta token y\/o sign/i, key: 'PADRON_MISSING_TOKEN_SIGN' },
+];
+
+/**
+ * Busca el hint de un fault de Padrón A13 a partir de su `faultstring`.
+ *
+ * @param faultString - El `faultstring` del SOAP Fault, tal como lo devuelve A13.
+ * @returns El hint del primer patrón que matchee, o `undefined` si no se reconoce ninguno —
+ *   que es un estado normal: el manual documenta siete casos (seis accionables) y ARCA puede
+ *   devolver otros.
+ *
+ * Disponible desde v3.1.0.
+ */
+export function getPadronHint(faultString: string | undefined | null): string | undefined {
+    if (!faultString) return undefined;
+
+    for (const { pattern, key } of PADRON_MESSAGE_PATTERNS) {
         if (pattern.test(faultString)) return getArcaHint(key);
     }
 

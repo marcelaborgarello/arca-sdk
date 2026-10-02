@@ -6,6 +6,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### ✨ Padrón A13: `TaxpayerResponse` gana un `hint` para los faults que documenta el manual
+
+- `getTaxpayer()` devolvía el `faultstring` de ARCA pelado cuando el servicio contestaba con un SOAP `Fault`, sin ninguna sugerencia de qué hacer — a diferencia de WSFE, CAEA y WSAA, que sí tienen diccionario de hints. El anexo 5.3 del *Manual Consulta a Padrón – Alcance 13 v1.4* documenta siete mensajes por su texto (A13 tampoco tiene códigos numéricos, como WSAA); seis son accionables.
+- Se agregó `TaxpayerResponse.hint?: string` (campo opcional, no rompe nada) y `getPadronHint()` / `PADRON_MESSAGE_PATTERNS` en `constants/errors.ts`, calcados del `getWsaaHint()` / `WSAA_FAULT_PATTERNS` que ya existían para WSAA. El séptimo mensaje del anexo —"clave inexistente"— queda sin hint a propósito: el texto ya dice todo, ponerle uno sería repetirlo con otras palabras, el mismo motivo por el que se borró `CUIT_NOT_FOUND` en la v3.0.0.
+- El más valioso de los seis es el de la clave **INACTIVA**: tiene consecuencia cruzada con wsfev1 — un receptor inactivo hace que `FECAESolicitar` rechace con el **10247**, así que saberlo acá evita quemar un número de comprobante.
+- **Sin verificar contra ARCA todavía**: los seis patrones matchean el texto entrecomillado del manual, no una respuesta real — a diferencia del `ALREADY_HAS_TA` de WSAA, que sí está confirmado en homologación. Que lleguen por un SOAP `Fault` (que es donde el SDK los busca) es una suposición por simetría con WSAA, pendiente de probar.
+- No se tocó `getPersona` en sí, ni se agregaron los tres métodos de A13 que todavía faltan (`dummy`, `getIdPersonaListByDocumento`, `getPersonaV2`).
+
 ### 📖 El README abría con la lista de lo que no funciona, antes de decir para qué sirve el SDK
 
 - La sección "Qué está verificado contra ARCA y qué no" era lo segundo que veía cualquiera que abriera el README, antes del pitch, de la instalación y del Quick Start. El contenido era correcto —sigue siéndolo, no cambia ningún dato de la tabla—, pero el orden hacía que la primera impresión fuera "mirá todo lo que no se probó" en vez de "esto es serio, y esto es lo que hay que chequear antes de confiar". Se movió después del Quick Start, y se le agregó una frase que explica el porqué (el SDK habla con un ente recaudador, un comprobante mal emitido no es un bug de UI) en vez de abrir directamente con el conteo de afirmaciones falsas encontradas.

@@ -3,7 +3,7 @@ import { PadronService } from '../../src/services/padron';
 import { callArcaApi } from '../../src/utils/network';
 import { WsaaService } from '../../src/auth/wsaa';
 import { ArcaError } from '../../src/types/common';
-import { ARCA_ERROR_HINTS } from '../../src/constants/errors';
+import { ARCA_ERROR_HINTS, getArcaHint } from '../../src/constants/errors';
 
 vi.mock('../../src/utils/network', () => ({
   callArcaApi: vi.fn(),
@@ -200,6 +200,58 @@ describe('PadronService (A13)', () => {
         expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
         expect((error as ArcaError).hint).toBeDefined();
       }
+    });
+
+    /**
+     * Desde la v3.1.0: cuando ARCA contesta con un SOAP `Fault` reconocido (anexo 5.3 del
+     * manual de A13), `getTaxpayer()` devuelve el hint junto con el error en vez de
+     * entregar el `faultstring` pelado. No lanza — A13 nunca lanzó por un fault de negocio,
+     * y cambiar eso acá hubiera sido romper la firma sin que nadie lo pidiera.
+     */
+    it('llega cuando ARCA contesta un Fault reconocido (clave INACTIVA)', async () => {
+      const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode>soapenv:Server</faultcode>
+      <faultstring>La clave (CUIT/CUIL) consultada se encuentra INACTIVA</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockFaultXml,
+      });
+
+      const result = await service.getTaxpayer('20111111112');
+
+      expect(result.taxpayer).toBeUndefined();
+      expect(result.error).toBe('La clave (CUIT/CUIL) consultada se encuentra INACTIVA');
+      expect(result.hint).toBe(getArcaHint('PADRON_INACTIVE'));
+      expect(result.hint).toBeDefined();
+    });
+
+    it('no inventa un hint para un Fault que el manual no documenta', async () => {
+      const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode>soapenv:Server</faultcode>
+      <faultstring>Error interno no documentado</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockFaultXml,
+      });
+
+      const result = await service.getTaxpayer('20111111112');
+
+      expect(result.error).toBe('Error interno no documentado');
+      expect(result.hint).toBeUndefined();
     });
   });
 });
