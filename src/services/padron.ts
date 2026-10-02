@@ -1,7 +1,7 @@
 import { WsaaService } from '../auth/wsaa';
 import { getPadronEndpoint } from '../constants/endpoints';
 import { getArcaHint, getPadronHint } from '../constants/errors';
-import { ArcaNetworkError, ArcaError } from '../types/common';
+import { ArcaError } from '../types/common';
 import type {
     TaxpayerServiceConfig,
     Taxpayer,
@@ -85,21 +85,27 @@ export class PadronService {
             timeout: this.config.timeout || 15000,
         });
 
-        if (!response.ok) {
-            throw new ArcaNetworkError(
-                `Error HTTP al comunicarse con Padrón A13: ${response.status}`,
-                { status: response.status }
-            );
-        }
-
+        // A13 devuelve sus faults de negocio (los siete del anexo 5.3, incluidos los seis
+        // que reconoce getPadronHint()) con HTTP 500 — verificado contra homologación
+        // real el 2026-10-02: "El Id de la persona no es valido" y "La Clave (CUIT/CUIL)
+        // consultada es inexistente" llegan los dos con status 500. Leer el body antes de
+        // mirar `response.ok`, igual que ya hace wsaa.ts, es obligatorio: devolver el fault
+        // tal cual sin leerlo es la línea que hacía perder el hint en una llamada real,
+        // aunque los tests unitarios (que mockean `ok: true`) seguían verdes.
         const xml = await response.text();
-        return this.parseResponse(xml);
+        return this.parseResponse(xml, response.ok, response.status);
     }
 
     /**
      * Parsea la respuesta XML de getPersona
+     *
+     * @param httpOk - `response.ok` de la llamada HTTP. Sólo se usa para enriquecer el
+     *   error cuando el body no trae un sobre SOAP — A13 devuelve sus faults de negocio
+     *   con HTTP 500, así que `!httpOk` por sí solo **no** implica un error de
+     *   infraestructura (ver `getTaxpayer()`).
+     * @param httpStatus - status HTTP, para el mismo fin.
      */
-    private parseResponse(xml: string): TaxpayerResponse {
+    private parseResponse(xml: string, httpOk?: boolean, httpStatus?: number): TaxpayerResponse {
         const parser = new XMLParser({
             ignoreAttributes: false,
             removeNSPrefix: true,
@@ -115,7 +121,7 @@ export class PadronService {
             throw new ArcaError(
                 'Respuesta del Padrón inválida: Body no encontrado',
                 'PADRON_ERROR',
-                { xml },
+                { xml, httpOk, httpStatus },
                 getArcaHint('PADRON_ERROR')
             );
         }

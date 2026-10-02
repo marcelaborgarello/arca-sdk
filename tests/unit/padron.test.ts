@@ -207,8 +207,16 @@ describe('PadronService (A13)', () => {
      * manual de A13), `getTaxpayer()` devuelve el hint junto con el error en vez de
      * entregar el `faultstring` pelado. No lanza — A13 nunca lanzó por un fault de negocio,
      * y cambiar eso acá hubiera sido romper la firma sin que nadie lo pidiera.
+     *
+     * **El `ok: false` / `status: 500` de estos dos mocks no es decorativo.** Verificado
+     * contra homologación real el 2026-10-02: los dos faults del anexo 5.3 que se
+     * provocaron —"El Id de la persona no es valido" y "La Clave (CUIT/CUIL) consultada
+     * es inexistente"— llegaron los dos con HTTP 500. Hasta ese día `getTaxpayer()`
+     * lanzaba `ArcaNetworkError` apenas veía `!response.ok`, sin leer el body: el hint
+     * nunca llegaba a dispararse contra ARCA real, sólo acá, donde el mock usaba
+     * `ok: true` sin querer.
      */
-    it('llega cuando ARCA contesta un Fault reconocido (clave INACTIVA)', async () => {
+    it('llega cuando ARCA contesta un Fault reconocido (clave INACTIVA), con HTTP 500', async () => {
       const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -220,7 +228,8 @@ describe('PadronService (A13)', () => {
 </soapenv:Envelope>`;
 
       (callArcaApi as any).mockResolvedValue({
-        ok: true,
+        ok: false,
+        status: 500,
         text: async () => mockFaultXml,
       });
 
@@ -232,7 +241,7 @@ describe('PadronService (A13)', () => {
       expect(result.hint).toBeDefined();
     });
 
-    it('no inventa un hint para un Fault que el manual no documenta', async () => {
+    it('no inventa un hint para un Fault que el manual no documenta, con HTTP 500', async () => {
       const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
@@ -244,7 +253,8 @@ describe('PadronService (A13)', () => {
 </soapenv:Envelope>`;
 
       (callArcaApi as any).mockResolvedValue({
-        ok: true,
+        ok: false,
+        status: 500,
         text: async () => mockFaultXml,
       });
 
@@ -252,6 +262,30 @@ describe('PadronService (A13)', () => {
 
       expect(result.error).toBe('Error interno no documentado');
       expect(result.hint).toBeUndefined();
+    });
+
+    /**
+     * El `!response.ok` no desapareció: sigue existiendo el caso de un 500 que **no**
+     * trae un sobre SOAP (el servicio realmente caído, una página de error del balanceador,
+     * etc.). Ese caso ya tenía cobertura arriba ("llega cuando la respuesta no tiene
+     * Body"), pero no con `ok: false` — se repite acá para dejar explícito que seguir
+     * lanzando `PADRON_ERROR` en ese caso es intencional, no un olvido del fix de arriba.
+     */
+    it('un 500 sin sobre SOAP sigue lanzando PADRON_ERROR, no lo confunde con un fault', async () => {
+      (callArcaApi as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => '<html><body>Internal Server Error</body></html>',
+      });
+
+      try {
+        await service.getTaxpayer('20111111112');
+        expect.unreachable('getTaxpayer() debía lanzar');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArcaError);
+        expect((error as ArcaError).code).toBe('PADRON_ERROR');
+        expect((error as ArcaError).hint).toBeDefined();
+      }
     });
   });
 });

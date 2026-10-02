@@ -6,6 +6,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 🐛 `getTaxpayer()` lanzaba `ArcaNetworkError` para los faults de negocio de A13, por leer `response.ok` antes que el body
+
+- A13 devuelve sus siete faults del anexo 5.3 —los mismos que `getPadronHint()` reconoce desde la entrada de abajo— envueltos en **HTTP 500**, confirmado contra homologación real el 2026-10-02 (`"El Id de la persona no es valido"` y `"La Clave (CUIT/CUIL) consultada es inexistente"` llegaron los dos con ese status). `padron.ts` miraba `!response.ok` **antes** de leer el body y lanzaba un `ArcaNetworkError` genérico ahí mismo: el hint agregado ayer no llegaba a dispararse nunca contra ARCA real, sólo en los tests unitarios, que mockeaban `ok: true` sin querer.
+- Se invirtió el orden, igual que ya hace `wsaa.ts`: leer siempre el body y parsearlo, sin mirar `response.ok` de antemano. Un `500` que **no** trae un sobre SOAP (el servicio genuinamente caído) sigue degradando a `PADRON_ERROR` con su hint — no se perdió ese caso, se agregó un test que lo fija.
+- **Cambia comportamiento**: antes, cualquiera de los siete mensajes del anexo 5.3 hacía lanzar; ahora se devuelven como `{ error, hint }`, consistente con el resto del diseño de A13 (informa por valor, no lanza — salvo `PADRON_ERROR`).
+- Con los dos fixes de hoy, `tests/integration/padron.integration.test.ts` corre en verde de punta a punta contra homologación real (antes no existía ninguna suite de integración para A13).
+
 ### 🐛 El endpoint de homologación de Padrón A13 no resolvía por DNS
 
 - `PADRON_A13_ENDPOINTS.homologacion` (`constants/endpoints.ts`) apuntaba a `awshomo.arca.gob.ar`, un dominio **sin registro DNS**: cualquier llamada a `getTaxpayer()` en homologación terminaba en `ArcaNetworkError`, siempre. Verificado que no es un problema de red local: `arca.gob.ar`, `wsaahomo.afip.gov.ar`, `wswhomo.afip.gov.ar` y `aws.arca.gob.ar` (el endpoint de **producción** de A13) resuelven todos sin problema.

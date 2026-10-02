@@ -32,12 +32,20 @@ describe.skipIf(!config)('Padrón A13 contra ARCA homologación', () => {
         });
     });
 
-    it('getTaxpayer() devuelve los datos del propio CUIT de prueba', async () => {
+    /**
+     * No asume que el CUIT de prueba **existe** en el padrón de homologación.
+     * **Confirmado el 2026-10-02**: el CUIT real de Marcela (`27203953734`, el mismo que
+     * usan estos tests) devuelve *"La Clave (CUIT/CUIL) consultada es inexistente"* en
+     * homologación — A13 ahí tiene su propio dataset sintético, no un espejo del padrón
+     * real. Lo único que vale la pena afirmar sin conocer ese dataset es que la llamada
+     * se completa (no lanza) y devuelve una de las dos formas válidas de
+     * `TaxpayerResponse`, nunca las dos a la vez.
+     */
+    it('getTaxpayer() del propio CUIT de prueba no lanza y devuelve una forma válida', async () => {
         const result = await padron.getTaxpayer(config!.cuit);
 
-        expect(result.error).toBeUndefined();
-        expect(result.taxpayer).toBeDefined();
-        expect(result.taxpayer?.taxId).toBe(Number(config!.cuit));
+        const tieneUnoSoloDeLosDos = (!!result.taxpayer) !== (!!result.error);
+        expect(tieneUnoSoloDeLosDos).toBe(true);
     });
 
     /**
