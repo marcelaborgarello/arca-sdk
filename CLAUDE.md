@@ -118,14 +118,20 @@ Dos consecuencias que conviene tener presentes antes de tocar `padron.ts`:
 - **Hoy el SDK no puede consultar los datos de un contribuyente inactivo.** Con `getPersona`
   una clave inactiva devuelve error y nada más; `getPersonaV2` existe exactamente para eso, y
   es justo el caso en que más importa mirar antes de facturarle a alguien — un receptor
-  inactivo hace que wsfev1 rechace con el **10247**.
-- **El anexo 5.3 documenta siete mensajes de error y el SDK no reconoce ninguno.** El
-  diccionario de `errors.ts` sólo tiene `PADRON_ERROR`, que es un código interno. Hacerlos
-  llegar pide un canal que no existe: `getTaxpayer()` informa los errores **por valor de
-  retorno** (`{ taxpayer?, error? }`), no lanzando, y `TaxpayerResponse` no tiene campo `hint`.
-- Y un detalle que confunde: `padron.ts` chequea `response.errorConstancia`, un campo que
-  **no existe en A13** (cero menciones en las 25 páginas). Viene del servicio de Constancia
-  de Inscripción.
+  inactivo hace que wsfev1 rechace con el **10247**. Siguen faltando los tres métodos
+  (`getPersonaV2`, `getIdPersonaListByDocumento`, `dummy`): sólo se agregó el hint, no API
+  nueva.
+- **Resuelto (v3.1.0, 2026-10-02): el anexo 5.3 documenta siete mensajes de error y el SDK
+  ahora reconoce seis** (el séptimo, "clave inexistente", queda sin hint a propósito: el
+  texto ya dice todo). `TaxpayerResponse` ganó `hint?: string` y `getPadronHint()` en
+  `constants/errors.ts` resuelve el `faultstring` del `Fault` de A13 — confirmado contra
+  homologación real, incluido un detalle que no era obvio: **A13 envuelve sus faults de
+  negocio en HTTP 500**, así que `getTaxpayer()` tenía que leer el body antes de mirar
+  `response.ok` (se corrigió; antes lanzaba `ArcaNetworkError` para cualquiera de los
+  siete mensajes).
+- **Resuelto (2026-10-02)**: se sacó el chequeo de `response.errorConstancia`. Era un
+  campo que no existe en A13 (cero menciones en las 25 páginas) — venía del servicio de
+  Constancia de Inscripción y nadie lo testeaba.
 
 Ya contemplado (no reportar como novedad):
 

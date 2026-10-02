@@ -136,10 +136,6 @@ export class PadronService {
             return { error: 'No se encontraron datos para el CUIT informado' };
         }
 
-        if (response.errorConstancia) {
-            return { error: response.errorConstancia };
-        }
-
         const p = response.persona;
         if (!p) {
             return { error: 'CUIT no encontrado' };

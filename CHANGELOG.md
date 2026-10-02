@@ -6,6 +6,10 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 🧹 Se sacó el chequeo de `response.errorConstancia` en Padrón A13
+
+- `errorConstancia` no existe en A13: cero menciones en las 25 páginas del *Manual Consulta a Padrón – Alcance 13 v1.4*. Es un campo del servicio de Constancia de Inscripción. No hacía daño —era defensivo— pero nadie lo testeaba y hacía pensar que era parte de este servicio.
+
 ### 🐛 `getTaxpayer()` lanzaba `ArcaNetworkError` para los faults de negocio de A13, por leer `response.ok` antes que el body
 
 - A13 devuelve sus siete faults del anexo 5.3 —los mismos que `getPadronHint()` reconoce desde la entrada de abajo— envueltos en **HTTP 500**, confirmado contra homologación real el 2026-10-02 (`"El Id de la persona no es valido"` y `"La Clave (CUIT/CUIL) consultada es inexistente"` llegaron los dos con ese status). `padron.ts` miraba `!response.ok` **antes** de leer el body y lanzaba un `ArcaNetworkError` genérico ahí mismo: el hint agregado ayer no llegaba a dispararse nunca contra ARCA real, sólo en los tests unitarios, que mockeaban `ok: true` sin querer.
