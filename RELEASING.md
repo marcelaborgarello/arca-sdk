@@ -165,12 +165,27 @@ Con el Trusted Publisher configurado sin *"allowed actions"* (ver §2), lo que h
 workflow es **dejar la versión en la antesala de npm, no publicarla**. Todavía no la puede
 instalar nadie.
 
-El último paso es entrar a npmjs.com, al paquete `arca-sdk`, y **confirmar la publicación**.
-Ahí se vuelve pública.
+El último paso es entrar a npmjs.com y **aprobar la versión en espera**. Ahí se vuelve
+pública.
 
-<!-- POR COMPLETAR: anotar el paso a paso exacto de esta pantalla (dónde aparece la versión
-     en espera, qué dice el botón) la próxima vez que se publique, mientras pasa. Al
-     2026-09-26 el mecanismo está entendido pero la pantalla no se vio nunca. -->
+**No está en la configuración del paquete.** Es una vista a nivel de cuenta: el avatar
+(arriba a la derecha) → **"Staged Packages"** (`npmjs.com/settings/<usuario>/staged-packages`).
+Ahí aparece la versión pendiente; revisarla y tocar **"Approve"**. Pide confirmación de
+2FA en el momento, sea por la web o por CLI.
+
+Equivalente por CLI, si en algún momento conviene no entrar a la web:
+
+```bash
+npm stage list arca-sdk      # trae el <stage-id> de lo que está pendiente
+npm stage view <stage-id>    # para inspeccionar antes de aprobar
+npm stage approve <stage-id> # pide 2FA
+```
+
+> **Verificado el 2026-10-01 contra la cuenta real** (con la 3.0.0 ya aprobada, "Staged
+> Packages" muestra _"There are no package versions waiting for review"_, que confirma
+> que es la pantalla correcta) y contra la documentación oficial
+> (`docs.npmjs.com/staged-publishing`). Lo único que falta ver en vivo es el estado
+> "pendiente" con una versión real en la antesala — eso queda para la próxima publicación.
 
 ```bash
 npm view arca-sdk version                  # confirmá que subió
