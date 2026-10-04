@@ -19,21 +19,27 @@ export const WSFE_ENDPOINTS: Record<Environment, string> = {
 /**
  * URLs del servicio Padron A13 por ambiente
  *
- * **El de homologación no es `awshomo.arca.gob.ar`.** Ese dominio no tiene registro DNS
- * — verificado el 2026-10-01 contra `arca.gob.ar`, `wsaahomo.afip.gov.ar` y
- * `wswhomo.afip.gov.ar`, que sí resuelven. WSAA y WSFE se quedaron en `afip.gov.ar` para
- * homologación y sólo migraron producción a `arca.gob.ar`; A13 migró los dos a la vez, y
- * el de homologación quedó con un nombre que ARCA nunca dio de alta. El equivalente vivo
- * es `awshomo.afip.gov.ar` — mismo host que usaba el SDK antes de la migración de
- * dominios, confirmado respondiendo SOAP Faults reales en homologación.
+ * **Los dos ambientes se quedaron en `afip.gov.ar`, a diferencia de WSAA y WSFE.** El
+ * *Manual Consulta a Padrón – Alcance 13 v1.4* (sección 2.3) documenta homologación en
+ * `awshomo.afip.gov.ar` y producción en `aws.afip.gov.ar` — nunca menciona `arca.gob.ar`
+ * para ninguno de los dos. WSAA y WSFE sí migraron su endpoint de producción a
+ * `arca.gob.ar` (y ARCA lo anunció), pero no hay un anuncio equivalente para A13.
  *
- * Nunca se había detectado porque no existía `tests/integration/padron.integration.test.ts`
- * (agregado en el mismo cambio) y porque en producción `aws.arca.gob.ar` sí resuelve, así
- * que cualquier consumidor que facture de verdad nunca pega contra el endpoint roto.
+ * **El de homologación no es `awshomo.arca.gob.ar`.** Ese dominio no tiene registro DNS
+ * — verificado el 2026-10-01. El equivalente vivo es `awshomo.afip.gov.ar`, confirmado
+ * respondiendo SOAP Faults reales en homologación.
+ *
+ * **El de producción tampoco es `aws.arca.gob.ar`** — corregido el 2026-10-02 a
+ * `aws.afip.gov.ar`, que es lo que dice el manual. No eran dos hosts distintos: los dos
+ * nombres resuelven hoy a la misma IP (verificado por DNS, `200.1.116.54`), así que el
+ * valor viejo no estaba roto — era una migración que el SDK asumió sin que el manual de
+ * A13 la confirme, de la misma familia que el bug de homologación de arriba. Si ARCA
+ * alguna vez deja de servir ese alias (no tiene por qué avisar, al no ser el dominio
+ * documentado), el valor viejo se habría roto en producción sin este cambio.
  */
 export const PADRON_A13_ENDPOINTS: Record<Environment, string> = {
     homologacion: 'https://awshomo.afip.gov.ar/sr-padron/webservices/personaServiceA13',
-    produccion: 'https://aws.arca.gob.ar/sr-padron/webservices/personaServiceA13',
+    produccion: 'https://aws.afip.gov.ar/sr-padron/webservices/personaServiceA13',
 };
 
 /**

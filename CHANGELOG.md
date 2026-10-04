@@ -6,6 +6,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 🐛 Padrón A13: el endpoint de producción no coincidía con el manual
+
+- `PADRON_A13_ENDPOINTS.produccion` apuntaba a `aws.arca.gob.ar`. El *Manual Consulta a Padrón – Alcance 13 v1.4* (sección 2.3) documenta producción en `aws.afip.gov.ar` — a diferencia de WSAA y WSFE, A13 no migró ningún ambiente a `arca.gob.ar` según su manual.
+- **No era un bug activo**: los dos hosts resuelven hoy a la misma IP (verificado por DNS), así que no hay cambio de comportamiento. Es una migración que el SDK había asumido sin que el manual de A13 la confirme — misma familia que el bug del endpoint de homologación (v3.1.0, 2026-10-01), sólo que ese sí estaba roto y este no, todavía.
+- Corregido a `aws.afip.gov.ar`, coincidiendo con el manual.
+
 ### ✨ Padrón A13: nuevo método `getTaxpayerAllowInactive()` — consultar una clave INACTIVA
 
 - Cuarto y último de los métodos del manual (sección 3.4, `getPersonaV2`). Mismo request que `getTaxpayer()` (no agrega parámetros); la diferencia es que ARCA no falla cuando la clave está INACTIVA, sino que devuelve los datos completos igual. Es el gap que `CLAUDE.md` señalaba como el más valioso de los tres métodos que faltaban: hasta ahora el SDK no podía consultar un contribuyente inactivo, que es justo el caso en que más importa mirar antes de facturarle a alguien (wsfev1 rechaza un receptor inactivo con el 10247).
