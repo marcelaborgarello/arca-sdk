@@ -9,6 +9,7 @@ import type {
     Address,
     Activity,
     TaxRecord,
+    PadronServiceStatus,
 } from '../types/padron';
 import { callArcaApi } from '../utils/network';
 import { escapeXml } from '../utils/xml';
@@ -60,7 +61,7 @@ export class PadronService {
         const ticket = await this.wsaa.login();
 
         const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
-<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" 
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
                   xmlns:a13="http://a13.soap.ws.server.puc.sr/">
   <soapenv:Header/>
   <soapenv:Body>
@@ -94,6 +95,74 @@ export class PadronService {
         // aunque los tests unitarios (que mockean `ok: true`) seguían verdes.
         const xml = await response.text();
         return this.parseResponse(xml, response.ok, response.status);
+    }
+
+    /**
+     * Verifica el estado del servicio de Padrón A13: aplicación, autenticación y base de
+     * datos.
+     *
+     * A diferencia de {@link getTaxpayer}, **no requiere token ni sign** — el manual
+     * (*Manual Consulta a Padrón – Alcance 13 v1.4*, sección 2.2) exceptúa explícitamente
+     * a `dummy` de la autenticación: es el único de los cuatro métodos del servicio que
+     * no la necesita. Por eso esta llamada no pasa por `WsaaService.login()`.
+     *
+     * @returns Estado de los tres componentes (`"OK"` o `"ERROR"` cada uno).
+     */
+    async dummy(): Promise<PadronServiceStatus> {
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:a13="http://a13.soap.ws.server.puc.sr/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <a13:dummy/>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const endpoint = getPadronEndpoint(this.config.environment);
+
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': '',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout || 15000,
+        });
+
+        const xml = await response.text();
+        return this.parseDummyResponse(xml);
+    }
+
+    /**
+     * Parsea la respuesta XML de dummy
+     */
+    private parseDummyResponse(xml: string): PadronServiceStatus {
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            removeNSPrefix: true,
+        });
+        const result = parser.parse(xml);
+
+        const status = result.Envelope?.Body?.dummyResponse?.return;
+        if (!status) {
+            // Mismo criterio que getTaxpayer(): una respuesta sin el sobre esperado es
+            // casi siempre el servicio de homologación caído, no un problema de quien
+            // integra — y es irónico que sea justo dummy, el método pensado para
+            // detectar esto, el que falle así. El hint de PADRON_ERROR aplica igual.
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: no se encontró dummyResponse',
+                'PADRON_ERROR',
+                { xml },
+                getArcaHint('PADRON_ERROR')
+            );
+        }
+
+        return {
+            appServer: status.appserver,
+            authServer: status.authserver,
+            dbServer: status.dbserver,
+        };
     }
 
     /**

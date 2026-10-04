@@ -88,7 +88,7 @@ export class WsaaService {
         // 2. Intentar usar persistencia externa si está disponible
         if (this.config.storage) {
             try {
-                const storedTicket = await this.config.storage.get(this.config.cuit, this.config.environment);
+                const storedTicket = await this.config.storage.get(this.config.cuit, this.config.environment, this.config.service);
                 if (storedTicket) {
                     // Validar si el ticket devuelto por el storage no está expirado
                     // Agrego un margen de 5 minutos
@@ -112,7 +112,7 @@ export class WsaaService {
         // Guardar en persistencia externa
         if (this.config.storage) {
             try {
-                await this.config.storage.save(this.config.cuit, this.config.environment, ticket);
+                await this.config.storage.save(this.config.cuit, this.config.environment, ticket, this.config.service);
             } catch (error) {
                 console.warn('[ARCA-SDK] TokenStorage.save falló:', error);
             }

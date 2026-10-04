@@ -6,6 +6,19 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### ✨ Padrón A13: nuevo método `dummy()` para verificar el estado del servicio
+
+- El manual (*Manual Consulta a Padrón – Alcance 13 v1.4*, sección 3.1) documenta cuatro métodos y el SDK sólo implementaba uno (`getPersona`, como `getTaxpayer()`). Se agregó `dummy()`, que devuelve el estado de los tres componentes que reporta ARCA (`appServer`, `authServer`, `dbServer`, cada uno `'OK' | 'ERROR'`) vía el tipo nuevo `PadronServiceStatus`.
+- **Es el único de los cuatro métodos que el manual exceptúa de autenticación** (sección 2.2): `dummy()` no pasa por `WsaaService.login()`, a diferencia de `getTaxpayer()`.
+- **Verificado contra ARCA homologación real** (2026-10-02): los tres componentes en `OK`.
+- Quedan dos de los tres métodos que faltan del manual: `getIdPersonaListByDocumento` (DNI → CUITs) y `getPersonaV2` (consultar una clave inactiva) — ver `pendientes.md`.
+
+### ✨ `TokenStorage.get/save` ganan un `service` opcional, para no mezclar el TA de dos servicios
+
+- Un mismo CUIT y ambiente (`cuit:env`) puede tener TAs vigentes de más de un servicio ARCA a la vez — `wsfe` y `ws_sr_padron_a13`, por ejemplo. `TokenStorage.get/save` sólo recibían `cuit` y `env`, así que un storage compartido entre `WsfeService` y `PadronService` devolvía el TA del servicio equivocado y ARCA lo rechazaba con *"Token recibido es para el servicio [X], deberia ser para servicio [Y]"* (visto a mano el 2026-10-01).
+- Se agregó un tercer parámetro `service?: string` a `get()` y un cuarto a `save()`, y `WsaaService.login()` ya los pasa (`this.config.service`) en las dos llamadas. **Es aditivo, no rompe la interfaz**: un `TokenStorage` implementado con la firma vieja sigue type-checkeando y funcionando igual que antes (JS ignora el argumento de más) — simplemente no evita la colisión hasta que se actualice para usarlo.
+- `tests/integration/helpers.ts` ya namespacea sus claves por servicio y volvió a usar un solo archivo de cache: el archivo separado para Padrón A13 (`padronTokenStorage` / `.ta-cache-padron.json`) era el parche para este mismo problema y dejó de hacer falta.
+
 ### 🧹 Se sacó el chequeo de `response.errorConstancia` en Padrón A13
 
 - `errorConstancia` no existe en A13: cero menciones en las 25 páginas del *Manual Consulta a Padrón – Alcance 13 v1.4*. Es un campo del servicio de Constancia de Inscripción. No hacía daño —era defensivo— pero nadie lo testeaba y hacía pensar que era parte de este servicio.

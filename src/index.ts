@@ -30,6 +30,7 @@ export type {
     Activity,
     TaxRecord,
     TaxpayerResponse,
+    PadronServiceStatus,
 } from './types/padron';
 
 // Tipos WSFE

@@ -21,19 +21,6 @@ export interface IntegrationConfig {
 const TA_CACHE = process.env.ARCA_TEST_TA_CACHE ?? './.ta-cache.json';
 
 /**
- * Ruta aparte para el TA de Padrón A13.
- *
- * `TokenStorage.get/save` no reciben `service` — sólo `cuit` y `env` — así que un único
- * archivo de cache no puede distinguir el TA de `wsfe` del de `ws_sr_padron_a13` para el
- * mismo CUIT. Mezclarlos produce el fault *"Token recibido es para el servicio [wsfe],
- * deberia ser para servicio [ws_sr_padron_a13]"* (visto a mano el 2026-10-01,
- * investigando el endpoint roto — ver `pendientes.md`). Arreglarlo de raíz implicaría
- * cambiar la firma pública de `TokenStorage`, que es un cambio más grande y se decide
- * aparte. Mientras tanto, cada suite de integración usa su propio archivo.
- */
-const PADRON_TA_CACHE = process.env.ARCA_TEST_PADRON_TA_CACHE ?? './.ta-cache-padron.json';
-
-/**
  * Devuelve la configuración si están las tres variables de entorno, o `null`.
  *
  * `ARCA_TEST_CERT` y `ARCA_TEST_KEY` son **rutas** a los PEM, no su contenido: así
@@ -74,15 +61,22 @@ export function getIntegrationConfig(): IntegrationConfig | null {
  * otra cosa. El manual avisa que el valor puede cambiar sin previo aviso.
  *
  * Es también el patrón que cualquier consumidor del SDK necesita en producción.
+ *
+ * **Un solo archivo para los dos servicios.** Hasta la v3.1.0 `wsfe` y `ws_sr_padron_a13`
+ * necesitaban cada uno su propio archivo de cache, porque `TokenStorage.get/save` no
+ * recibían `service` y un único archivo no podía distinguir el TA de uno del otro para el
+ * mismo CUIT — mezclarlos daba el fault *"Token recibido es para el servicio [wsfe],
+ * deberia ser para servicio [ws_sr_padron_a13]"* (visto a mano el 2026-10-01). Con
+ * `service` ya en la clave, un archivo alcanza.
  */
 function makeFileTokenStorage(cachePath: string): TokenStorage {
     return {
-        async get(cuit, env) {
+        async get(cuit, env, service) {
             if (!existsSync(cachePath)) return null;
 
             try {
                 const all = JSON.parse(readFileSync(cachePath, 'utf-8'));
-                const raw = all[`${cuit}:${env}`];
+                const raw = all[`${cuit}:${env}:${service ?? ''}`];
                 if (!raw) return null;
 
                 const ticket: LoginTicket = {
@@ -101,7 +95,7 @@ function makeFileTokenStorage(cachePath: string): TokenStorage {
             }
         },
 
-        async save(cuit, env, ticket) {
+        async save(cuit, env, ticket, service) {
             const dir = dirname(cachePath);
             if (dir && dir !== '.' && !existsSync(dir)) mkdirSync(dir, { recursive: true });
 
@@ -109,14 +103,10 @@ function makeFileTokenStorage(cachePath: string): TokenStorage {
                 ? JSON.parse(readFileSync(cachePath, 'utf-8'))
                 : {};
 
-            all[`${cuit}:${env}`] = ticket;
+            all[`${cuit}:${env}:${service ?? ''}`] = ticket;
             writeFileSync(cachePath, JSON.stringify(all, null, 2), 'utf-8');
         },
     };
 }
 
 export const fileTokenStorage: TokenStorage = makeFileTokenStorage(TA_CACHE);
-
-/** Mismo mecanismo que {@link fileTokenStorage}, en un archivo aparte para no mezclar el
- *  TA de `ws_sr_padron_a13` con el de `wsfe` (ver el comentario de `PADRON_TA_CACHE`). */
-export const padronTokenStorage: TokenStorage = makeFileTokenStorage(PADRON_TA_CACHE);

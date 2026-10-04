@@ -138,7 +138,7 @@ describe('WsaaService.login', () => {
             const ticket = await wsaa.login();
 
             expect(ticket.token).toBe('token-de-storage');
-            expect(storage.get).toHaveBeenCalledWith('20123456789', 'homologacion');
+            expect(storage.get).toHaveBeenCalledWith('20123456789', 'homologacion', 'wsfe');
             expect(callArcaApi).not.toHaveBeenCalled();
         });
 
@@ -173,7 +173,7 @@ describe('WsaaService.login', () => {
 
             const ticket = await wsaa.login();
 
-            expect(storage.save).toHaveBeenCalledWith('20123456789', 'homologacion', ticket);
+            expect(storage.save).toHaveBeenCalledWith('20123456789', 'homologacion', ticket, 'wsfe');
         });
 
         // El margen de 5 minutos existe para no usar un ticket que va a vencer en medio

@@ -78,6 +78,21 @@ export interface Taxpayer {
 }
 
 /**
+ * Estado de los componentes del servicio de Padrón A13, devuelto por `dummy()`.
+ *
+ * El manual (*Manual Consulta a Padrón – Alcance 13 v1.4*, sección 3.1.2) documenta sólo
+ * estos dos valores posibles para cada componente: `"OK"` o, ante una falla, `"ERROR"`.
+ */
+export interface PadronServiceStatus {
+    /** Estado de la aplicación. */
+    appServer: 'OK' | 'ERROR';
+    /** Estado del servicio de autenticación (WSAA). */
+    authServer: 'OK' | 'ERROR';
+    /** Estado de la base de datos. */
+    dbServer: 'OK' | 'ERROR';
+}
+
+/**
  * Respuesta del servicio de Padrón
  */
 export interface TaxpayerResponse {

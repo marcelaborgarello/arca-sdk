@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { PadronService } from '../../src/services/padron';
-import { getIntegrationConfig, padronTokenStorage } from './helpers';
+import { getIntegrationConfig, fileTokenStorage } from './helpers';
 
 /**
  * Suite de integración contra Padrón A13 en ARCA **homologación**.
@@ -28,7 +28,7 @@ describe.skipIf(!config)('Padrón A13 contra ARCA homologación', () => {
             cuit: config!.cuit,
             cert: config!.cert,
             key: config!.key,
-            storage: padronTokenStorage,
+            storage: fileTokenStorage,
         });
     });
 

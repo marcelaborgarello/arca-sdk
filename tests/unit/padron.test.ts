@@ -288,5 +288,81 @@ describe('PadronService (A13)', () => {
       }
     });
   });
+
+  /**
+   * `dummy()`, agregado en v3.1.0 — manual A13, sección 3.1. Es el único de los cuatro
+   * métodos del servicio que el manual exceptúa de autenticación (sección 2.2): por eso
+   * cada test verifica también que `WsaaService.login()` no se llame, no sólo que el
+   * parseo sea correcto.
+   */
+  describe('dummy()', () => {
+    it('parsea appserver/authserver/dbserver en OK sin pedir token', async () => {
+      const mockDummyXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:dummyResponse xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <return>
+        <appserver>OK</appserver>
+        <authserver>OK</authserver>
+        <dbserver>OK</dbserver>
+      </return>
+    </ns2:dummyResponse>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockDummyXml,
+      });
+
+      const status = await service.dummy();
+
+      expect(status).toEqual({ appServer: 'OK', authServer: 'OK', dbServer: 'OK' });
+      expect(WsaaService.prototype.login).not.toHaveBeenCalled();
+    });
+
+    it('propaga un ERROR puntual (ej. base de datos caída) sin lanzar', async () => {
+      // Un componente caído no es un fault de negocio ni una respuesta inválida: el
+      // manual lo documenta como un valor más del campo, no como un error del WS.
+      const mockDummyXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:dummyResponse xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <return>
+        <appserver>OK</appserver>
+        <authserver>OK</authserver>
+        <dbserver>ERROR</dbserver>
+      </return>
+    </ns2:dummyResponse>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockDummyXml,
+      });
+
+      const status = await service.dummy();
+
+      expect(status.dbServer).toBe('ERROR');
+      expect(status.appServer).toBe('OK');
+    });
+
+    it('lanza PADRON_ERROR con hint si la respuesta no trae dummyResponse', async () => {
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => '<?xml version="1.0" encoding="UTF-8"?><algo>no es dummyResponse</algo>',
+      });
+
+      try {
+        await service.dummy();
+        expect.unreachable('dummy() debía lanzar');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArcaError);
+        expect((error as ArcaError).code).toBe('PADRON_ERROR');
+        expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+      }
+    });
+  });
 });
 
