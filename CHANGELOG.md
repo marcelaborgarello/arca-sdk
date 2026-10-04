@@ -6,6 +6,12 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 📖 El JSDoc de `VatCondition.MONOTRIBUTISTA_SOCIAL` afirmaba un rechazo sin fuente
+
+- Decía *"en producción suele rechazarse"* como motivo de que `PadronService` mapee Monotributista Social a 6 en vez de 13. Era una racionalización sin cita, escrita en una sesión anterior para documentar un mapeo que ya existía.
+- **Probado contra ARCA homologación real (2026-10-02)**: una Factura A con `CondicionIVAReceptorId: 13` fue autorizada por ARCA sin rechazo ni observación relacionada. El JSDoc se corrigió para contar esto en vez de la racionalización sin fuente.
+- `PadronService` **sigue mapeando a 6**, sin cambios de comportamiento en este commit — es una decisión pendiente (ver `pendientes.md`), no algo que esta corrección de documentación resuelva por sí sola.
+
 ### 🐛 Padrón A13: el endpoint de producción no coincidía con el manual
 
 - `PADRON_A13_ENDPOINTS.produccion` apuntaba a `aws.arca.gob.ar`. El *Manual Consulta a Padrón – Alcance 13 v1.4* (sección 2.3) documenta producción en `aws.afip.gov.ar` — a diferencia de WSAA y WSFE, A13 no migró ningún ambiente a `arca.gob.ar` según su manual.

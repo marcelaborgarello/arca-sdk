@@ -196,12 +196,18 @@ export enum VatCondition {
     /**
      * Monotributista Social.
      *
-     * @remarks Figura en el catálogo del manual, pero **en producción suele
-     * rechazarse**: ARCA espera que todo monotributista —estándar, social o
-     * promovido— se declare como {@link VatCondition.RESPONSABLE_MONOTRIBUTO} (6).
-     * Por eso `PadronService` mapea a 6 y no a 13 aunque detecte los impuestos de
-     * monotributo social. Está disponible acá para quien lo necesite y sepa que su
-     * caso lo admite, pero **probalo contra homologación antes de usarlo**.
+     * @remarks Figura en el catálogo del manual (p. 202), con las mismas clases
+     * admitidas que {@link VatCondition.RESPONSABLE_MONOTRIBUTO} (6): A/ALEY y C.
+     * **Confirmado contra homologación real el 2026-10-02**: una Factura A con este
+     * valor fue autorizada por ARCA (`Resultado: 'A'`, CAE emitido), sin ningún
+     * rechazo ni observación relacionada con la condición de IVA del receptor.
+     *
+     * Hasta esa fecha este JSDoc afirmaba, sin cita, que *"en producción suele
+     * rechazarse"* y que por eso `PadronService` mapea a 6 en vez de 13. Esa
+     * justificación era una racionalización sin fuente (escrita el 2026-09-25 para
+     * documentar un mapeo que ya existía desde antes) y quedó refutada. `PadronService`
+     * **sigue mapeando a 6 hoy**, pero no por ese motivo — es una decisión pendiente
+     * de tomar explícitamente (ver `pendientes.md`), no un hecho de ARCA.
      *
      * Disponible desde v2.0.0.
      */
