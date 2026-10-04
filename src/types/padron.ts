@@ -106,3 +106,23 @@ export interface TaxpayerResponse {
      */
     hint?: string;
 }
+
+/**
+ * Respuesta de `getTaxpayerIdsByDocument()` (método SOAP `getIdPersonaListByDocumento`,
+ * Manual A13 v1.4, sección 3.3).
+ */
+export interface TaxpayerIdsResponse {
+    /**
+     * CUITs/CUILs asociados al documento consultado. Un array vacío es un resultado
+     * válido (el documento no tiene claves asociadas en el padrón), no un error — el
+     * manual no documenta "sin resultados" como fault para este método.
+     *
+     * **Sin verificar contra ARCA real todavía** que un documento sin coincidencias
+     * efectivamente devuelva esto en vez de, por ejemplo, un `Fault`: el manual no trae
+     * un ejemplo de ese caso.
+     */
+    taxIds?: number[];
+    error?: string;
+    /** Ver {@link TaxpayerResponse.hint}. */
+    hint?: string;
+}

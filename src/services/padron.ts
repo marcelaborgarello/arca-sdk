@@ -10,6 +10,7 @@ import type {
     Activity,
     TaxRecord,
     PadronServiceStatus,
+    TaxpayerIdsResponse,
 } from '../types/padron';
 import { callArcaApi } from '../utils/network';
 import { escapeXml } from '../utils/xml';
@@ -132,6 +133,88 @@ export class PadronService {
 
         const xml = await response.text();
         return this.parseDummyResponse(xml);
+    }
+
+    /**
+     * Busca las claves (CUIT/CUIL) asociadas a un número de documento (típicamente DNI).
+     *
+     * Método SOAP `getIdPersonaListByDocumento` (Manual A13 v1.4, sección 3.3). Sirve
+     * para resolver la CUIT de un comprador a partir de su DNI — el caso de la RG 5866
+     * (tope de $10.000.000 para identificar al Consumidor Final) cuando se tiene el
+     * documento pero no la CUIT.
+     *
+     * @param document - Número de documento, sin puntos ni guiones.
+     * @returns `taxIds` con las claves encontradas (array vacío si no hay ninguna), o
+     *   `error`/`hint` si ARCA devolvió un fault.
+     */
+    async getTaxpayerIdsByDocument(document: string): Promise<TaxpayerIdsResponse> {
+        const ticket = await this.wsaa.login();
+
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:a13="http://a13.soap.ws.server.puc.sr/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <a13:getIdPersonaListByDocumento>
+      <token>${escapeXml(ticket.token)}</token>
+      <sign>${escapeXml(ticket.sign)}</sign>
+      <cuitRepresentada>${escapeXml(this.config.cuit)}</cuitRepresentada>
+      <documento>${escapeXml(document)}</documento>
+    </a13:getIdPersonaListByDocumento>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const endpoint = getPadronEndpoint(this.config.environment);
+
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': '',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout || 15000,
+        });
+
+        // Mismo motivo que en getTaxpayer(): A13 envuelve sus faults de negocio en HTTP
+        // 500, así que hay que leer el body antes de mirar response.ok.
+        const xml = await response.text();
+        return this.parseIdPersonaListResponse(xml);
+    }
+
+    /**
+     * Parsea la respuesta XML de getIdPersonaListByDocumento
+     */
+    private parseIdPersonaListResponse(xml: string): TaxpayerIdsResponse {
+        const parser = new XMLParser({
+            ignoreAttributes: false,
+            removeNSPrefix: true,
+        });
+        const result = parser.parse(xml);
+
+        const body = result.Envelope?.Body;
+        if (!body) {
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: Body no encontrado',
+                'PADRON_ERROR',
+                { xml },
+                getArcaHint('PADRON_ERROR')
+            );
+        }
+
+        const listReturn = body.getIdPersonaListByDocumentoResponse?.idPersonaListReturn;
+        if (!listReturn) {
+            const fault = body.Fault;
+            if (fault) {
+                const faultString = fault.faultstring || 'Error desconocido en ARCA';
+                return { error: faultString, hint: getPadronHint(faultString) };
+            }
+            return { error: 'No se encontraron datos para el documento informado' };
+        }
+
+        // idPersona puede venir ausente (documento sin claves asociadas — ver la nota en
+        // TaxpayerIdsResponse.taxIds), un único valor, o varios.
+        return { taxIds: this.toNumberArray(listReturn.idPersona) };
     }
 
     /**
@@ -286,5 +369,15 @@ export class PadronService {
         if (data === undefined || data === null) return [];
         if (Array.isArray(data)) return data as Record<string, unknown>[];
         return [data as Record<string, unknown>];
+    }
+
+    /**
+     * Igual que {@link toArray}, pero para campos que son valores sueltos (CUITs), no
+     * objetos — `idPersona` de `getIdPersonaListByDocumento` es del mismo caso de
+     * fast-xml-parser (ausente / un valor / varios), sólo que el contenido es primitivo.
+     */
+    private toNumberArray(raw: unknown): number[] {
+        if (raw === undefined || raw === null) return [];
+        return (Array.isArray(raw) ? raw : [raw]).map((v) => Number(v));
     }
 }

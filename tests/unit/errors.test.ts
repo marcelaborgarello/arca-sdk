@@ -17,15 +17,16 @@ import { VAT_RATE_CODES } from '../../src/types/wsfe';
  * quedar congelado —o directamente colgado del código equivocado— sin que nada se ponga
  * en rojo. Fue exactamente lo que pasó con la alícuota de IVA.
  *
- * **Alcance, y conviene tenerlo claro**: están cubiertas **53 de las 54** entradas del
+ * **Alcance, y conviene tenerlo claro**: están cubiertas **54 de las 55** entradas del
  * diccionario —lo asevera el test de cobertura del final—, pero no todas de la misma
  * manera. En **39** se verifica el **texto** contra el manual que corresponde: los códigos
  * de IVA (10019, 10043), `ALREADY_HAS_TA`, el 10283 y el 1527 del tributo ID 13, los trece
  * que hasta la v3.0.0 describían otro código, los seis que no tenían hint y los quince
- * fijados del v4.8. De los **ocho** faults de WSAA y los **seis** de Padrón A13 que quedan
- * se verifica el **ruteo** —que el `faultstring` llegue al hint—, no lo que dicen: ninguno
- * de los seis de A13 está verificado contra ARCA real todavía (ver `PADRON_MESSAGE_PATTERNS`
- * en `constants/errors.ts`). Y se cubre la búsqueda de `getHintForObservations`.
+ * fijados del v4.8. De los **ocho** faults de WSAA y los **siete** de Padrón A13 que quedan
+ * se verifica el **ruteo** —que el `faultstring` llegue al hint—, no lo que dicen, con una
+ * excepción: `PADRON_INVALID_DOCUMENT` sí está verificado contra ARCA real (ver
+ * `PADRON_MESSAGE_PATTERNS` en `constants/errors.ts`) — los otros seis de A13 y los ocho de
+ * WSAA, no. Y se cubre la búsqueda de `getHintForObservations`.
  *
  * La única entrada sin cubrir acá es `PADRON_ERROR`, que se prueba en `padron.test.ts`.
  */
@@ -539,11 +540,14 @@ describe('ARCA_ERROR_HINTS — los hints que estaban bien, fijados', () => {
  */
 /**
  * `getPadronHint` — los seis faults accionables del anexo 5.3 del *Manual Consulta a Padrón
- * – Alcance 13 v1.4*. El séptimo mensaje del anexo —clave inexistente— no tiene patrón ni
- * hint a propósito: ver el comentario de `PADRON_INVALID_ID` en `constants/errors.ts`.
+ * – Alcance 13 v1.4*, más uno que no está en ningún manual. El séptimo mensaje *del anexo*
+ * —clave inexistente— no tiene patrón ni hint a propósito: ver el comentario de
+ * `PADRON_INVALID_ID` en `constants/errors.ts`.
  *
- * **Ninguno de los seis está verificado contra ARCA real**, a diferencia de `ALREADY_HAS_TA`
- * en los tests de WSAA: salen entrecomillados del manual, no de una respuesta real.
+ * **Ninguno de los seis del anexo está verificado contra ARCA real**, a diferencia de
+ * `ALREADY_HAS_TA` en los tests de WSAA: salen entrecomillados del manual, no de una
+ * respuesta real. `PADRON_INVALID_DOCUMENT` es la excepción — se encontró probando
+ * `getTaxpayerIdsByDocument()` contra homologación real el 2026-10-02, no está en el manual.
  */
 const FAULTS_DE_PADRON: ReadonlyArray<{ faultString: string; clave: string }> = [
     { faultString: 'El Id de la persona no es valido', clave: 'PADRON_INVALID_ID' },
@@ -555,6 +559,7 @@ const FAULTS_DE_PADRON: ReadonlyArray<{ faultString: string; clave: string }> = 
         clave: 'PADRON_CUIT_NOT_IN_RELATIONS',
     },
     { faultString: 'Falta token y/o sign.', clave: 'PADRON_MISSING_TOKEN_SIGN' },
+    { faultString: 'El número de documento consultado es inválido.', clave: 'PADRON_INVALID_DOCUMENT' },
 ];
 
 describe('getPadronHint', () => {
@@ -562,12 +567,12 @@ describe('getPadronHint', () => {
         expect(getPadronHint(faultString)).toBe(getArcaHint(clave));
     });
 
-    it('cubre los seis casos accionables del anexo 5.3', () => {
+    it('cubre los siete casos accionables (seis del anexo 5.3 + uno verificado aparte)', () => {
         // Mismo motivo que el test análogo de WSAA: un `it.each` sobre una lista vacía no
-        // corre y no falla, así que vaciar la tabla desaparecería los seis tests de arriba
+        // corre y no falla, así que vaciar la tabla desaparecería los siete tests de arriba
         // en silencio.
-        expect(PADRON_MESSAGE_PATTERNS).toHaveLength(6);
-        expect(FAULTS_DE_PADRON).toHaveLength(6);
+        expect(PADRON_MESSAGE_PATTERNS).toHaveLength(7);
+        expect(FAULTS_DE_PADRON).toHaveLength(7);
     });
 
     it('cada clave de la tabla tiene un hint escrito', () => {
@@ -601,12 +606,12 @@ describe('cobertura del diccionario', () => {
             10283, 1527,           // describe del tributo ID 13
         ]);
 
-        // 13 + 6 + 15 + 9 + 6 + 2 + 2, sin repetidos: el 10283 y el 1527 no están en las tablas.
-        expect(cubiertos.size).toBe(53);
+        // 13 + 6 + 15 + 9 + 7 + 2 + 2, sin repetidos: el 10283 y el 1527 no están en las tablas.
+        expect(cubiertos.size).toBe(54);
 
         // La única que falta es `PADRON_ERROR`, que no es un código de ARCA sino interno del
         // SDK: su cobertura vive en `padron.test.ts`, que es donde se usa.
-        expect(Object.keys(ARCA_ERROR_HINTS)).toHaveLength(54);
+        expect(Object.keys(ARCA_ERROR_HINTS)).toHaveLength(55);
     });
 
     it('no quedó ninguna entrada que ningún camino del código pueda entregar', () => {

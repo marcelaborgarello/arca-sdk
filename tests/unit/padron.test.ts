@@ -364,5 +364,156 @@ describe('PadronService (A13)', () => {
       }
     });
   });
+
+  /**
+   * `getTaxpayerIdsByDocument()` (método SOAP getIdPersonaListByDocumento), agregado en
+   * v3.1.0 — manual A13, sección 3.3. A diferencia de dummy(), sí requiere token/sign:
+   * no está en la excepción de autenticación de la sección 2.2.
+   */
+  describe('getTaxpayerIdsByDocument()', () => {
+    it('devuelve las claves asociadas cuando hay más de una', async () => {
+      const mockXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:getIdPersonaListByDocumentoResponse xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <idPersonaListReturn>
+        <idPersona>23117096769</idPersona>
+        <idPersona>27117096764</idPersona>
+        <metadata>
+          <fechaHora>2025-07-17T16:22:09.168-03:00</fechaHora>
+          <servidor>host</servidor>
+        </metadata>
+      </idPersonaListReturn>
+    </ns2:getIdPersonaListByDocumentoResponse>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockXml,
+      });
+
+      const result = await service.getTaxpayerIdsByDocument('11709676');
+
+      expect(result.taxIds).toEqual([23117096769, 27117096764]);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('devuelve un array con una sola clave cuando el parser no lo arma como lista', async () => {
+      // fast-xml-parser devuelve un objeto pelado, no un array de uno, cuando el tag se
+      // repite una sola vez — el mismo caso que ya cubre toArray() para domicilio/impuesto.
+      const mockXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:getIdPersonaListByDocumentoResponse xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <idPersonaListReturn>
+        <idPersona>20111111112</idPersona>
+      </idPersonaListReturn>
+    </ns2:getIdPersonaListByDocumentoResponse>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockXml,
+      });
+
+      const result = await service.getTaxpayerIdsByDocument('11111111');
+
+      expect(result.taxIds).toEqual([20111111112]);
+    });
+
+    it('devuelve un array vacío, no un error, cuando el documento no tiene claves asociadas', async () => {
+      // El manual no documenta este caso con un ejemplo: es la interpretación más
+      // razonable de "idPersonaListReturn sin idPersona", no un hecho verificado contra
+      // ARCA real (ver la nota en TaxpayerIdsResponse.taxIds).
+      const mockXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:getIdPersonaListByDocumentoResponse xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <idPersonaListReturn>
+        <metadata>
+          <fechaHora>2025-07-17T16:22:09.168-03:00</fechaHora>
+        </metadata>
+      </idPersonaListReturn>
+    </ns2:getIdPersonaListByDocumentoResponse>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockXml,
+      });
+
+      const result = await service.getTaxpayerIdsByDocument('99999999');
+
+      expect(result.taxIds).toEqual([]);
+      expect(result.error).toBeUndefined();
+    });
+
+    it('devuelve el hint cuando ARCA contesta un Fault reconocido (falta cuitRepresentada)', async () => {
+      const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode>soapenv:Server</faultcode>
+      <faultstring>Debe enviar la CUIT representada</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => mockFaultXml,
+      });
+
+      const result = await service.getTaxpayerIdsByDocument('11709676');
+
+      expect(result.taxIds).toBeUndefined();
+      expect(result.error).toBe('Debe enviar la CUIT representada');
+      expect(result.hint).toBe(getArcaHint('PADRON_MISSING_CUIT_REPRESENTADA'));
+    });
+
+    /**
+     * A diferencia del test de arriba (mensaje sacado del manual, sin provocar), este
+     * `faultstring` es real: se confirmó contra homologación el 2026-10-02 pasándole a
+     * `getTaxpayerIdsByDocument()` un documento con ceros a la izquierda. HTTP 500, SOAP
+     * `Fault`, igual que el resto de A13 — y el manual no lo menciona en ningún lado.
+     */
+    it('devuelve el hint de PADRON_INVALID_DOCUMENT, confirmado contra ARCA real', async () => {
+      const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultcode>soap:Server</faultcode><faultstring>El número de documento consultado es inválido.</faultstring></soap:Fault></soap:Body></soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => mockFaultXml,
+      });
+
+      const result = await service.getTaxpayerIdsByDocument('00000001');
+
+      expect(result.taxIds).toBeUndefined();
+      expect(result.error).toBe('El número de documento consultado es inválido.');
+      expect(result.hint).toBe(getArcaHint('PADRON_INVALID_DOCUMENT'));
+      expect(result.hint).toBeDefined();
+    });
+
+    it('lanza PADRON_ERROR con hint si la respuesta no trae ningún sobre reconocido', async () => {
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => '<?xml version="1.0" encoding="UTF-8"?><algo>no es un sobre SOAP</algo>',
+      });
+
+      try {
+        await service.getTaxpayerIdsByDocument('11709676');
+        expect.unreachable('getTaxpayerIdsByDocument() debía lanzar');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArcaError);
+        expect((error as ArcaError).code).toBe('PADRON_ERROR');
+        expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+      }
+    });
+  });
 });
 

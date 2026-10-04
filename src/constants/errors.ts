@@ -306,6 +306,15 @@ export const ARCA_ERROR_HINTS: Record<string | number, string> = {
         'misma trampa que el 600/601 de wsfev1: si acabás de delegar en WSASS, el TA cacheado no la conoce — ' +
         'borralo y pedí uno nuevo (Manual A13 v1.4, descripción de cuitRepresentada).',
     PADRON_MISSING_TOKEN_SIGN: 'Falta el token o el sign en la consulta (Manual A13 v1.4, anexo 5.3).',
+    // No está en el anexo 5.3 — ese anexo sólo documenta los faults de getPersona/
+    // getPersonaV2 (consultas por idPersona). Este es propio de
+    // getIdPersonaListByDocumento (consulta por documento) y el manual no lo menciona en
+    // ninguna parte. **Es el único de los faults de A13 verificado contra ARCA real**: se
+    // encontró el 2026-10-02 probando getTaxpayerIdsByDocument() con un documento con
+    // ceros a la izquierda contra homologación — HTTP 500, SOAP Fault, igual que los demás.
+    PADRON_INVALID_DOCUMENT: 'El número de documento no es válido para getTaxpayerIdsByDocument(). Probá sin ' +
+        'ceros a la izquierda ni otros caracteres no numéricos (no documentado en el manual — encontrado ' +
+        'empíricamente contra homologación).',
 };
 
 /**
@@ -374,18 +383,24 @@ export function getWsaaHint(faultString: string | undefined | null): string | un
 }
 
 /**
- * Los seis faults de Padrón A13 que documenta el anexo 5.3 de su manual, con el patrón que
- * los reconoce en el `faultstring` de un SOAP `Fault`.
+ * Los seis faults de Padrón A13 que documenta el anexo 5.3 de su manual, más uno que no
+ * documenta ningún lado, con el patrón que los reconoce en el `faultstring` de un SOAP
+ * `Fault`.
  *
  * Mismo diseño que {@link WSAA_FAULT_PATTERNS}: A13 tampoco tiene códigos numéricos, así que
  * se identifican por el texto. El séptimo mensaje del anexo —clave inexistente— no está acá
  * a propósito: no es accionable, ver el comentario de `PADRON_INVALID_ID` y vecinos en
  * {@link ARCA_ERROR_HINTS}.
  *
- * **Ninguno de los seis está verificado contra ARCA real todavía** (a diferencia de
+ * **Los seis del anexo siguen sin verificarse contra ARCA real** (a diferencia de
  * `ALREADY_HAS_TA` en WSAA_FAULT_PATTERNS, que sí lo está). Que lleguen por `Fault` es una
  * suposición por simetría con WSAA. Si al provocarlos contra homologación aparecen por otro
  * canal, esta tabla hay que revisarla, no sólo completarla.
+ *
+ * **El séptimo patrón, `PADRON_INVALID_DOCUMENT`, es distinto**: no sale del anexo 5.3 (que
+ * sólo cubre faults de `getPersona`/`getPersonaV2`) sino de probar
+ * `getTaxpayerIdsByDocument()` contra homologación real el 2026-10-02, y es justamente por
+ * eso el único de los siete confirmado — HTTP 500, SOAP `Fault`, igual que los demás.
  *
  * Si ninguno matchea, el hint queda `undefined`. Degrada, no rompe.
  *
@@ -398,6 +413,7 @@ export const PADRON_MESSAGE_PATTERNS: ReadonlyArray<{ pattern: RegExp; key: stri
     { pattern: /Debe enviar la CUIT representada/i, key: 'PADRON_MISSING_CUIT_REPRESENTADA' },
     { pattern: /no le permite actuar en representaci[oó]n/i, key: 'PADRON_CUIT_NOT_IN_RELATIONS' },
     { pattern: /Falta token y\/o sign/i, key: 'PADRON_MISSING_TOKEN_SIGN' },
+    { pattern: /n[uú]mero de documento consultado es inv[aá]lido/i, key: 'PADRON_INVALID_DOCUMENT' },
 ];
 
 /**

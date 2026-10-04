@@ -6,6 +6,14 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### ✨ Padrón A13: nuevo método `getTaxpayerIdsByDocument()` (DNI → CUITs)
+
+- Tercero de los cuatro métodos del manual (sección 3.3, `getIdPersonaListByDocumento`). Resuelve las claves (CUIT/CUIL) asociadas a un número de documento — el caso de la RG 5866 (tope de $10.000.000 para identificar al Consumidor Final) cuando se tiene el DNI del comprador pero no la CUIT.
+- Tipo nuevo `TaxpayerIdsResponse` (`taxIds?: number[]`, `error?`, `hint?`), mismo patrón que `TaxpayerResponse`: informa por valor, no lanza para faults de negocio. Un array vacío es éxito (documento sin claves asociadas), no error.
+- **Verificado contra ARCA homologación real** (2026-10-02): una consulta con un DNI de prueba devolvió 25 CUITs asociados — confirma que el parseo del array (`idPersona` repetido) funciona con una respuesta real, no sólo con el ejemplo del manual.
+- **Hallazgo que no está en ningún manual**: probar el método con un documento con ceros a la izquierda devuelve el fault *"El número de documento consultado es inválido."* — no es uno de los siete mensajes del anexo 5.3 (ese anexo sólo cubre `getPersona`/`getPersonaV2`, por `idPersona`). Se agregó como `PADRON_INVALID_DOCUMENT` en `getPadronHint()`/`PADRON_MESSAGE_PATTERNS`, y es el único de los faults de A13 confirmado contra ARCA real, a diferencia de los otros seis (que siguen saliendo del texto entrecomillado del manual, sin provocar).
+- Queda uno de los tres métodos que faltaban: `getPersonaV2` (consultar una clave inactiva) — ver `pendientes.md`.
+
 ### ✨ Padrón A13: nuevo método `dummy()` para verificar el estado del servicio
 
 - El manual (*Manual Consulta a Padrón – Alcance 13 v1.4*, sección 3.1) documenta cuatro métodos y el SDK sólo implementaba uno (`getPersona`, como `getTaxpayer()`). Se agregó `dummy()`, que devuelve el estado de los tres componentes que reporta ARCA (`appServer`, `authServer`, `dbServer`, cada uno `'OK' | 'ERROR'`) vía el tipo nuevo `PadronServiceStatus`.

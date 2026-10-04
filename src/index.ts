@@ -31,6 +31,7 @@ export type {
     TaxRecord,
     TaxpayerResponse,
     PadronServiceStatus,
+    TaxpayerIdsResponse,
 } from './types/padron';
 
 // Tipos WSFE
