@@ -83,14 +83,46 @@ describe('PadronService (A13)', () => {
     expect(result.taxpayer?.inactiveRelatedKeys).toEqual([]);
   });
 
-  it('should handle "CUIT not found" response', async () => {
+  it('should handle "CUIT inexistente" response (SOAP Fault, capturado contra ARCA homologación real)', async () => {
+    // Fixture GRABADO, no escrito a mano: es el XML tal cual lo devolvió ARCA
+    // homologación el 2026-10-02 al consultar el CUIT bien formado pero inexistente
+    // 20099999999 (ver tests/integration/padron.integration.test.ts, "un CUIT bien
+    // formado pero inexistente no inventa un hint"). El mock anterior simulaba un
+    // <personaReturn> sin <persona> ni <Fault> — una forma que ARCA nunca mandó y que
+    // no está en el manual. Lo real es un soap:Fault, que A13 envuelve en HTTP 500.
+    const mockPadronXml = `<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"><soap:Body><soap:Fault><faultcode>soap:Server</faultcode><faultstring>La Clave (CUIT/CUIL) consultada es inexistente</faultstring><detail><ns1:SRValidationException xmlns:ns1="http://a13.soap.ws.server.puc.sr/"/></detail></soap:Fault></soap:Body></soap:Envelope>`;
+
+    (callArcaApi as any).mockResolvedValue({
+      ok: false,
+      status: 500,
+      text: async () => mockPadronXml,
+    });
+
+    const result = await service.getTaxpayer('20099999999');
+
+    expect(result.taxpayer).toBeUndefined();
+    expect(result.error).toBe('La Clave (CUIT/CUIL) consultada es inexistente');
+    // Séptimo patrón del anexo 5.3: a propósito sin hint, el mensaje ya dice todo.
+    expect(result.hint).toBeUndefined();
+  });
+
+  /**
+   * Hasta el 2026-10-04, un `personaReturn` sin `persona` ni `Fault` devolvía el string
+   * fijo `'CUIT no encontrado'`, inventado por el SDK — nunca se vio esa forma contra
+   * ARCA real, y el test que la cubría mockeaba esa misma forma inventada en vez de
+   * describir un caso real. Al confirmarse (ver el test de arriba) que el padrón manda
+   * un soap:Fault para "no encontrado", esta rama quedó sin ningún caso conocido que la
+   * dispare: se trata como respuesta con forma inesperada, igual que el `!body` de más
+   * arriba, en vez de simular un error de negocio que ARCA nunca mandó.
+   */
+  it('lanza PADRON_ERROR si personaReturn llega sin persona ni Fault (forma sin precedente)', async () => {
     const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
 <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
   <soapenv:Body>
     <getPersonaResponse xmlns="http://a13.soap.ws.server.puc.sr/">
       <personaReturn>
         <metadata>
-            <fechaHora>2026-02-21T10:00:00</fechaHora>
+          <fechaHora>2026-02-21T10:00:00</fechaHora>
         </metadata>
       </personaReturn>
     </getPersonaResponse>
@@ -102,8 +134,43 @@ describe('PadronService (A13)', () => {
       text: async () => mockPadronXml,
     });
 
-    const result = await service.getTaxpayer('22222222222');
-    expect(result.error).toBe('CUIT no encontrado');
+    try {
+      await service.getTaxpayer('22222222222');
+      expect.unreachable('getTaxpayer() debía lanzar');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ArcaError);
+      expect((error as ArcaError).code).toBe('PADRON_ERROR');
+      expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+    }
+  });
+
+  /**
+   * Hermano del caso de arriba, un nivel más afuera: acá ni siquiera llega
+   * `personaReturn`. Hasta el 2026-10-04 devolvía otro string inventado
+   * ('No se encontraron datos para el CUIT informado'), sin test y sin ningún caso
+   * conocido contra ARCA que lo dispare — mismo motivo, mismo arreglo.
+   */
+  it('lanza PADRON_ERROR si el Body no trae ni personaReturn ni Fault (forma sin precedente)', async () => {
+    const mockPadronXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <algoRaro>ni personaReturn ni Fault</algoRaro>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+    (callArcaApi as any).mockResolvedValue({
+      ok: true,
+      text: async () => mockPadronXml,
+    });
+
+    try {
+      await service.getTaxpayer('22222222222');
+      expect.unreachable('getTaxpayer() debía lanzar');
+    } catch (error) {
+      expect(error).toBeInstanceOf(ArcaError);
+      expect((error as ArcaError).code).toBe('PADRON_ERROR');
+      expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+    }
   });
 
   it('should parse Monotributo Social correctly (idImpuesto 24)', async () => {

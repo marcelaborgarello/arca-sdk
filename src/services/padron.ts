@@ -349,12 +349,32 @@ export class PadronService {
                 const faultString = fault.faultstring || 'Error desconocido en ARCA';
                 return { error: faultString, hint: getPadronHint(faultString) };
             }
-            return { error: 'No se encontraron datos para el CUIT informado' };
+            // Mismo caso que el !p de más abajo: ningún camino conocido de ARCA llega
+            // sin personaReturn y sin Fault a la vez — los siete mensajes del anexo 5.3
+            // viajan por Fault (confirmado 2026-10-02). Forma sin precedente, no un
+            // "sin datos" que ARCA haya dicho así.
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: ni personaReturn ni Fault',
+                'PADRON_ERROR',
+                { xml },
+                getArcaHint('PADRON_ERROR')
+            );
         }
 
         const p = response.persona;
         if (!p) {
-            return { error: 'CUIT no encontrado' };
+            // Nunca se vio esta forma contra ARCA real: el anexo 5.3 documenta siete
+            // mensajes y los siete llegan como soap:Fault (confirmado 2026-10-02, ver
+            // tests/integration/padron.integration.test.ts). Un personaReturn presente
+            // sin persona ni Fault es una forma sin precedente, no un "no encontrado"
+            // conocido — tratarla como error de negocio inventado el texto. Mismo
+            // criterio que el !body de más arriba.
+            throw new ArcaError(
+                'Respuesta del Padrón inválida: personaReturn sin persona ni Fault',
+                'PADRON_ERROR',
+                { xml },
+                getArcaHint('PADRON_ERROR')
+            );
         }
 
         let vatCondition: VatCondition | undefined;

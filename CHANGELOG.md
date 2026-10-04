@@ -6,6 +6,13 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### 🐛 Padrón A13: dos fallbacks de `getTaxpayer()` devolvían errores de negocio que ARCA nunca mandó
+
+- `parseResponse()` tenía dos ramas (`personaReturn` sin `persona`, y `Body` sin `personaReturn` ni `Fault`) que devolvían strings fijos inventados por el SDK (`'CUIT no encontrado'` y `'No se encontraron datos para el CUIT informado'`). Ninguna de las dos formas se vio nunca contra ARCA real, y la segunda ni tenía test.
+- **Confirmado contra ARCA homologación real (2026-10-02)**: una clave inexistente (el caso que motivó el primer fallback) llega como `soap:Fault` con `faultstring` *"La Clave (CUIT/CUIL) consultada es inexistente"* — ya cubierto por la rama de `Fault`, HTTP 500 incluido. Los siete mensajes del anexo 5.3 viajan por ese canal, no por un `personaReturn` vacío.
+- Las dos ramas ahora lanzan `ArcaError('PADRON_ERROR')`, mismo criterio que el `!body` de más arriba: una forma de respuesta sin precedente es una anomalía de infraestructura, no un error de negocio que ARCA nunca dijo así.
+- El test de `padron.test.ts` que mockeaba la forma inventada se reemplazó por el XML real capturado contra homologación, y se agregaron los dos tests que faltaban para las ramas de `PADRON_ERROR`.
+
 ### 📖 El JSDoc de `VatCondition.MONOTRIBUTISTA_SOCIAL` afirmaba un rechazo sin fuente
 
 - Decía *"en producción suele rechazarse"* como motivo de que `PadronService` mapee Monotributista Social a 6 en vez de 13. Era una racionalización sin cita, escrita en una sesión anterior para documentar un mapeo que ya existía.
