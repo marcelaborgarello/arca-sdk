@@ -101,26 +101,38 @@ páginas de texto, índice incluido, y tiene un capítulo de FAQ que nunca se le
 > 404. Acá, a diferencia de wsfev1, los dos dominios que responden dan el **mismo archivo**:
 > no hay que comparar versiones.
 
-### El padrón A13 está implementado a medias, y el manual lo dice
+### El padrón A13 ya implementa los cuatro métodos del manual
 
-`padron.ts` implementa **uno** de los cuatro métodos que documenta el manual. No es una
-decisión tomada: es que el manual no se había leído.
+Hasta el 2026-10-02 `padron.ts` implementaba **uno** de los cuatro — no era una decisión
+tomada, era que el manual no se había leído. Ya no es así:
 
-| Método | Qué hace | Estado |
+| Método | Qué hace | En el SDK |
 |---|---|---|
-| `getPersona` | CUIT → datos, domicilios, impuestos | ✅ es `getTaxpayer()` |
-| `dummy` | verifica si el servicio está vivo | ❌ |
-| `getIdPersonaListByDocumento` | DNI → lista de CUITs asociadas | ❌ |
-| `getPersonaV2` | ídem `getPersona` **pero permite consultar una clave INACTIVA** | ❌ |
+| `getPersona` | CUIT → datos, domicilios, impuestos | ✅ `getTaxpayer()` |
+| `dummy` | verifica si el servicio está vivo | ✅ `dummy()` — único de los cuatro sin token (manual, sección 2.2) |
+| `getIdPersonaListByDocumento` | DNI → lista de CUITs asociadas | ✅ `getTaxpayerIdsByDocument()` |
+| `getPersonaV2` | ídem `getPersona` **pero permite consultar una clave INACTIVA** | ✅ `getTaxpayerAllowInactive()` |
 
-Dos consecuencias que conviene tener presentes antes de tocar `padron.ts`:
+Los tres métodos nuevos son API aditiva (minor), y los tres se verificaron contra ARCA
+homologación real, no sólo con tests unitarios — detalle completo en `historial.md`,
+entradas del 2026-10-02.
 
-- **Hoy el SDK no puede consultar los datos de un contribuyente inactivo.** Con `getPersona`
-  una clave inactiva devuelve error y nada más; `getPersonaV2` existe exactamente para eso, y
-  es justo el caso en que más importa mirar antes de facturarle a alguien — un receptor
-  inactivo hace que wsfev1 rechace con el **10247**. Siguen faltando los tres métodos
-  (`getPersonaV2`, `getIdPersonaListByDocumento`, `dummy`): sólo se agregó el hint, no API
-  nueva.
+Consecuencias que valía la pena tener presentes y que ya están resueltas:
+
+- **Resuelto (2026-10-02): el SDK ya puede consultar los datos de un contribuyente
+  inactivo.** Con `getTaxpayer()` una clave inactiva sigue devolviendo sólo el error —eso
+  no cambió, es el comportamiento de `getPersona`—, pero `getTaxpayerAllowInactive()`
+  (`getPersonaV2`) trae los datos completos igual. Confirmado contra homologación real con
+  un CUIT INACTIVO de verdad del dataset sintético. Es el caso en que más importa mirar
+  antes de facturarle a alguien — un receptor inactivo hace que wsfev1 rechace con el
+  **10247**.
+- **Hallazgo de paso, al provocar `getTaxpayerIdsByDocument()` contra homologación**: un
+  documento con ceros a la izquierda devuelve el fault *"El número de documento consultado
+  es inválido."* — **no está en ningún manual**, ni en el anexo 5.3 (que sólo cubre
+  `getPersona`/`getPersonaV2`, por `idPersona`, no por `documento`). Se agregó como
+  `PADRON_INVALID_DOCUMENT` en `getPadronHint()`, y es el único de los siete patrones de
+  A13 confirmado contra ARCA real — los otros seis siguen saliendo del texto entrecomillado
+  del manual, sin provocar.
 - **Resuelto (v3.1.0, 2026-10-02): el anexo 5.3 documenta siete mensajes de error y el SDK
   ahora reconoce seis** (el séptimo, "clave inexistente", queda sin hint a propósito: el
   texto ya dice todo). `TaxpayerResponse` ganó `hint?: string` y `getPadronHint()` en

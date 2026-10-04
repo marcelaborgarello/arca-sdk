@@ -6,6 +6,15 @@ Todos los cambios notables de este proyecto se documentan en este archivo.
 
 ## [Sin publicar]
 
+### ✨ Padrón A13: nuevo método `getTaxpayerAllowInactive()` — consultar una clave INACTIVA
+
+- Cuarto y último de los métodos del manual (sección 3.4, `getPersonaV2`). Mismo request que `getTaxpayer()` (no agrega parámetros); la diferencia es que ARCA no falla cuando la clave está INACTIVA, sino que devuelve los datos completos igual. Es el gap que `CLAUDE.md` señalaba como el más valioso de los tres métodos que faltaban: hasta ahora el SDK no podía consultar un contribuyente inactivo, que es justo el caso en que más importa mirar antes de facturarle a alguien (wsfev1 rechaza un receptor inactivo con el 10247).
+- **Es un método nuevo, no una opción en `getTaxpayer()`**: la decisión se tomó explícitamente para que el nombre del método describa qué llamada de red se hace, sin filtrar `getPersonaV2` (nombre del método SOAP) a la firma pública.
+- `Taxpayer` gana `inactiveRelatedKeys?: number[]` (campo `claveInactivaAsociada` del manual) — es parte del tipo `Persona` que comparten `getPersona` y `getPersonaV2`, así que también se mapea en `getTaxpayer()`, no sólo en el método nuevo.
+- Se generalizó el parseo interno (antes específico de `getPersonaResponse`) para que lo comparte con `getPersonaV2Response`: la única diferencia entre los dos métodos SOAP es el nombre del elemento raíz de la respuesta.
+- **Verificado contra ARCA homologación real** (2026-10-02), con un CUIT INACTIVO de verdad del dataset sintético (no un ejemplo armado a mano): `getTaxpayer()` del mismo CUIT falla con el hint de `PADRON_INACTIVE`, y `getTaxpayerAllowInactive()` devuelve los datos completos.
+- Con los cuatro métodos del manual implementados (`getTaxpayer`, `dummy`, `getTaxpayerIdsByDocument`, `getTaxpayerAllowInactive`), Padrón A13 deja de estar "implementado a medias".
+
 ### ✨ Padrón A13: nuevo método `getTaxpayerIdsByDocument()` (DNI → CUITs)
 
 - Tercero de los cuatro métodos del manual (sección 3.3, `getIdPersonaListByDocumento`). Resuelve las claves (CUIT/CUIL) asociadas a un número de documento — el caso de la RG 5866 (tope de $10.000.000 para identificar al Consumidor Final) cuando se tiene el DNI del comprador pero no la CUIT.

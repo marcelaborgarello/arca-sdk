@@ -149,6 +149,9 @@ Este README describe la **v3.0.0**, que es la que sirve npm.
 | Moneda extranjera (`currency`/`exchangeRate`) | ✅ Homologación (Factura C en USD) |
 | **CAEA** (contingencia) | ❌ Sin verificar, entero |
 | **Padrón A13** — `padron.getTaxpayer()` | ✅ Homologación — ver nota |
+| **Padrón A13** — `padron.dummy()` | ✅ Homologación (2026-10-02), los tres componentes en `OK` |
+| **Padrón A13** — `padron.getTaxpayerIdsByDocument()` | ✅ Homologación (2026-10-02) — ver nota |
+| **Padrón A13** — `padron.getTaxpayerAllowInactive()` | ✅ Homologación (2026-10-02), con un CUIT INACTIVO real |
 
 Lo marcado con ❌ **está implementado** y tiene tests unitarios, pero esos tests mockean la red:
 prueban que el SDK hace lo que creemos, no que ARCA lo acepte. **Si vas a usar algo de esa
@@ -160,11 +163,26 @@ lista, probalo contra homologación antes de producción.**
 > corrigió (ver `CHANGELOG`) y de paso se encontró un segundo bug: A13 devuelve sus
 > faults de negocio con HTTP 500, y el SDK los descartaba sin leerlos. Los dos están
 > arreglados y confirmados contra homologación real — incluidos dos de los seis
-> mensajes de error que ahora trae `hint`. **Lo que no se pudo verificar todavía**: una
-> respuesta **exitosa** con datos de un contribuyente real, porque el dataset de
-> homologación de A13 es sintético (no espeja el padrón real — un CUIT real típicamente
-> da "inexistente" ahí) y, al momento de escribir esto, el backend de ARCA homologación
-> tiene una falla de infraestructura propia (`ORA-03150`) que no depende del SDK.
+> mensajes de error que ahora trae `hint`. **Actualización del mismo día**: lo que
+> faltaba (una respuesta exitosa con datos de un contribuyente real) también se
+> confirmó más tarde, al verificar `getTaxpayerAllowInactive()` — ver esa nota. El
+> dataset de homologación de A13 sigue siendo sintético (no espeja el padrón real), pero
+> el `ORA-03150` del backend de ARCA se recuperó solo.
+
+> **`getTaxpayerIdsByDocument()`, nota aparte (02/10/2026)**: un DNI de prueba devolvió
+> 25 CUITs asociados contra homologación real, confirmando el parseo del array. Lo que
+> no se pudo confirmar fue el caso de "documento sin ninguna clave" — en el dataset
+> sintético de homologación, todo DNI de 8 dígitos probado tuvo coincidencias. Aparte,
+> probar el método con un documento con ceros a la izquierda (`00000001`) devolvió un
+> fault que **no está en el manual**: *"El número de documento consultado es
+> inválido."* — se agregó al diccionario de hints como `PADRON_INVALID_DOCUMENT`.
+
+> **`getTaxpayerAllowInactive()`, nota aparte (02/10/2026)**: se buscó un CUIT INACTIVO
+> de verdad entre los que devolvió `getTaxpayerIdsByDocument()` (no uno armado a mano) y
+> se confirmaron los dos lados: `getTaxpayer()` de ese CUIT falla con el hint de
+> `PADRON_INACTIVE` (sin cambios — es `getPersona`), y `getTaxpayerAllowInactive()` del
+> mismo CUIT devuelve los datos completos. Es la primera vez que una respuesta
+> **exitosa** con `persona` real de homologación queda confirmada contra el SDK.
 
 > Venimos auditando cada afirmación normativa de esta documentación contra los cuatro manuales
 > oficiales de ARCA, no sólo el de facturación, y corrigiendo lo que no coincide — aparecieron
@@ -181,14 +199,16 @@ lista, probalo contra homologación antes de producción.**
 |----------|-------------|--------|----------------|
 | **WSAA** | Autenticación y Autorización | ✅ Completo | [WSAA](https://www.arca.gob.ar/ws/WSAA/WSAAmanualDev.pdf) |
 | **WSFE v1** | Facturación Electrónica (A, B, C) | ✅ Completo | [RG 4291 v4.8](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) |
-| **Padrón A13** | Consulta de datos de contribuyentes | ⚠️ Un método de los cuatro del manual | [Padrón A13 v1.4](https://arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf) |
+| **Padrón A13** | Consulta de datos de contribuyentes | ✅ Completo — los cuatro métodos del manual | [Padrón A13 v1.4](https://arca.gob.ar/ws/ws-padron-a13/manual-ws-sr-padron-a13-v1.4.pdf) |
 | **CAEA** | Contingencia: solicitud, consulta y rendición informativa | ⚠️ Implementado, sin verificar contra homologación | [RG 4291 v4.8](https://www.arca.gob.ar/fe/ayuda/documentos/wsfev1-RG-4291.pdf) |
 
-> **Padrón A13**: `getTaxpayer()` implementa `getPersona`, que es la consulta por CUIT. El
-> manual documenta otros tres métodos que el SDK todavía no expone: `dummy` (estado del
-> servicio), `getIdPersonaListByDocumento` (DNI → las CUITs asociadas) y `getPersonaV2`, que es
-> el único que permite consultar una clave en estado **INACTIVA**. Si necesitás alguno,
-> [abrí un issue](https://github.com/marcelaborgarello/arca-sdk/issues).
+> **Padrón A13**: `getTaxpayer()` implementa `getPersona` (consulta por CUIT),
+> `dummy()` verifica el estado del servicio, `getTaxpayerIdsByDocument()` resuelve las
+> CUITs/CUILs asociadas a un DNI (útil para el tope de $10.000.000 de la RG 5866 cuando
+> tenés el documento del comprador pero no la CUIT), y `getTaxpayerAllowInactive()`
+> trae los datos de una clave en estado **INACTIVA** — algo que `getTaxpayer()` no
+> puede hacer (ARCA lo rechaza), y que importa porque un receptor inactivo hace que
+> `wsfev1` rechace la factura con el 10247.
 
 ### ✅ Tipos de comprobantes
 
@@ -871,7 +891,7 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 
 ### Tests disponibles
 
-15 archivos, 294 tests — es lo que corre `bun run test`. **No incluye
+15 archivos, 307 tests — es lo que corre `bun run test`. **No incluye
 `tests/integration/`** (ni `wsfe.integration.test.ts` ni `padron.integration.test.ts`):
 `vitest.config.ts` limita la corrida a `tests/unit/**`, y la integración va aparte con
 `bun run test:integration`.
@@ -881,9 +901,9 @@ Detalle completo en [`tests/integration/README.md`](tests/integration/README.md)
 | WSAA | `wsaa.test.ts` | `login()` con prioridad memoria → storage → red, márgenes de expiración, fallas del `TokenStorage`, `clearCache()` |
 | WSFE | `wsfe.test.ts` | Emisión (`issueInvoiceB/C`, `issueCreditNoteC`, `issueDebitNoteA/B/C`, `issueReceiptA/B/C`), `checkStatus`, `getPointsOfSale`, RG 5616, RG 5866, códigos de `InvoiceType`, el 96 compartido de `TaxIdType`, hints de alícuota. `issueInvoiceA` e `issueCreditNoteA/B` se cubren en `request-xml.test.ts`, no acá |
 | CAEA | `caea.test.ts` | Solicitud, consulta, rendición informativa, sin movimiento, `CbteFchHsGen`, las seis alícuotas de IVA en el XML |
-| Errores | `errors.test.ts` | El diccionario de hints: **53 de sus 54 entradas** están cubiertas — en 39 se verifica el **texto** contra el manual que corresponde, y en los catorce faults de WSAA (8) y Padrón A13 (6) restantes, que el `faultstring` llegue al hint (ninguno de los dos servicios devuelve códigos numéricos, así que se reconocen por texto). La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
-| Padrón | `padron.test.ts` | Parsing de respuesta, condición IVA, el hint de un fault reconocido del anexo 5.3 (y que uno no documentado no inventa hint) — los dos con HTTP 500 real, no con `ok: true` —, y que un 500 sin sobre SOAP real siga degradando a `PADRON_ERROR` |
-| Endpoints | `endpoints.test.ts` | Que homologación de WSAA/WSFE/A13 siga en `afip.gov.ar` y producción en `arca.gob.ar` — regresión del endpoint de A13 que no resolvía por DNS (ver la nota de Padrón A13 más arriba, en "Qué está verificado") |
+| Errores | `errors.test.ts` | El diccionario de hints: **54 de sus 55 entradas** están cubiertas — en 39 se verifica el **texto** contra el manual que corresponde, y en los quince faults de WSAA (8) y Padrón A13 (7) restantes, que el `faultstring` llegue al hint (ninguno de los dos servicios devuelve códigos numéricos, así que se reconocen por texto) — con una excepción, `PADRON_INVALID_DOCUMENT`, que sí está confirmado contra ARCA real. La única sin cubrir es `PADRON_ERROR`, que se prueba en `padron.test.ts` |
+| Padrón | `padron.test.ts` | Parsing de respuesta de `getTaxpayer()`, condición IVA, el hint de un fault reconocido del anexo 5.3 (y que uno no documentado no inventa hint) — los dos con HTTP 500 real, no con `ok: true` —, que un 500 sin sobre SOAP real siga degradando a `PADRON_ERROR`, `dummy()` (sin pedir token), `getTaxpayerIdsByDocument()` (varias claves, una sola, ninguna, fault confirmado contra ARCA real) y `getTaxpayerAllowInactive()` (clave INACTIVA sin fallar, `inactiveRelatedKeys`, fault reconocido) |
+| Endpoints | `endpoints.test.ts` | Que homologación de WSAA/WSFE/A13 siga en `afip.gov.ar`, que WSAA/WSFE migraron producción a `arca.gob.ar` y que **A13 no** (sus dos ambientes siguen en `afip.gov.ar`, como documenta su manual) — regresión de los dos endpoints de A13 que no coincidían con el manual (ver la nota de Padrón A13 más arriba, en "Qué está verificado") |
 | XML del request | `request-xml.test.ts` | Orden del `sequence` del XSD en los dos builders, escapado, Tributos, moneda extranjera, rechazos |
 | XML / TRA | `xml.test.ts` | Construcción del TRA y sus márgenes de tiempo, parsing de WSAA, validación de CUIT |
 | Fechas | `formatArcaDate.test.ts` | Fecha-calendario vs. instante, conversión a UTC-3, `yyyymmddhhmmss` |

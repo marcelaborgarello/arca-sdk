@@ -78,6 +78,9 @@ describe('PadronService (A13)', () => {
     expect(result.taxpayer?.isMonotax).toBe(false);
     expect(result.taxpayer?.addresses[0].street).toBe('CALLE FALSA 123');
     expect(result.taxpayer?.addresses[0].province).toBe('CIUDAD AUTONOMA BUENOS AIRES');
+    // claveInactivaAsociada es parte del tipo Persona compartido con getPersonaV2, así que
+    // getTaxpayer() también lo mapea — en array vacío cuando no viene, no undefined.
+    expect(result.taxpayer?.inactiveRelatedKeys).toEqual([]);
   });
 
   it('should handle "CUIT not found" response', async () => {
@@ -508,6 +511,91 @@ describe('PadronService (A13)', () => {
       try {
         await service.getTaxpayerIdsByDocument('11709676');
         expect.unreachable('getTaxpayerIdsByDocument() debía lanzar');
+      } catch (error) {
+        expect(error).toBeInstanceOf(ArcaError);
+        expect((error as ArcaError).code).toBe('PADRON_ERROR');
+        expect((error as ArcaError).hint).toBe(ARCA_ERROR_HINTS.PADRON_ERROR);
+      }
+    });
+  });
+
+  /**
+   * `getTaxpayerAllowInactive()` (método SOAP getPersonaV2), agregado en v3.1.0 — manual
+   * A13, sección 3.4. Mismo request que getTaxpayer(); la diferencia es el elemento raíz
+   * de la respuesta (`getPersonaV2Response` en vez de `getPersonaResponse`) y que ARCA no
+   * falla cuando la clave está INACTIVA.
+   */
+  describe('getTaxpayerAllowInactive()', () => {
+    it('devuelve los datos de una clave INACTIVA en vez de fallar, con claveInactivaAsociada', async () => {
+      // Calcado del ejemplo del manual (sección 3.4.3, p. 16-18): misma persona, mismo
+      // estadoClave INACTIVO.
+      const mockXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+  <soap:Body>
+    <ns2:getPersonaV2Response xmlns:ns2="http://a13.soap.ws.server.puc.sr/">
+      <personaReturn>
+        <persona>
+          <idPersona>20002444233</idPersona>
+          <tipoPersona>FISICA</tipoPersona>
+          <nombre>PHILLIP</nombre>
+          <apellido>GEOFFREY WILLIAM</apellido>
+          <estadoClave>INACTIVO</estadoClave>
+          <claveInactivaAsociada>20002444233</claveInactivaAsociada>
+          <claveInactivaAsociada>27002444238</claveInactivaAsociada>
+        </persona>
+      </personaReturn>
+    </ns2:getPersonaV2Response>
+  </soap:Body>
+</soap:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => mockXml,
+      });
+
+      const result = await service.getTaxpayerAllowInactive('20002444233');
+
+      expect(result.error).toBeUndefined();
+      expect(result.taxpayer).toBeDefined();
+      expect(result.taxpayer?.status).toBe('INACTIVO');
+      expect(result.taxpayer?.inactiveRelatedKeys).toEqual([20002444233, 27002444238]);
+    });
+
+    it('devuelve el hint cuando ARCA contesta un Fault reconocido, con HTTP 500', async () => {
+      // Mismo fault y mismo canal que ya se confirmó para getTaxpayer() — getPersonaV2
+      // comparte el manejo de errores, no sólo el tipo de respuesta.
+      const mockFaultXml = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/">
+  <soapenv:Body>
+    <soapenv:Fault>
+      <faultcode>soapenv:Server</faultcode>
+      <faultstring>El Id de la persona no es valido</faultstring>
+    </soapenv:Fault>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+      (callArcaApi as any).mockResolvedValue({
+        ok: false,
+        status: 500,
+        text: async () => mockFaultXml,
+      });
+
+      const result = await service.getTaxpayerAllowInactive('201111111120');
+
+      expect(result.taxpayer).toBeUndefined();
+      expect(result.error).toBe('El Id de la persona no es valido');
+      expect(result.hint).toBe(getArcaHint('PADRON_INVALID_ID'));
+    });
+
+    it('lanza PADRON_ERROR con hint si la respuesta no trae ningún sobre reconocido', async () => {
+      (callArcaApi as any).mockResolvedValue({
+        ok: true,
+        text: async () => '<?xml version="1.0" encoding="UTF-8"?><algo>no es un sobre SOAP</algo>',
+      });
+
+      try {
+        await service.getTaxpayerAllowInactive('20111111112');
+        expect.unreachable('getTaxpayerAllowInactive() debía lanzar');
       } catch (error) {
         expect(error).toBeInstanceOf(ArcaError);
         expect((error as ArcaError).code).toBe('PADRON_ERROR');

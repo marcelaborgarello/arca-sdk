@@ -75,6 +75,14 @@ export interface Taxpayer {
     isVATExempt: boolean;
     /** Condición frente al IVA autocalculada (lista para WSFE/CAEA) */
     vatCondition?: import('./wsfe').VatCondition;
+    /**
+     * Claves inactivas asociadas a este contribuyente (campo `claveInactivaAsociada` del
+     * manual, sección 4.2 — "Tipo Persona"). Es parte del tipo `Persona` que comparten
+     * `getPersona` y `getPersonaV2`, así que puede aparecer en la respuesta de
+     * {@link PadronService.getTaxpayer} también, no sólo en
+     * {@link PadronService.getTaxpayerAllowInactive}.
+     */
+    inactiveRelatedKeys?: number[];
 }
 
 /**

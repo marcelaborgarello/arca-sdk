@@ -55,6 +55,9 @@ export class PadronService {
     /**
      * Consulta los datos de un contribuyente por CUIT
      *
+     * @remarks Si la clave está **INACTIVA**, ARCA rechaza la consulta (anexo 5.3,
+     * `PADRON_INACTIVE`) y este método no devuelve datos — usá
+     * {@link getTaxpayerAllowInactive} para ese caso.
      * @param taxId CUIT a consultar (11 dígitos sin guiones)
      * @returns Datos del contribuyente o mensaje de error
      */
@@ -95,7 +98,60 @@ export class PadronService {
         // tal cual sin leerlo es la línea que hacía perder el hint en una llamada real,
         // aunque los tests unitarios (que mockean `ok: true`) seguían verdes.
         const xml = await response.text();
-        return this.parseResponse(xml, response.ok, response.status);
+        return this.parseResponse(xml, 'getPersonaResponse', response.ok, response.status);
+    }
+
+    /**
+     * Consulta los datos de un contribuyente por CUIT, **incluso si la clave fiscal está
+     * INACTIVA**.
+     *
+     * Método SOAP `getPersonaV2` (Manual A13 v1.4, sección 3.4). El request es idéntico
+     * al de {@link getTaxpayer} — mismos parámetros, sin nada nuevo — y es exactamente
+     * por eso que viven como dos métodos separados en vez de una opción en
+     * `getTaxpayer()`: la única diferencia es qué llamada de red se hace, no qué se le
+     * manda a ARCA, así que no hay nada que una opción pudiera describir mejor que el
+     * nombre del método.
+     *
+     * Usalo cuando `getTaxpayer()` te devuelva el error de clave INACTIVA
+     * (`PADRON_INACTIVE`) y necesites los datos igual — por ejemplo, para mostrarle al
+     * usuario por qué no se le puede facturar (wsfev1 rechaza un receptor inactivo con el
+     * 10247) en vez de sólo decir "no se pudo consultar".
+     *
+     * @param taxId CUIT a consultar (11 dígitos sin guiones)
+     * @returns Datos del contribuyente o mensaje de error
+     */
+    async getTaxpayerAllowInactive(taxId: string): Promise<TaxpayerResponse> {
+        const ticket = await this.wsaa.login();
+
+        const soapRequest = `<?xml version="1.0" encoding="UTF-8"?>
+<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                  xmlns:a13="http://a13.soap.ws.server.puc.sr/">
+  <soapenv:Header/>
+  <soapenv:Body>
+    <a13:getPersonaV2>
+      <token>${escapeXml(ticket.token)}</token>
+      <sign>${escapeXml(ticket.sign)}</sign>
+      <cuitRepresentada>${escapeXml(this.config.cuit)}</cuitRepresentada>
+      <idPersona>${escapeXml(taxId)}</idPersona>
+    </a13:getPersonaV2>
+  </soapenv:Body>
+</soapenv:Envelope>`;
+
+        const endpoint = getPadronEndpoint(this.config.environment);
+
+        const response = await callArcaApi(endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'text/xml; charset=utf-8',
+                'SOAPAction': '',
+            },
+            body: soapRequest,
+            timeout: this.config.timeout || 15000,
+        });
+
+        // Mismo motivo que getTaxpayer(): A13 envuelve sus faults de negocio en HTTP 500.
+        const xml = await response.text();
+        return this.parseResponse(xml, 'getPersonaV2Response', response.ok, response.status);
     }
 
     /**
@@ -249,15 +305,23 @@ export class PadronService {
     }
 
     /**
-     * Parsea la respuesta XML de getPersona
+     * Parsea la respuesta XML de getPersona / getPersonaV2 — comparten todo salvo el
+     * nombre del elemento raíz de la respuesta.
      *
+     * @param responseTag - `'getPersonaResponse'` para {@link getTaxpayer},
+     *   `'getPersonaV2Response'` para {@link getTaxpayerAllowInactive}.
      * @param httpOk - `response.ok` de la llamada HTTP. Sólo se usa para enriquecer el
      *   error cuando el body no trae un sobre SOAP — A13 devuelve sus faults de negocio
      *   con HTTP 500, así que `!httpOk` por sí solo **no** implica un error de
      *   infraestructura (ver `getTaxpayer()`).
      * @param httpStatus - status HTTP, para el mismo fin.
      */
-    private parseResponse(xml: string, httpOk?: boolean, httpStatus?: number): TaxpayerResponse {
+    private parseResponse(
+        xml: string,
+        responseTag: 'getPersonaResponse' | 'getPersonaV2Response',
+        httpOk?: boolean,
+        httpStatus?: number
+    ): TaxpayerResponse {
         const parser = new XMLParser({
             ignoreAttributes: false,
             removeNSPrefix: true,
@@ -278,7 +342,7 @@ export class PadronService {
             );
         }
 
-        const response = body.getPersonaResponse?.personaReturn;
+        const response = body[responseTag]?.personaReturn;
         if (!response) {
             const fault = body.Fault;
             if (fault) {
@@ -320,6 +384,7 @@ export class PadronService {
             isSocialMonotax: this.hasTaxId(p, 24) || this.hasTaxId(p, 21), // 24 = Obra Social / Promovido, 21 = Autónomo
             isVATExempt: this.hasTaxId(p, 32),        // 32 = IVA Exento
             vatCondition,
+            inactiveRelatedKeys: this.toNumberArray(p.claveInactivaAsociada),
         };
 
         return { taxpayer };
@@ -373,8 +438,9 @@ export class PadronService {
 
     /**
      * Igual que {@link toArray}, pero para campos que son valores sueltos (CUITs), no
-     * objetos — `idPersona` de `getIdPersonaListByDocumento` es del mismo caso de
-     * fast-xml-parser (ausente / un valor / varios), sólo que el contenido es primitivo.
+     * objetos — `idPersona` de `getIdPersonaListByDocumento` y `claveInactivaAsociada`
+     * de `Persona` son del mismo caso de fast-xml-parser (ausente / un valor / varios),
+     * sólo que el contenido es primitivo.
      */
     private toNumberArray(raw: unknown): number[] {
         if (raw === undefined || raw === null) return [];
